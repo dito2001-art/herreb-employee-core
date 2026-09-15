@@ -7,6 +7,7 @@ import {
   createEmailAdapter,
   createEmailReadOnlyTransport,
   createSalesOpsAdapter,
+  createSharedOfferingReadAdapter,
   projectReadOnlyAdapter,
   type ReadOnlyServiceOptions,
   type ServiceFetcher
@@ -76,9 +77,15 @@ export function buildReadOnlyRuntime(
 
   if (env.SALES_OPS && salesToken) {
     adapters.push(
+      createSharedOfferingReadAdapter({
+        service: env.SALES_OPS,
+        token: salesToken
+      })
+    );
+    adapters.push(
       projectReadOnlyAdapter(
         createSalesOpsAdapter({ service: env.SALES_OPS, token: salesToken }),
-        ["offering.read", "offering.recommend"]
+        ["offering.recommend"]
       )
     );
   }
