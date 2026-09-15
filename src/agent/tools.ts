@@ -8,18 +8,35 @@ const genericInputSchema = z.object({
   idempotencyKey: z.string().min(1).optional()
 });
 
+export function capabilityIdToToolName(capabilityId: string): string {
+  const normalized = capabilityId
+    .trim()
+    .replace(/[^A-Za-z0-9_-]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  if (!normalized) throw new Error(`INVALID_TOOL_NAME:${capabilityId}`);
+  return normalized;
+}
+
 export function buildEmployeeTools(
   session: EmployeeRuntimeSession,
   executableCapabilities: ReadonlySet<string> = new Set()
 ): ToolSet {
   const tools: ToolSet = {};
+  const seenToolNames = new Map<string, string>();
 
   for (const capabilityId of session.manifest.capabilities) {
     const definition = getCapability(capabilityId);
     if (!definition) continue;
 
-    tools[capabilityId] = tool({
-      description: `${definition.description}. Risk: ${definition.risk}.`,
+    const toolName = capabilityIdToToolName(capabilityId);
+    const collision = seenToolNames.get(toolName);
+    if (collision && collision !== capabilityId) {
+      throw new Error(`TOOL_NAME_COLLISION:${collision}:${capabilityId}:${toolName}`);
+    }
+    seenToolNames.set(toolName, capabilityId);
+
+    tools[toolName] = tool({
+      description: `${definition.description}. Capability: ${capabilityId}. Risk: ${definition.risk}.`,
       inputSchema: genericInputSchema,
       execute: async ({ input, idempotencyKey }) => {
         if (!executableCapabilities.has(capabilityId)) {
@@ -33,6 +50,7 @@ export function buildEmployeeTools(
               tenantId: session.context.tenantId,
               employeeId: session.manifest.id,
               capabilityId,
+              toolName,
               executed: false
             }
           };
@@ -43,7 +61,11 @@ export function buildEmployeeTools(
           ok: result.ok,
           output: result.output,
           error: result.error,
-          audit: result.audit
+          audit: result.audit,
+          evidence: {
+            capabilityId,
+            toolName
+          }
         };
       }
     });
@@ -54,4 +76,8 @@ export function buildEmployeeTools(
 
 export function listManifestToolIds(manifest: EmployeeManifest): string[] {
   return [...manifest.capabilities];
+}
+
+export function listManifestToolNames(manifest: EmployeeManifest): string[] {
+  return manifest.capabilities.map(capabilityIdToToolName);
 }
