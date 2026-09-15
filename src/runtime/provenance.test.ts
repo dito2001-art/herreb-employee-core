@@ -1,50 +1,58 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  canAuthorizeControlledWrite,
-  type RuntimeProvenance,
-  unverifiedProvenance
-} from "./provenance";
+import * as provenance from "./provenance";
 
 test("claimed session identity cannot authorize controlled writes", () => {
-  const provenance = unverifiedProvenance("session-state");
-  assert.equal(
-    canAuthorizeControlledWrite(provenance, "herreb", "fernando"),
-    false
+  const value = provenance.unverifiedProvenance("session-state");
+  const allowed = provenance.canAuthorizeControlledWrite(
+    value,
+    "herreb",
+    "fernando"
   );
+  assert.equal(allowed, false);
 });
 
 test("only matching owner-verified provenance can authorize controlled writes", () => {
-  const verified: RuntimeProvenance = {
+  const verified: provenance.RuntimeProvenance = {
     assurance: "OWNER_VERIFIED",
     subjectId: "fernando",
     tenantId: "herreb",
     source: "trusted-authenticator"
   };
-  assert.equal(
-    canAuthorizeControlledWrite(verified, "herreb", "fernando"),
-    true
+
+  const ownerAllowed = provenance.canAuthorizeControlledWrite(
+    verified,
+    "herreb",
+    "fernando"
   );
-  assert.equal(
-    canAuthorizeControlledWrite(verified, "other", "fernando"),
-    false
+  const wrongTenantAllowed = provenance.canAuthorizeControlledWrite(
+    verified,
+    "other",
+    "fernando"
   );
-  assert.equal(
-    canAuthorizeControlledWrite(verified, "herreb", "other"),
-    false
+  const wrongActorAllowed = provenance.canAuthorizeControlledWrite(
+    verified,
+    "herreb",
+    "other"
   );
+
+  assert.equal(ownerAllowed, true);
+  assert.equal(wrongTenantAllowed, false);
+  assert.equal(wrongActorAllowed, false);
 });
 
 test("service verification alone does not become owner authorization", () => {
-  const serviceVerified: RuntimeProvenance = {
+  const serviceVerified: provenance.RuntimeProvenance = {
     assurance: "SERVICE_VERIFIED",
     subjectId: "fernando",
     tenantId: "herreb",
     source: "internal-service"
   };
-  assert.equal(
-    canAuthorizeControlledWrite(serviceVerified, "herreb", "fernando"),
-    false
+  const allowed = provenance.canAuthorizeControlledWrite(
+    serviceVerified,
+    "herreb",
+    "fernando"
   );
+  assert.equal(allowed, false);
 });
