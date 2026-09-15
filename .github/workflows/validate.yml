@@ -9,6 +9,7 @@ on:
   pull_request:
     branches:
       - main
+      - feature/employee-core-v0.1
 
 permissions:
   contents: read
@@ -37,37 +38,13 @@ jobs:
         run: npm ci
 
       - name: Formatting
-        id: formatting
-        continue-on-error: true
         run: npx oxfmt --check .
 
       - name: Lint
-        id: lint
-        continue-on-error: true
         run: npm run lint
 
       - name: TypeScript
-        id: typescript
-        continue-on-error: true
         run: npx tsc --noEmit
 
       - name: Core tests
-        id: tests
-        continue-on-error: true
         run: npm run test:core
-
-      - name: Validation result
-        if: always()
-        env:
-          FORMATTING: ${{ steps.formatting.outcome }}
-          LINT: ${{ steps.lint.outcome }}
-          TYPESCRIPT: ${{ steps.typescript.outcome }}
-          TESTS: ${{ steps.tests.outcome }}
-        run: |
-          echo "Formatting: $FORMATTING"
-          echo "Lint:       $LINT"
-          echo "TypeScript: $TYPESCRIPT"
-          echo "Tests:      $TESTS"
-          if [ "$FORMATTING" != "success" ] || [ "$LINT" != "success" ] || [ "$TYPESCRIPT" != "success" ] || [ "$TESTS" != "success" ]; then
-            exit 1
-          fi
