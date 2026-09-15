@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/employee-core-v0.1
+      - feature/employee-runtime-v0.1
   pull_request:
     branches:
       - main
@@ -35,8 +36,30 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: TypeScript and lint
-        run: npm run check
+      - name: Formatting
+        id: formatting
+        continue-on-error: true
+        run: npx oxfmt --check .
+
+      - name: Lint
+        id: lint
+        continue-on-error: true
+        run: npx oxlint src/
+
+      - name: TypeScript
+        id: typescript
+        continue-on-error: true
+        run: npx tsc
 
       - name: Core tests
+        id: tests
+        continue-on-error: true
         run: npm run test:core
+
+      - name: Validation gate
+        if: always()
+        run: |
+          test "${{ steps.formatting.outcome }}" = "success"
+          test "${{ steps.lint.outcome }}" = "success"
+          test "${{ steps.typescript.outcome }}" = "success"
+          test "${{ steps.tests.outcome }}" = "success"
