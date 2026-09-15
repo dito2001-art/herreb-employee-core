@@ -24,6 +24,7 @@ type RuntimeEnv = Env & {
   SALES_OPS_TOKEN?: string;
   AG002_GATEWAY?: ServiceFetcher;
   HERREB_RUNTIME_TOKEN?: string;
+  AG002_TENANT_ID?: string;
   CALENDAR_READ?: ServiceFetcher;
   CALENDAR_READ_TOKEN?: string;
   EMAIL_READ?: ServiceFetcher;
@@ -81,26 +82,25 @@ export class ChatAgent extends AIChatAgent<Env> {
       actorId,
       channel
     });
-
-    const workersai = createWorkersAI({ binding: this.env.AI });
-    const model = workersai(session.modelRoute.model, {
-      sessionAffinity: this.sessionAffinity
+    const modelRoute = session.modelRoute;
+    const model = createWorkersAI({ binding: this.env.AI })(modelRoute.model);
+    const system = buildEmployeeSystemPrompt(session.context, session.manifest);
+    const tools = buildEmployeeTools(session, bootstrap.connectedCapabilities);
+    const messages = pruneMessages({
+      messages: await convertToModelMessages(this.messages),
+      reasoning: "all",
+      toolCalls: "before-last-2-messages",
+      emptyMessages: "remove"
     });
 
-    const result = streamText({
+    return streamText({
       model,
-      system: buildEmployeeSystemPrompt(session.context, session.manifest),
-      messages: pruneMessages({
-        messages: await convertToModelMessages(this.messages),
-        toolCalls: "before-last-2-messages",
-        reasoning: "before-last-message"
-      }),
-      tools: buildEmployeeTools(session, bootstrap.connectedCapabilities),
-      stopWhen: stepCountIs(12),
+      system,
+      messages,
+      tools,
+      stopWhen: stepCountIs(8),
       abortSignal: options?.abortSignal
-    });
-
-    return result.toUIMessageStreamResponse();
+    }).toUIMessageStreamResponse();
   }
 }
 
@@ -111,4 +111,4 @@ export default {
       new Response("Not found", { status: 404 })
     );
   }
-} satisfies ExportedHandler<Env>;
+};
