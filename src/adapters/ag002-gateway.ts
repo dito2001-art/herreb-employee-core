@@ -5,6 +5,12 @@ import type { ServiceFetcher } from "./sales-ops";
 export interface Ag002GatewayTransportOptions {
   service: ServiceFetcher;
   runtimeToken: string;
+  /**
+   * AG-002/CRM v110 is a single-tenant service. Pin each binding to the
+   * tenant it owns so a caller cannot cross tenant boundaries merely by
+   * changing X-Tenant-ID.
+   */
+  tenantId: string;
   baseUrl?: string;
 }
 
@@ -24,9 +30,21 @@ export function createAg002GatewayReadOnlyTransport(
   options: Ag002GatewayTransportOptions
 ): CrmTransport {
   const baseUrl = options.baseUrl ?? "https://internal";
+  const scopedTenantId = options.tenantId.trim();
 
   return {
     async execute(input): Promise<CapabilityResult> {
+      if (!scopedTenantId || input.tenantId !== scopedTenantId) {
+        return {
+          ok: false,
+          error: {
+            code: "AG002_TENANT_SCOPE_MISMATCH",
+            message: "AG-002 binding is not authorized for this tenant"
+          },
+          evidence: { executed: false }
+        };
+      }
+
       if (input.operation !== "read") {
         return {
           ok: false,
