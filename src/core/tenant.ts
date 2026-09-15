@@ -19,10 +19,5 @@ export function tenantScopedKey(
   context: Pick<TenantContext, "tenantId" | "employeeId" | "workspaceId">,
   resource: string
 ): string {
-  return [
-    safeKeyPart(context.tenantId, "TENANT_ID"),
-    safeKeyPart(context.employeeId, "EMPLOYEE_ID"),
-    safeKeyPart(context.workspaceId, "WORKSPACE_ID"),
-    safeKeyPart(resource, "RESOURCE_KEY")
-  ].join(":");
+  return [safeKeyPart(context.tenantId, "TENANT_ID"), safeKeyPart(context.employeeId, "EMPLOYEE_ID"), safeKeyPart(context.workspaceId, "WORKSPACE_ID"), safeKeyPart(resource, "RESOURCE_KEY")].join(":");
 }
