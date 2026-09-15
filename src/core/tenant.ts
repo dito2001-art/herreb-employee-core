@@ -14,6 +14,7 @@ function safeKeyPart(value: string, label: string): string {
   return encodeURIComponent(clean);
 }
 
+// Every durable/cache/session key must preserve the tenant + employee + workspace boundary.
 export function tenantScopedKey(
   context: Pick<TenantContext, "tenantId" | "employeeId" | "workspaceId">,
   resource: string
