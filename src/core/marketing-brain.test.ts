@@ -1,19 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { buildTenantMarketingBrain } from "./marketing-brain";
 import type { KnowledgeRecord } from "./knowledge";
+import { buildTenantMarketingBrain } from "./marketing-brain";
 
 const canonical: KnowledgeRecord = {
   id: "k-verified",
   tenantId: "tenant-a",
+  namespace: "marketing",
   kind: "CANONICAL",
   subject: "offering:service-1",
-  content: "Service 1 includes strategic consulting.",
-  source: { type: "TENANT_DECLARED", ref: "onboarding" },
-  status: "VERIFIED",
+  content: { statement: "Service 1 includes strategic consulting." },
+  sourceRefs: ["onboarding"],
   confidence: 1,
-  createdAt: "2026-09-15T13:00:00Z",
+  verified: true,
   updatedAt: "2026-09-15T13:00:00Z"
 };
 
@@ -21,7 +21,7 @@ const retrieved: KnowledgeRecord = {
   ...canonical,
   id: "k-retrieved",
   kind: "RETRIEVED",
-  source: { type: "WEB", ref: "public-research" }
+  sourceRefs: ["public-research"]
 };
 
 test("marketing brain publishes only claims backed by verified canonical truth", () => {
@@ -59,7 +59,7 @@ test("marketing brain publishes only claims backed by verified canonical truth",
   );
 });
 
-test("marketing brain rejects cross-tenant knowledge, brand, audience, claims and insights", () => {
+test("marketing brain rejects cross-tenant knowledge, brand and audience", () => {
   assert.throws(
     () =>
       buildTenantMarketingBrain({
@@ -110,8 +110,7 @@ test("marketing brain preserves standalone EMP-003 offering context", () => {
         type: "SERVICE",
         name: "AI Consulting",
         active: true,
-        sourceSystem: "tenant-offerings",
-        sourceId: "service-1"
+        metadata: { source: "tenant-offerings" }
       }
     ],
     knowledge: [canonical]
