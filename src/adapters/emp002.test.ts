@@ -76,10 +76,7 @@ test("calendar writes require idempotency approval and verified authorization", 
   const approvalOnly = await executeCapability(registry, request, {
     approvalGranted: true
   });
-  assert.equal(
-    approvalOnly.error?.code,
-    "VERIFIED_AUTHORIZATION_REQUIRED"
-  );
+  assert.equal(approvalOnly.error?.code, "VERIFIED_AUTHORIZATION_REQUIRED");
   assert.equal(calls, 0);
 
   const approved = await executeCapability(registry, request, {
