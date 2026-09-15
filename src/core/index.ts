@@ -11,6 +11,7 @@ export * from "./knowledge-repository";
 export * from "./knowledge-onboarding";
 export * from "./marketing";
 export * from "./marketing-brain";
+export * from "./marketing-brain-repository";
 export * from "./adapters";
 export * from "./executor";
 export * from "./durable";
