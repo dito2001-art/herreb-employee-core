@@ -1,6 +1,8 @@
 import {
+  createAg002GatewayReadOnlyTransport,
   createCalendarAdapter,
   createCalendarReadOnlyTransport,
+  createCrmAdapter,
   createEmailAdapter,
   createEmailReadOnlyTransport,
   createSalesOpsAdapter,
@@ -14,6 +16,8 @@ import { assertReadOnlyAdapters } from "./read-only";
 export interface EmployeeRuntimeBindings {
   salesOps?: ServiceFetcher;
   salesOpsToken?: string;
+  crmRead?: ServiceFetcher;
+  crmReadToken?: string;
   calendarRead?: ServiceFetcher;
   calendarReadToken?: string;
   emailRead?: ServiceFetcher;
@@ -34,6 +38,7 @@ export function buildReadOnlyRuntimeAdapters(
 ): CapabilityAdapter[] {
   const adapters: CapabilityAdapter[] = [];
   const salesOpsToken = token(bindings.salesOpsToken);
+  const crmToken = token(bindings.crmReadToken);
   const calendarToken = token(bindings.calendarReadToken);
   const emailToken = token(bindings.emailReadToken);
 
@@ -42,6 +47,17 @@ export function buildReadOnlyRuntimeAdapters(
       projectReadOnlyAdapter(
         createSalesOpsAdapter({ service: bindings.salesOps, token: salesOpsToken }),
         ["offering.read", "offering.recommend"]
+      )
+    );
+  }
+
+  if (bindings.crmRead && crmToken) {
+    adapters.push(
+      projectReadOnlyAdapter(
+        createCrmAdapter(
+          createAg002GatewayReadOnlyTransport({ service: bindings.crmRead, runtimeToken: crmToken })
+        ),
+        ["crm.read"]
       )
     );
   }
