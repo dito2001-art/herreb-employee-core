@@ -7,6 +7,7 @@ export * from "./audit";
 export * from "./tenant";
 export * from "./tenant-manifest";
 export * from "./knowledge";
+export * from "./knowledge-repository";
 export * from "./marketing";
 export * from "./marketing-brain";
 export * from "./adapters";
