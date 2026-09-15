@@ -175,7 +175,7 @@ test("green capability executes without approval", async () => {
   assert.equal(result.audit.tenantId, "tenant-a");
 });
 
-test("yellow capability requires idempotency and explicit approval", async () => {
+test("yellow capability requires idempotency approval and verified authorization", async () => {
   const registry = createAdapterRegistry();
   registry.register({
     id: "test-quote",
@@ -185,30 +185,41 @@ test("yellow capability requires idempotency and explicit approval", async () =>
       return { ok: true, output: { quoteId: "Q-1" } };
     }
   });
-  const missingKey = await executeCapability(registry, {
-    context: baseContext,
-    capabilityId: "quote.create",
-    input: {}
-  });
-  assert.equal(missingKey.error?.code, "IDEMPOTENCY_KEY_REQUIRED");
-  const blocked = await executeCapability(registry, {
+  const request = {
     context: baseContext,
     capabilityId: "quote.create",
     input: {},
     idempotencyKey: "quote:run-1"
+  };
+  const missingKey = await executeCapability(registry, {
+    ...request,
+    idempotencyKey: undefined
   });
+  assert.equal(missingKey.error?.code, "IDEMPOTENCY_KEY_REQUIRED");
+  const blocked = await executeCapability(registry, request);
   assert.equal(blocked.error?.code, "APPROVAL_REQUIRED");
-  const approved = await executeCapability(
-    registry,
-    {
-      context: baseContext,
-      capabilityId: "quote.create",
-      input: {},
-      idempotencyKey: "quote:run-1"
-    },
-    { approvalGranted: true }
+  const approvalOnly = await executeCapability(registry, request, {
+    approvalGranted: true
+  });
+  assert.equal(
+    approvalOnly.error?.code,
+    "VERIFIED_AUTHORIZATION_REQUIRED"
   );
+  const approved = await executeCapability(registry, request, {
+    approvalGranted: true,
+    controlledWriteAuthorization: {
+      authorized: true,
+      assurance: "OWNER_VERIFIED",
+      subjectId: "fernando",
+      tenantId: "tenant-a",
+      source: "trusted-authenticator"
+    }
+  });
   assert.equal(approved.ok, true);
   assert.equal(approved.audit.evidence?.approvalGranted, true);
   assert.equal(approved.audit.evidence?.idempotencyKey, "quote:run-1");
+  assert.equal(
+    approved.audit.evidence?.authorizationAssurance,
+    "OWNER_VERIFIED"
+  );
 });
