@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { StaticModelRouter } from "../core";
 import { HerreBEmployeeRuntime } from "../runtime";
-import { buildEmployeeTools, listManifestToolIds } from "./tools";
+import {
+  buildEmployeeTools,
+  capabilityIdToToolName,
+  listManifestToolIds,
+  listManifestToolNames
+} from "./tools";
 
 const router = new StaticModelRouter({
   provider: "workers-ai",
@@ -47,14 +52,33 @@ test("EMP-003 receives marketer tools but not sales or assistant tools", async (
   assert.ok(!ids.includes("calendar.write"));
 });
 
+test("provider-facing tool names are safe while capability ids remain canonical", async () => {
+  const current = await session("EMP-002");
+  assert.equal(capabilityIdToToolName("calendar.read"), "calendar_read");
+  assert.deepEqual(listManifestToolNames(current.manifest), [
+    "crm_read",
+    "crm_write",
+    "calendar_read",
+    "calendar_write",
+    "email_read",
+    "email_send",
+    "task_schedule"
+  ]);
+  for (const name of listManifestToolNames(current.manifest)) {
+    assert.match(name, /^[A-Za-z0-9_-]+$/);
+  }
+});
+
 test("unconnected manifest tool returns evidence and performs no side effect", async () => {
   const current = await session("EMP-002");
   const tools = buildEmployeeTools(current) as Record<string, { execute?: Function }>;
-  const execute = tools["email.send"]?.execute;
+  const execute = tools.email_send?.execute;
   assert.equal(typeof execute, "function");
   const result = await execute?.({ input: { to: "nobody@example.test" } }, {});
   assert.equal(result.ok, false);
   assert.equal(result.error.code, "CAPABILITY_NOT_CONNECTED");
   assert.equal(result.evidence.executed, false);
   assert.equal(result.evidence.tenantId, "herreb");
+  assert.equal(result.evidence.capabilityId, "email.send");
+  assert.equal(result.evidence.toolName, "email_send");
 });
