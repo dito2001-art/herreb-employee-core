@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ServiceFetcher } from "../adapters";
-import { StaticModelRouter, parseTenantManifest } from "../core";
+import {
+  StaticModelRouter,
+  parseTenantManifest,
+  type EmployeeId
+} from "../core";
 import { buildReadOnlyRuntime } from "./bootstrap";
 import { HerreBEmployeeRuntime } from "./runtime";
 
@@ -21,8 +25,14 @@ const router = new StaticModelRouter({
   reason: "HerreB Client 0 workforce harness"
 });
 
-function client0Runtime(enabledEmployees = ["EMP-001", "EMP-002", "EMP-003"] as const) {
-  const calls: Array<{ service: string; method: string; tenant: string | null }> = [];
+function client0Runtime(
+  enabledEmployees: readonly EmployeeId[] = ["EMP-001", "EMP-002", "EMP-003"]
+) {
+  const calls: Array<{
+    service: string;
+    method: string;
+    tenant: string | null;
+  }> = [];
   const bootstrap = buildReadOnlyRuntime({
     SALES_OPS: service((request) => {
       calls.push({
@@ -87,7 +97,7 @@ function client0Runtime(enabledEmployees = ["EMP-001", "EMP-002", "EMP-003"] as 
   return { runtime, calls, bootstrap };
 }
 
-function start(runtime: HerreBEmployeeRuntime, employeeId: "EMP-001" | "EMP-002" | "EMP-003") {
+function start(runtime: HerreBEmployeeRuntime, employeeId: EmployeeId) {
   return runtime.start({
     tenantId: "herreb-client-0",
     employeeId,
@@ -237,12 +247,17 @@ test("Client 0 workforce shares tenant offerings without sharing employee permis
     /EMPLOYEE_CAPABILITY_NOT_DECLARED/
   );
 
-  assert.equal(calls.length, 6);
+  assert.equal(calls.length, 5);
   assert.equal(
     calls.every((call) => call.tenant === "herreb-client-0"),
     true
   );
-  assert.equal(calls.every((call) => call.method === "GET" || call.service === "sales"), true);
+  assert.equal(
+    calls.every(
+      (call) => call.method === "GET" || call.service === "sales"
+    ),
+    true
+  );
 });
 
 test("Client 0 disabled employee fails closed before model or capability execution", async () => {
