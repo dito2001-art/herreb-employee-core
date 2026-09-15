@@ -41,6 +41,7 @@ const manifests = {
     purpose:
       "Research, plan, create, execute and measure tenant marketing work.",
     capabilities: [
+      "offering.read",
       "crm.read",
       "marketing.read",
       "marketing.write",
