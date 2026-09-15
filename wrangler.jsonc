@@ -9,6 +9,10 @@
     {
       "binding": "SALES_OPS",
       "service": "herreb-emp001-sales-ops-sandbox"
+    },
+    {
+      "binding": "AG002_GATEWAY",
+      "service": "herreb-agent-gateway-v3"
     }
   ],
   "assets": {
