@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   StaticModelRouter,
+  parseTenantManifest,
   type CapabilityAdapter,
   type CapabilityRequest,
   type CapabilityResult
@@ -52,6 +53,63 @@ test("runtime starts only one of the three declared employees", async () => {
       channel: "test"
     }),
     /Invalid option/
+  );
+});
+
+test("runtime enforces tenant employee entitlements before model routing", async () => {
+  const runtime = new HerreBEmployeeRuntime({
+    modelRouter,
+    adapters: [crmReadAdapter],
+    resolveTenantManifest: (tenantId) =>
+      parseTenantManifest({
+        tenantId,
+        enabledEmployees: ["EMP-003"],
+        knowledgeNamespace: `${tenantId}:knowledge`,
+        offeringNamespace: `${tenantId}:offerings`
+      })
+  });
+
+  const marketer = await runtime.start({
+    tenantId: "client-a",
+    employeeId: "EMP-003",
+    workspaceId: "marketing",
+    actorId: "owner",
+    channel: "test"
+  });
+  assert.equal(marketer.tenantManifest?.tenantId, "client-a");
+
+  await assert.rejects(
+    runtime.start({
+      tenantId: "client-a",
+      employeeId: "EMP-001",
+      workspaceId: "sales",
+      actorId: "owner",
+      channel: "test"
+    }),
+    /EMPLOYEE_NOT_ENTITLED/
+  );
+});
+
+test("runtime rejects a tenant manifest resolved for another tenant", async () => {
+  const runtime = new HerreBEmployeeRuntime({
+    modelRouter,
+    resolveTenantManifest: () =>
+      parseTenantManifest({
+        tenantId: "tenant-b",
+        enabledEmployees: ["EMP-002"],
+        knowledgeNamespace: "tenant-b:knowledge",
+        offeringNamespace: "tenant-b:offerings"
+      })
+  });
+  await assert.rejects(
+    runtime.start({
+      tenantId: "tenant-a",
+      employeeId: "EMP-002",
+      workspaceId: "assistant",
+      actorId: "owner",
+      channel: "test"
+    }),
+    /TENANT_MANIFEST_MISMATCH/
   );
 });
 
