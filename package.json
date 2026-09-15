@@ -17,7 +17,7 @@
     "types": "wrangler types env.d.ts",
     "format": "oxfmt --write .",
     "lint": "oxlint src/",
-    "test:core": "npx --yes tsx@4.23.13 --test src/core/core.test.ts src/core/marketing-brain.test.ts src/core/proactive-sales.test.ts src/core/sales-loop.test.ts src/core/sales-loop-executor.test.ts src/core/sales-state.test.ts src/adapters/adapters.test.ts src/adapters/emp002.test.ts src/adapters/ag002-gateway.test.ts src/runtime/runtime.test.ts src/runtime/read-only.test.ts src/runtime/bootstrap.test.ts src/runtime/client0.test.ts src/runtime/provenance.test.ts src/runtime/tenant-manifest-resolver.test.ts src/runtime/tenant-crm.test.ts src/runtime/tenant-capabilities.test.ts src/agent/agent.test.ts src/agent/tools.test.ts",
+    "test:core": "npx --yes tsx@4.23.13 --test src/core/core.test.ts src/core/marketing-brain.test.ts src/core/proactive-sales.test.ts src/core/sales-loop.test.ts src/core/sales-loop-executor.test.ts src/core/sales-state.test.ts src/adapters/adapters.test.ts src/adapters/emp001-whatsapp.test.ts src/adapters/emp002.test.ts src/adapters/ag002-gateway.test.ts src/runtime/runtime.test.ts src/runtime/read-only.test.ts src/runtime/bootstrap.test.ts src/runtime/client0.test.ts src/runtime/provenance.test.ts src/runtime/tenant-manifest-resolver.test.ts src/runtime/tenant-crm.test.ts src/runtime/tenant-capabilities.test.ts src/agent/agent.test.ts src/agent/tools.test.ts",
     "check": "oxfmt --check . && oxlint src/ && tsc"
   },
   "dependencies": {
