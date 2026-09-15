@@ -16,7 +16,7 @@ export const ProactiveSalesPolicySchema = z.object({
   allowAutonomousFollowup: z.boolean().default(true),
   maxTouchesPerLeadPerDay: z.number().int().positive().default(1),
   maxTouchesPerLeadPerWeek: z.number().int().positive().default(3),
-  suppressionList: z.array(z.string().min(1)).default([]),
+  suppressionList: z.array(z.string().min(1)).default([])
 });
 export type ProactiveSalesPolicy = z.infer<typeof ProactiveSalesPolicySchema>;
 
@@ -50,7 +50,10 @@ export function canAutonomouslyContactLead(input: {
   kind: "OUTREACH" | "FOLLOWUP";
 }): SalesAutonomyDecision {
   const policy = ProactiveSalesPolicySchema.parse(input.policy);
-  if (policy.tenantId !== input.tenantId || input.lead.tenantId !== input.tenantId) {
+  if (
+    policy.tenantId !== input.tenantId ||
+    input.lead.tenantId !== input.tenantId
+  ) {
     return { allowed: false, reason: "TENANT_MISMATCH" };
   }
   if (policy.mode !== "ACTIVE") {
