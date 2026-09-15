@@ -24,14 +24,25 @@ const retrieved: KnowledgeRecord = {
   sourceRefs: ["public-research"]
 };
 
+const offering = {
+  id: "service-1",
+  tenantId: "tenant-a",
+  type: "SERVICE" as const,
+  name: "AI Consulting",
+  active: true,
+  metadata: { source: "tenant-offerings" }
+};
+
 test("marketing brain publishes only claims backed by verified canonical truth", () => {
   const brain = buildTenantMarketingBrain({
     tenantId: "tenant-a",
+    offerings: [offering],
     knowledge: [canonical, retrieved],
     claims: [
       {
         id: "claim-ok",
         tenantId: "tenant-a",
+        offeringId: offering.id,
         text: "Service 1 includes strategic consulting.",
         sourceKnowledgeIds: [canonical.id],
         verified: true
@@ -49,6 +60,14 @@ test("marketing brain publishes only claims backed by verified canonical truth",
         text: "Unsupported claim",
         sourceKnowledgeIds: ["missing"],
         verified: true
+      },
+      {
+        id: "claim-missing-offering",
+        tenantId: "tenant-a",
+        offeringId: "not-in-tenant-brain",
+        text: "Unsupported offering claim",
+        sourceKnowledgeIds: [canonical.id],
+        verified: true
       }
     ]
   });
@@ -59,7 +78,7 @@ test("marketing brain publishes only claims backed by verified canonical truth",
   );
 });
 
-test("marketing brain rejects cross-tenant knowledge, brand and audience", () => {
+test("marketing brain rejects cross-tenant knowledge brand audience offering claim and insight", () => {
   assert.throws(
     () =>
       buildTenantMarketingBrain({
@@ -98,21 +117,54 @@ test("marketing brain rejects cross-tenant knowledge, brand and audience", () =>
       }),
     /MARKETING_TENANT_ISOLATION/
   );
+  assert.throws(
+    () =>
+      buildTenantMarketingBrain({
+        tenantId: "tenant-a",
+        offerings: [{ ...offering, tenantId: "tenant-b" }]
+      }),
+    /MARKETING_TENANT_ISOLATION/
+  );
+  assert.throws(
+    () =>
+      buildTenantMarketingBrain({
+        tenantId: "tenant-a",
+        knowledge: [canonical],
+        claims: [
+          {
+            id: "claim-wrong-tenant",
+            tenantId: "tenant-b",
+            text: "Wrong tenant claim",
+            sourceKnowledgeIds: [canonical.id],
+            verified: true
+          }
+        ]
+      }),
+    /MARKETING_TENANT_ISOLATION/
+  );
+  assert.throws(
+    () =>
+      buildTenantMarketingBrain({
+        tenantId: "tenant-a",
+        insights: [
+          {
+            id: "insight-wrong-tenant",
+            tenantId: "tenant-b",
+            hypothesis: "Wrong tenant insight",
+            evidenceRefs: [],
+            confidence: 0.5,
+            learnedAt: "2026-09-15T13:00:00Z"
+          }
+        ]
+      }),
+    /MARKETING_TENANT_ISOLATION/
+  );
 });
 
 test("marketing brain preserves standalone EMP-003 offering context", () => {
   const brain = buildTenantMarketingBrain({
     tenantId: "tenant-a",
-    offerings: [
-      {
-        id: "service-1",
-        tenantId: "tenant-a",
-        type: "SERVICE",
-        name: "AI Consulting",
-        active: true,
-        metadata: { source: "tenant-offerings" }
-      }
-    ],
+    offerings: [offering],
     knowledge: [canonical]
   });
 
