@@ -23,6 +23,10 @@ type RuntimeEnv = Env & {
   SALES_OPS_TOKEN?: string;
   AG002_GATEWAY?: ServiceFetcher;
   HERREB_RUNTIME_TOKEN?: string;
+  CALENDAR_READ?: ServiceFetcher;
+  CALENDAR_READ_TOKEN?: string;
+  EMAIL_READ?: ServiceFetcher;
+  EMAIL_READ_TOKEN?: string;
 };
 
 function readStateString(state: unknown, key: string): string | undefined {
