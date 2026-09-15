@@ -7,7 +7,14 @@ import {
   streamText
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
-import { projectReadOnlyAdapter, createSalesOpsAdapter, type ServiceFetcher } from "./adapters";
+import {
+  createAg002GatewayReadOnlyTransport,
+  createCrmAdapter,
+  createMarketingCrmAdapter,
+  projectReadOnlyAdapter,
+  createSalesOpsAdapter,
+  type ServiceFetcher
+} from "./adapters";
 import { buildEmployeeTools } from "./agent/tools";
 import { StaticModelRouter, type CapabilityAdapter } from "./core";
 import {
@@ -22,6 +29,8 @@ const DEFAULT_MODEL = "@cf/moonshotai/kimi-k2.7-code";
 type RuntimeEnv = Env & {
   SALES_OPS?: ServiceFetcher;
   SALES_OPS_TOKEN?: string;
+  AG002_GATEWAY?: ServiceFetcher;
+  RUNTIME_GATEWAY_TOKEN?: string;
 };
 
 function readStateString(state: unknown, key: string): string | undefined {
@@ -32,6 +41,7 @@ function readStateString(state: unknown, key: string): string | undefined {
 
 function buildReadOnlyAdapters(env: RuntimeEnv): CapabilityAdapter[] {
   const adapters: CapabilityAdapter[] = [];
+
   if (env.SALES_OPS && env.SALES_OPS_TOKEN?.trim()) {
     adapters.push(
       projectReadOnlyAdapter(
@@ -40,6 +50,18 @@ function buildReadOnlyAdapters(env: RuntimeEnv): CapabilityAdapter[] {
       )
     );
   }
+
+  if (env.AG002_GATEWAY && env.RUNTIME_GATEWAY_TOKEN?.trim()) {
+    const crmTransport = createAg002GatewayReadOnlyTransport({
+      service: env.AG002_GATEWAY,
+      runtimeToken: env.RUNTIME_GATEWAY_TOKEN
+    });
+    adapters.push(
+      projectReadOnlyAdapter(createCrmAdapter(crmTransport), ["crm.read"]),
+      projectReadOnlyAdapter(createMarketingCrmAdapter(crmTransport), ["crm.read", "marketing.read"])
+    );
+  }
+
   assertReadOnlyAdapters(adapters);
   return adapters;
 }
