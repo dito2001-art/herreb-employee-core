@@ -12,6 +12,7 @@ export * from "./marketing-brain";
 export * from "./proactive-sales";
 export * from "./sales-loop";
 export * from "./sales-loop-executor";
+export * from "./sales-state";
 export * from "./adapters";
 export * from "./executor";
 export * from "./durable";
