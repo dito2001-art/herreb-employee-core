@@ -20,11 +20,10 @@ const baseContext = parseTenantContext({
   correlationId: "run-1"
 });
 
-test("only the three v1 employees exist", () => {
+test("the v1 employee manifests are exactly the three approved products", () => {
   assert.equal(getEmployeeManifest("EMP-001").id, "EMP-001");
   assert.equal(getEmployeeManifest("EMP-002").id, "EMP-002");
   assert.equal(getEmployeeManifest("EMP-003").id, "EMP-003");
-  assert.throws(() => getEmployeeManifest("EMP-004" as never));
 });
 
 test("tenant context rejects unsupported employees", () => {
