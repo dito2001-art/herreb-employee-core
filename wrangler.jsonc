@@ -5,6 +5,12 @@
   "compatibility_date": "2026-06-11",
   "compatibility_flags": ["nodejs_compat"],
   "ai": { "binding": "AI", "remote": true },
+  "services": [
+    {
+      "binding": "SALES_OPS",
+      "service": "herreb-emp001-sales-ops-sandbox"
+    }
+  ],
   "assets": {
     "directory": "./public",
     "not_found_handling": "single-page-application",
