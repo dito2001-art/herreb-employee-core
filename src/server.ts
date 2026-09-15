@@ -22,6 +22,8 @@ const DEFAULT_MODEL = "@cf/moonshotai/kimi-k2.7-code";
 type RuntimeEnv = Env & {
   SALES_OPS?: ServiceFetcher;
   SALES_OPS_TOKEN?: string;
+  CRM_READ?: ServiceFetcher;
+  CRM_READ_TOKEN?: string;
   CALENDAR_READ?: ServiceFetcher;
   CALENDAR_READ_TOKEN?: string;
   EMAIL_READ?: ServiceFetcher;
@@ -66,6 +68,8 @@ export class ChatAgent extends AIChatAgent<Env> {
     const adapters = buildReadOnlyRuntimeAdapters({
       salesOps: env.SALES_OPS,
       salesOpsToken: env.SALES_OPS_TOKEN,
+      crmRead: env.CRM_READ,
+      crmReadToken: env.CRM_READ_TOKEN,
       calendarRead: env.CALENDAR_READ,
       calendarReadToken: env.CALENDAR_READ_TOKEN,
       emailRead: env.EMAIL_READ,
