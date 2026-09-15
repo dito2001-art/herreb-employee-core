@@ -44,7 +44,7 @@ test("calendar reads execute without approval", async () => {
   assert.equal(calls, 1);
 });
 
-test("calendar writes require idempotency and approval", async () => {
+test("calendar writes require idempotency approval and verified authorization", async () => {
   let calls = 0;
   const registry = createAdapterRegistry();
   registry.register(
@@ -73,8 +73,24 @@ test("calendar writes require idempotency and approval", async () => {
   assert.equal(blocked.error?.code, "APPROVAL_REQUIRED");
   assert.equal(calls, 0);
 
-  const approved = await executeCapability(registry, request, {
+  const approvalOnly = await executeCapability(registry, request, {
     approvalGranted: true
+  });
+  assert.equal(
+    approvalOnly.error?.code,
+    "VERIFIED_AUTHORIZATION_REQUIRED"
+  );
+  assert.equal(calls, 0);
+
+  const approved = await executeCapability(registry, request, {
+    approvalGranted: true,
+    controlledWriteAuthorization: {
+      authorized: true,
+      assurance: "OWNER_VERIFIED",
+      subjectId: "tester",
+      tenantId: "tenant-a",
+      source: "trusted-authenticator"
+    }
   });
   assert.equal(approved.ok, true);
   assert.equal(calls, 1);
