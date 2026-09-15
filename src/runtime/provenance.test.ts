@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   canAuthorizeControlledWrite,
-  unverifiedProvenance,
-  type RuntimeProvenance
+  type RuntimeProvenance,
+  unverifiedProvenance
 } from "./provenance";
 
 test("claimed session identity cannot authorize controlled writes", () => {
@@ -21,7 +21,10 @@ test("only matching owner-verified provenance can authorize controlled writes", 
     tenantId: "herreb",
     source: "trusted-authenticator"
   };
-  assert.equal(canAuthorizeControlledWrite(verified, "herreb", "fernando"), true);
+  assert.equal(
+    canAuthorizeControlledWrite(verified, "herreb", "fernando"),
+    true
+  );
   assert.equal(canAuthorizeControlledWrite(verified, "other", "fernando"), false);
   assert.equal(canAuthorizeControlledWrite(verified, "herreb", "other"), false);
 });
