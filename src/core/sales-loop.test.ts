@@ -7,18 +7,18 @@ const tenantId = "herreb-client-0";
 const policy = () =>
   ProactiveSalesPolicySchema.parse({
     tenantId,
-    channels: ["EMAIL", "WHATSAPP", "CRM"],
+    channels: ["EMAIL", "WHATSAPP", "CRM"]
   });
 
 const qualifiedLead = (
-  overrides: Partial<SalesLoopLead> = {},
+  overrides: Partial<SalesLoopLead> = {}
 ): SalesLoopLead => ({
   id: "lead-1",
   tenantId,
   source: "DATABASE",
   contactKey: "lead@example.com",
   qualified: true,
-  ...overrides,
+  ...overrides
 });
 
 test("empty active pipeline asks for database leads first", () => {
@@ -26,8 +26,8 @@ test("empty active pipeline asks for database leads first", () => {
     nextSalesLoopAction({ tenantId, policy: policy(), leads: [] }),
     {
       action: "IMPORT_DATABASE",
-      reason: "DATABASE_SELLING_ENABLED",
-    },
+      reason: "DATABASE_SELLING_ENABLED"
+    }
   );
 });
 
@@ -35,7 +35,7 @@ test("unqualified lead is qualified before contact", () => {
   const lead = qualifiedLead({ qualified: false });
   assert.equal(
     nextSalesLoopAction({ tenantId, policy: policy(), leads: [lead] }).action,
-    "QUALIFY",
+    "QUALIFY"
   );
 });
 
@@ -43,7 +43,7 @@ test("qualified untouched lead receives autonomous outreach", () => {
   const decision = nextSalesLoopAction({
     tenantId,
     policy: policy(),
-    leads: [qualifiedLead()],
+    leads: [qualifiedLead()]
   });
   assert.equal(decision.action, "OUTREACH");
   assert.equal(decision.channel, "EMAIL");
@@ -53,13 +53,13 @@ test("contacted lead receives followup only when due", () => {
   const due = qualifiedLead({ contacted: true, followupDue: true });
   assert.equal(
     nextSalesLoopAction({ tenantId, policy: policy(), leads: [due] }).action,
-    "FOLLOWUP",
+    "FOLLOWUP"
   );
 
   const notDue = qualifiedLead({ contacted: true, followupDue: false });
   assert.notEqual(
     nextSalesLoopAction({ tenantId, policy: policy(), leads: [notDue] }).action,
-    "FOLLOWUP",
+    "FOLLOWUP"
   );
 });
 
@@ -67,7 +67,7 @@ test("touch limits prevent repeated contact", () => {
   const lead = qualifiedLead({ touchesToday: 1, touchesThisWeek: 1 });
   assert.notEqual(
     nextSalesLoopAction({ tenantId, policy: policy(), leads: [lead] }).action,
-    "OUTREACH",
+    "OUTREACH"
   );
 });
 
@@ -78,8 +78,8 @@ test("opt-out is suppressed before any selling action", () => {
     {
       action: "SUPPRESS",
       leadId: "lead-1",
-      reason: "LEAD_OPTED_OUT",
-    },
+      reason: "LEAD_OPTED_OUT"
+    }
   );
 });
 
@@ -88,16 +88,16 @@ test("PAUSED stops the loop and tenant mismatch fails closed", () => {
     nextSalesLoopAction({
       tenantId,
       policy: { ...policy(), mode: "PAUSED" },
-      leads: [qualifiedLead()],
+      leads: [qualifiedLead()]
     }).reason,
-    "SALES_PAUSED",
+    "SALES_PAUSED"
   );
   assert.equal(
     nextSalesLoopAction({
       tenantId: "tenant-b",
       policy: policy(),
-      leads: [qualifiedLead()],
+      leads: [qualifiedLead()]
     }).reason,
-    "TENANT_MISMATCH",
+    "TENANT_MISMATCH"
   );
 });
