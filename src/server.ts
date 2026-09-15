@@ -7,6 +7,7 @@ import {
   streamText
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
+import { buildEmployeeTools } from "./agent/tools";
 import { StaticModelRouter } from "./core";
 import { buildEmployeeSystemPrompt, HerreBEmployeeRuntime } from "./runtime";
 
@@ -68,7 +69,7 @@ export class ChatAgent extends AIChatAgent<Env> {
         toolCalls: "before-last-2-messages",
         reasoning: "before-last-message"
       }),
-      tools: {},
+      tools: buildEmployeeTools(session),
       stopWhen: stepCountIs(12),
       abortSignal: options?.abortSignal
     });
