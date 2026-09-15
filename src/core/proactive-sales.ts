@@ -50,10 +50,7 @@ export function canAutonomouslyContactLead(input: {
   kind: "OUTREACH" | "FOLLOWUP";
 }): SalesAutonomyDecision {
   const policy = ProactiveSalesPolicySchema.parse(input.policy);
-  if (
-    policy.tenantId !== input.tenantId ||
-    input.lead.tenantId !== input.tenantId
-  ) {
+  if (policy.tenantId !== input.tenantId || input.lead.tenantId !== input.tenantId) {
     return { allowed: false, reason: "TENANT_MISMATCH" };
   }
   if (policy.mode !== "ACTIVE") {
