@@ -6,8 +6,17 @@ import type {
 } from "./adapters";
 import { authorizeCapability } from "./policy";
 
+export interface ControlledWriteAuthorization {
+  authorized: boolean;
+  assurance?: string;
+  subjectId?: string;
+  tenantId?: string;
+  source?: string;
+}
+
 export interface ExecuteOptions {
   approvalGranted?: boolean;
+  controlledWriteAuthorization?: ControlledWriteAuthorization;
 }
 
 export interface ExecutionResult<T = unknown> extends CapabilityResult<T> {
@@ -72,6 +81,28 @@ export async function executeCapability<TInput = unknown, TOutput = unknown>(
     };
   }
 
+  if (
+    policy.risk === "YELLOW" &&
+    !options.controlledWriteAuthorization?.authorized
+  ) {
+    const result: CapabilityResult<TOutput> = {
+      ok: false,
+      error: {
+        code: "VERIFIED_AUTHORIZATION_REQUIRED",
+        message: "Controlled writes require verified owner authorization"
+      }
+    };
+    return {
+      ...result,
+      audit: createAuditEvent(
+        request.context,
+        request.capabilityId,
+        policy,
+        result
+      )
+    };
+  }
+
   const adapter = registry.resolve(
     request.capabilityId,
     request.context.employeeId
@@ -99,6 +130,7 @@ export async function executeCapability<TInput = unknown, TOutput = unknown>(
     const adapterResult = (await adapter.execute(
       request
     )) as CapabilityResult<TOutput>;
+    const authorization = options.controlledWriteAuthorization;
     const result: CapabilityResult<TOutput> = {
       ...adapterResult,
       evidence: {
@@ -108,6 +140,14 @@ export async function executeCapability<TInput = unknown, TOutput = unknown>(
           : {}),
         ...(policy.decision === "REQUIRE_APPROVAL"
           ? { approvalGranted: true }
+          : {}),
+        ...(authorization?.authorized
+          ? {
+              authorizationAssurance: authorization.assurance,
+              authorizationSubjectId: authorization.subjectId,
+              authorizationTenantId: authorization.tenantId,
+              authorizationSource: authorization.source
+            }
           : {})
       }
     };
