@@ -27,17 +27,12 @@ test("the v1 employee manifests are exactly the three approved products", () => 
 });
 
 test("tenant context rejects unsupported employees", () => {
-  assert.throws(() =>
-    parseTenantContext({ ...baseContext, employeeId: "EMP-004" })
-  );
+  assert.throws(() => parseTenantContext({ ...baseContext, employeeId: "EMP-004" }));
 });
 
 test("tenant isolation rejects cross-tenant resources", () => {
   assert.doesNotThrow(() => assertSameTenant(baseContext, "tenant-a"));
-  assert.throws(
-    () => assertSameTenant(baseContext, "tenant-b"),
-    /TENANT_ISOLATION_VIOLATION/
-  );
+  assert.throws(() => assertSameTenant(baseContext, "tenant-b"), /TENANT_ISOLATION_VIOLATION/);
 });
 
 test("tenant scoped keys include tenant employee and workspace", () => {
@@ -53,6 +48,26 @@ test("policy is deny-by-default", () => {
 
 test("employee cannot use capability outside its manifest", () => {
   assert.equal(authorizeCapability(baseContext, "calendar.read").decision, "DENY");
+});
+
+test("adapter registry rejects unknown capabilities and invalid employee scopes", () => {
+  const registry = createAdapterRegistry();
+  assert.throws(() =>
+    registry.register({
+      id: "unknown",
+      capabilities: ["unknown.capability"],
+      employees: ["EMP-001"],
+      async execute() { return { ok: true }; }
+    })
+  );
+  assert.throws(() =>
+    registry.register({
+      id: "wrong-employee",
+      capabilities: ["calendar.read"],
+      employees: ["EMP-001"],
+      async execute() { return { ok: true }; }
+    })
+  );
 });
 
 test("green capability executes without approval", async () => {
@@ -103,4 +118,5 @@ test("yellow capability requires explicit approval", async () => {
     { approvalGranted: true }
   );
   assert.equal(approved.ok, true);
+  assert.equal(approved.audit.evidence?.approvalGranted, true);
 });
