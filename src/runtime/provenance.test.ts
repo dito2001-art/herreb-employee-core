@@ -25,8 +25,14 @@ test("only matching owner-verified provenance can authorize controlled writes", 
     canAuthorizeControlledWrite(verified, "herreb", "fernando"),
     true
   );
-  assert.equal(canAuthorizeControlledWrite(verified, "other", "fernando"), false);
-  assert.equal(canAuthorizeControlledWrite(verified, "herreb", "other"), false);
+  assert.equal(
+    canAuthorizeControlledWrite(verified, "other", "fernando"),
+    false
+  );
+  assert.equal(
+    canAuthorizeControlledWrite(verified, "herreb", "other"),
+    false
+  );
 });
 
 test("service verification alone does not become owner authorization", () => {
