@@ -25,7 +25,11 @@ export function parseTenantCrmConnectors(raw: unknown): TenantCrmConnector[] {
     const tenantId = clean(record.tenantId);
     const connectorId = clean(record.connectorId);
     const mode = record.mode;
-    if (!tenantId || !connectorId || (mode !== "EXTERNAL_CRM" && mode !== "HERREB_MANAGED_CRM")) {
+    if (
+      !tenantId ||
+      !connectorId ||
+      (mode !== "EXTERNAL_CRM" && mode !== "HERREB_MANAGED_CRM")
+    ) {
       throw new Error("TENANT_CRM_CONNECTOR_INVALID");
     }
     if (seen.has(tenantId)) throw new Error("TENANT_CRM_CONNECTOR_DUPLICATE");
@@ -34,18 +38,31 @@ export function parseTenantCrmConnectors(raw: unknown): TenantCrmConnector[] {
   });
 }
 
-export function createTenantCrmRegistry(rawJson: string | undefined): TenantCrmRegistry {
+export function createTenantCrmRegistry(
+  rawJson: string | undefined
+): TenantCrmRegistry {
   let connectors: TenantCrmConnector[] = [];
   if (rawJson?.trim()) {
     try {
       connectors = parseTenantCrmConnectors(JSON.parse(rawJson));
     } catch (error) {
-      const code = error instanceof Error && error.message.startsWith("TENANT_CRM_")
-        ? error.message
-        : "TENANT_CRM_CONNECTORS_INVALID";
-      return { resolve() { throw new Error(code); } };
+      const code =
+        error instanceof Error && error.message.startsWith("TENANT_CRM_")
+          ? error.message
+          : "TENANT_CRM_CONNECTORS_INVALID";
+      return {
+        resolve() {
+          throw new Error(code);
+        }
+      };
     }
   }
-  const byTenant = new Map(connectors.map((connector) => [connector.tenantId, connector]));
-  return { resolve(tenantId) { return byTenant.get(tenantId); } };
+  const byTenant = new Map(
+    connectors.map((connector) => [connector.tenantId, connector])
+  );
+  return {
+    resolve(tenantId) {
+      return byTenant.get(tenantId);
+    }
+  };
 }
