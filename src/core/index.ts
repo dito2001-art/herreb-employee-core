@@ -8,6 +8,7 @@ export * from "./tenant";
 export * from "./tenant-manifest";
 export * from "./knowledge";
 export * from "./marketing";
+export * from "./marketing-brain";
 export * from "./adapters";
 export * from "./executor";
 export * from "./durable";
