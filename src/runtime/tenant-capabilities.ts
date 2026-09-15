@@ -1,5 +1,8 @@
 import type { ServiceFetcher } from "../adapters";
-import { buildReadOnlyRuntime, type ReadOnlyRuntimeBootstrap } from "./bootstrap";
+import {
+  buildReadOnlyRuntime,
+  type ReadOnlyRuntimeBootstrap
+} from "./bootstrap";
 import {
   createTenantCrmRegistry,
   resolveTenantCrm,
@@ -32,7 +35,9 @@ export function buildTenantReadOnlyRuntime(
   const registry = createTenantCrmRegistry(env.TENANT_CRM_CONNECTORS_JSON);
   const resolved = resolveTenantCrm(tenantId, registry, bindings);
   const scoped = resolved
-    ? bindings.find((binding) => binding.connectorId === resolved.connector.connectorId)
+    ? bindings.find(
+        (binding) => binding.connectorId === resolved.connector.connectorId
+      )
     : undefined;
 
   return buildReadOnlyRuntime({
