@@ -42,15 +42,21 @@ export function buildTenantMarketingBrain(
     if (audience.tenantId !== input.tenantId)
       throw new Error("MARKETING_TENANT_ISOLATION_VIOLATION");
   }
+  for (const offering of input.offerings ?? []) {
+    if (offering.tenantId !== input.tenantId)
+      throw new Error("MARKETING_TENANT_ISOLATION_VIOLATION");
+  }
   for (const insight of input.insights ?? []) {
     if (insight.tenantId !== input.tenantId)
       throw new Error("MARKETING_TENANT_ISOLATION_VIOLATION");
   }
 
   const knowledgeById = new Map(knowledge.map((record) => [record.id, record]));
+  const offeringIds = new Set((input.offerings ?? []).map((offering) => offering.id));
   const publishableClaims = (input.claims ?? []).filter((claim) => {
     if (claim.tenantId !== input.tenantId)
       throw new Error("MARKETING_TENANT_ISOLATION_VIOLATION");
+    if (claim.offeringId && !offeringIds.has(claim.offeringId)) return false;
     if (!claim.verified) return false;
     return claim.sourceKnowledgeIds.every((id) => {
       const record = knowledgeById.get(id);
