@@ -19,7 +19,7 @@ const definitions: CapabilityDefinition[] = [
     id: "offering.read",
     description: "Read authoritative offerings",
     risk: "GREEN",
-    allowedEmployees: ["EMP-001"]
+    allowedEmployees: ["EMP-001", "EMP-003"]
   },
   {
     id: "offering.recommend",
