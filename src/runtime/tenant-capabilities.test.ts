@@ -4,12 +4,24 @@ import type { ServiceFetcher } from "../adapters";
 import { buildTenantReadOnlyRuntime } from "./tenant-capabilities";
 
 function service(): ServiceFetcher {
-  return { async fetch() { return Response.json({ ok: true }); } };
+  return {
+    async fetch() {
+      return Response.json({ ok: true });
+    }
+  };
 }
 
 const connectors = JSON.stringify([
-  { tenantId: "herreb", mode: "HERREB_MANAGED_CRM", connectorId: "crm-herreb" },
-  { tenantId: "client-b", mode: "HERREB_MANAGED_CRM", connectorId: "crm-client-b" }
+  {
+    tenantId: "herreb",
+    mode: "HERREB_MANAGED_CRM",
+    connectorId: "crm-herreb"
+  },
+  {
+    tenantId: "client-b",
+    mode: "HERREB_MANAGED_CRM",
+    connectorId: "crm-client-b"
+  }
 ]);
 
 test("tenant runtime exposes only its own CRM and calendar connector", () => {
@@ -55,7 +67,13 @@ test("managed CRM without a calendar connector does not invent calendar access",
   const current = buildTenantReadOnlyRuntime(
     { TENANT_CRM_CONNECTORS_JSON: connectors },
     "herreb",
-    [{ connectorId: "crm-herreb", service: service(), runtimeToken: "crm-token" }]
+    [
+      {
+        connectorId: "crm-herreb",
+        service: service(),
+        runtimeToken: "crm-token"
+      }
+    ]
   );
 
   assert.equal(current.diagnostics.crm, "CONNECTED");
@@ -67,13 +85,15 @@ test("unknown tenant receives no managed CRM or calendar capability", () => {
   const current = buildTenantReadOnlyRuntime(
     { TENANT_CRM_CONNECTORS_JSON: connectors },
     "unknown",
-    [{
-      connectorId: "crm-herreb",
-      service: service(),
-      runtimeToken: "crm-token",
-      calendarService: service(),
-      calendarToken: "calendar-token"
-    }]
+    [
+      {
+        connectorId: "crm-herreb",
+        service: service(),
+        runtimeToken: "crm-token",
+        calendarService: service(),
+        calendarToken: "calendar-token"
+      }
+    ]
   );
 
   assert.equal(current.diagnostics.crm, "MISSING_BINDING");
