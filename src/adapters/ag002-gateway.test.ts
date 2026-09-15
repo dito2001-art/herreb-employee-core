@@ -16,7 +16,8 @@ test("AG-002 transport sends GET read with tenant and runtime auth", async () =>
   };
   const transport = createAg002GatewayReadOnlyTransport({
     service,
-    runtimeToken: "secret"
+    runtimeToken: "secret",
+    tenantId: "herreb"
   });
   const result = await transport.execute({
     tenantId: "herreb",
@@ -40,6 +41,32 @@ test("AG-002 transport sends GET read with tenant and runtime auth", async () =>
   assert.equal(headers.get("X-Correlation-ID"), "corr-1");
 });
 
+test("AG-002 transport refuses cross-tenant reads before calling service", async () => {
+  let calls = 0;
+  const service: ServiceFetcher = {
+    async fetch() {
+      calls += 1;
+      return new Response("{}", { status: 200 });
+    }
+  };
+  const transport = createAg002GatewayReadOnlyTransport({
+    service,
+    runtimeToken: "secret",
+    tenantId: "herreb"
+  });
+  const result = await transport.execute({
+    tenantId: "another-tenant",
+    operation: "read",
+    entity: "tasks",
+    payload: { limit: 1 },
+    correlationId: "corr-tenant"
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "AG002_TENANT_SCOPE_MISMATCH");
+  assert.equal(result.evidence?.executed, false);
+  assert.equal(calls, 0);
+});
+
 test("AG-002 transport refuses writes before calling service", async () => {
   let calls = 0;
   const service: ServiceFetcher = {
@@ -50,7 +77,8 @@ test("AG-002 transport refuses writes before calling service", async () => {
   };
   const transport = createAg002GatewayReadOnlyTransport({
     service,
-    runtimeToken: "secret"
+    runtimeToken: "secret",
+    tenantId: "herreb"
   });
   const result = await transport.execute({
     tenantId: "herreb",
