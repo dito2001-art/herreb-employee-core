@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { StaticModelRouter } from "../core";
 import { createEmployeeAgentSession } from "./session";
+import { parseEmployeeSessionState } from "./session-state";
 
 const router = new StaticModelRouter({
   provider: "workers-ai",
@@ -53,4 +54,24 @@ test("tenant identity is mandatory and cannot silently fall back", async () => {
   });
 
   await assert.rejects(() => createEmployeeAgentSession(request, router), /TENANT_ID_REQUIRED/);
+});
+
+test("persistent session state accepts only the three catalog employees", () => {
+  const state = parseEmployeeSessionState({
+    tenantId: "herreb",
+    employeeId: "EMP-003",
+    workspaceId: "marketing",
+    actorId: "fernando",
+    channel: "web"
+  });
+  assert.equal(state.employeeId, "EMP-003");
+  assert.throws(() =>
+    parseEmployeeSessionState({
+      tenantId: "herreb",
+      employeeId: "EMP-004",
+      workspaceId: "other",
+      actorId: "fernando",
+      channel: "web"
+    })
+  );
 });
