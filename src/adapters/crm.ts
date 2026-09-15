@@ -1,7 +1,8 @@
 import type {
   CapabilityAdapter,
   CapabilityRequest,
-  CapabilityResult
+  CapabilityResult,
+  EmployeeId
 } from "../core";
 
 export interface CrmTransport {
@@ -21,7 +22,7 @@ export interface CrmCapabilityInput {
   payload?: Record<string, unknown>;
 }
 
-const READ_ENTITIES = new Set([
+const COMMERCIAL_ENTITIES = new Set([
   "tasks",
   "companies",
   "contacts",
@@ -33,23 +34,25 @@ const READ_ENTITIES = new Set([
   "billingMilestones"
 ]);
 
-const WRITE_ENTITIES = new Set(READ_ENTITIES);
-
-export function createCrmAdapter(
-  transport: CrmTransport
+function buildAdapter(
+  transport: CrmTransport,
+  options: {
+    id: string;
+    employees: readonly EmployeeId[];
+    capabilities: readonly string[];
+  }
 ): CapabilityAdapter<CrmCapabilityInput, unknown> {
   return {
-    id: "herreb-crm-capability-v1",
-    employees: ["EMP-001", "EMP-002", "EMP-003"],
-    capabilities: ["crm.read", "crm.write", "marketing.read", "marketing.write"],
+    id: options.id,
+    employees: options.employees,
+    capabilities: options.capabilities,
     async execute(
       request: CapabilityRequest<CrmCapabilityInput>
     ): Promise<CapabilityResult> {
       const { operation, entity, payload } = request.input;
       const isRead = operation === "read";
-      const allowed = isRead ? READ_ENTITIES.has(entity) : WRITE_ENTITIES.has(entity);
 
-      if (!allowed) {
+      if (!COMMERCIAL_ENTITIES.has(entity)) {
         return {
           ok: false,
           error: {
@@ -89,4 +92,24 @@ export function createCrmAdapter(
       });
     }
   };
+}
+
+export function createCrmAdapter(
+  transport: CrmTransport
+): CapabilityAdapter<CrmCapabilityInput, unknown> {
+  return buildAdapter(transport, {
+    id: "herreb-crm-capability-v1",
+    employees: ["EMP-001", "EMP-002"],
+    capabilities: ["crm.read", "crm.write"]
+  });
+}
+
+export function createMarketingCrmAdapter(
+  transport: CrmTransport
+): CapabilityAdapter<CrmCapabilityInput, unknown> {
+  return buildAdapter(transport, {
+    id: "herreb-marketing-crm-capability-v1",
+    employees: ["EMP-003"],
+    capabilities: ["crm.read", "marketing.read", "marketing.write"]
+  });
 }
