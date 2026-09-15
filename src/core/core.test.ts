@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  assertEmployeeEntitled,
+  assertKnowledgeTenant,
   assertSameTenant,
   authorizeCapability,
+  canUseAsVerifiedClaim,
   createAdapterRegistry,
   executeCapability,
   getEmployeeManifest,
+  KnowledgeRecordSchema,
   parseTenantContext,
+  parseTenantManifest,
   tenantScopedKey,
   type CapabilityAdapter
 } from "./index";
@@ -24,6 +29,59 @@ test("the v1 employee manifests are exactly the three approved products", () => 
   assert.equal(getEmployeeManifest("EMP-001").id, "EMP-001");
   assert.equal(getEmployeeManifest("EMP-002").id, "EMP-002");
   assert.equal(getEmployeeManifest("EMP-003").id, "EMP-003");
+});
+
+test("tenant manifests allow employees to be sold separately or together", () => {
+  const marketerOnly = parseTenantManifest({
+    tenantId: "tenant-marketing",
+    enabledEmployees: ["EMP-003"],
+    knowledgeNamespace: "tenant-marketing:knowledge",
+    offeringNamespace: "tenant-marketing:offerings"
+  });
+  assert.doesNotThrow(() => assertEmployeeEntitled(marketerOnly, "EMP-003"));
+  assert.throws(
+    () => assertEmployeeEntitled(marketerOnly, "EMP-001"),
+    /EMPLOYEE_NOT_ENTITLED/
+  );
+
+  const workforce = parseTenantManifest({
+    tenantId: "herreb",
+    enabledEmployees: ["EMP-001", "EMP-002", "EMP-003"],
+    knowledgeNamespace: "herreb:knowledge",
+    offeringNamespace: "herreb:offerings"
+  });
+  assert.doesNotThrow(() => assertEmployeeEntitled(workforce, "EMP-001"));
+  assert.doesNotThrow(() => assertEmployeeEntitled(workforce, "EMP-002"));
+  assert.doesNotThrow(() => assertEmployeeEntitled(workforce, "EMP-003"));
+});
+
+test("tenant knowledge is isolated and only verified canonical facts support claims", () => {
+  const canonical = KnowledgeRecordSchema.parse({
+    id: "knowledge-1",
+    tenantId: "tenant-a",
+    namespace: "tenant-a:knowledge",
+    kind: "CANONICAL",
+    subject: "offering:implant-x",
+    content: { claim: "Approved product claim" },
+    sourceRefs: ["product-sheet-1"],
+    confidence: 1,
+    verified: true,
+    updatedAt: "2026-09-15T00:00:00Z"
+  });
+  assert.doesNotThrow(() => assertKnowledgeTenant("tenant-a", canonical));
+  assert.throws(
+    () => assertKnowledgeTenant("tenant-b", canonical),
+    /KNOWLEDGE_TENANT_ISOLATION_VIOLATION/
+  );
+  assert.equal(canUseAsVerifiedClaim(canonical), true);
+
+  const learned = KnowledgeRecordSchema.parse({
+    ...canonical,
+    id: "knowledge-2",
+    kind: "LEARNED",
+    verified: true
+  });
+  assert.equal(canUseAsVerifiedClaim(learned), false);
 });
 
 test("tenant context rejects unsupported employees", () => {
