@@ -6,3 +6,4 @@ export * from "./bootstrap";
 export * from "./provenance";
 export * from "./tenant-manifest-resolver";
 export * from "./tenant-crm";
+export * from "./tenant-capabilities";
