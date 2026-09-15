@@ -13,6 +13,7 @@ export * from "./offering-repository";
 export * from "./marketing";
 export * from "./marketing-brain";
 export * from "./marketing-brain-repository";
+export * from "./marketing-cycle";
 export * from "./adapters";
 export * from "./executor";
 export * from "./durable";
