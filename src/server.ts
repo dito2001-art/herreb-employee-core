@@ -7,12 +7,12 @@ import {
   streamText
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
-import { projectReadOnlyAdapter, createSalesOpsAdapter, type ServiceFetcher } from "./adapters";
+import type { ServiceFetcher } from "./adapters";
 import { buildEmployeeTools } from "./agent/tools";
-import { StaticModelRouter, type CapabilityAdapter } from "./core";
+import { StaticModelRouter } from "./core";
 import {
-  assertReadOnlyAdapters,
   buildEmployeeSystemPrompt,
+  buildReadOnlyRuntimeAdapters,
   HerreBEmployeeRuntime,
   readOnlyCapabilityIds
 } from "./runtime";
@@ -22,26 +22,16 @@ const DEFAULT_MODEL = "@cf/moonshotai/kimi-k2.7-code";
 type RuntimeEnv = Env & {
   SALES_OPS?: ServiceFetcher;
   SALES_OPS_TOKEN?: string;
+  CALENDAR_READ?: ServiceFetcher;
+  CALENDAR_READ_TOKEN?: string;
+  EMAIL_READ?: ServiceFetcher;
+  EMAIL_READ_TOKEN?: string;
 };
 
 function readStateString(state: unknown, key: string): string | undefined {
   if (!state || typeof state !== "object") return undefined;
   const value = (state as Record<string, unknown>)[key];
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function buildReadOnlyAdapters(env: RuntimeEnv): CapabilityAdapter[] {
-  const adapters: CapabilityAdapter[] = [];
-  if (env.SALES_OPS && env.SALES_OPS_TOKEN?.trim()) {
-    adapters.push(
-      projectReadOnlyAdapter(
-        createSalesOpsAdapter({ service: env.SALES_OPS, token: env.SALES_OPS_TOKEN }),
-        ["offering.read", "offering.recommend"]
-      )
-    );
-  }
-  assertReadOnlyAdapters(adapters);
-  return adapters;
 }
 
 export class ChatAgent extends AIChatAgent<Env> {
@@ -72,7 +62,15 @@ export class ChatAgent extends AIChatAgent<Env> {
       model: DEFAULT_MODEL,
       reason: "employee-runtime-v0.1 default route"
     });
-    const adapters = buildReadOnlyAdapters(this.env as RuntimeEnv);
+    const env = this.env as RuntimeEnv;
+    const adapters = buildReadOnlyRuntimeAdapters({
+      salesOps: env.SALES_OPS,
+      salesOpsToken: env.SALES_OPS_TOKEN,
+      calendarRead: env.CALENDAR_READ,
+      calendarReadToken: env.CALENDAR_READ_TOKEN,
+      emailRead: env.EMAIL_READ,
+      emailReadToken: env.EMAIL_READ_TOKEN
+    });
     const runtime = new HerreBEmployeeRuntime({ modelRouter, adapters });
     const session = await runtime.start({
       tenantId,
