@@ -76,6 +76,45 @@ test("configured bootstrap exposes only read-only capabilities", () => {
   });
 });
 
+test("EMP-003 can read shared offerings but cannot recommend or sell", async () => {
+  const current = buildReadOnlyRuntime({
+    SALES_OPS: service(() =>
+      Response.json({
+        ok: true,
+        products: [{ id: "svc-1", name: "AI Consulting", active: true }]
+      })
+    ),
+    SALES_OPS_TOKEN: "sales-token"
+  });
+  const runtime = new HerreBEmployeeRuntime({
+    modelRouter: router,
+    adapters: current.adapters
+  });
+  const session = await runtime.start({
+    tenantId: "client-marketing-only",
+    employeeId: "EMP-003",
+    workspaceId: "marketing",
+    actorId: "owner",
+    channel: "test"
+  });
+
+  const offerings = await session.execute("offering.read", {});
+  assert.equal(offerings.ok, true);
+  assert.equal(
+    (offerings.output as { offerings: Array<{ tenantId: string }> })
+      .offerings[0]?.tenantId,
+    "client-marketing-only"
+  );
+  await assert.rejects(
+    session.execute("offering.recommend", { need: "growth" }),
+    /EMPLOYEE_CAPABILITY_NOT_DECLARED/
+  );
+  await assert.rejects(
+    session.execute("quote.create", {}),
+    /EMPLOYEE_CAPABILITY_NOT_DECLARED/
+  );
+});
+
 test("EMP-002 CRM read forwards tenant and correlation evidence through AG-002", async () => {
   let observed: Request | undefined;
   const current = buildReadOnlyRuntime({
