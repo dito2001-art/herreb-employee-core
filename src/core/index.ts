@@ -7,3 +7,4 @@ export * from "./audit";
 export * from "./tenant";
 export * from "./adapters";
 export * from "./executor";
+export * from "./durable";
