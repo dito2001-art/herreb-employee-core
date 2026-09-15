@@ -18,37 +18,27 @@ export async function executeCapability<TInput = unknown, TOutput = unknown>(
   const policy = authorizeCapability(request.context, request.capabilityId);
 
   if (policy.decision === "DENY") {
+    const result: CapabilityResult<TOutput> = { ok: false, error: { code: "POLICY_DENIED", message: policy.reason } };
+    return { ...result, audit: createAuditEvent(request.context, request.capabilityId, policy, result) };
+  }
+
+  if (policy.risk === "YELLOW" && !request.idempotencyKey?.trim()) {
     const result: CapabilityResult<TOutput> = {
       ok: false,
-      error: { code: "POLICY_DENIED", message: policy.reason }
+      error: { code: "IDEMPOTENCY_KEY_REQUIRED", message: "Side-effecting capabilities require an idempotency key" }
     };
-    return {
-      ...result,
-      audit: createAuditEvent(request.context, request.capabilityId, policy, result)
-    };
+    return { ...result, audit: createAuditEvent(request.context, request.capabilityId, policy, result) };
   }
 
   if (policy.decision === "REQUIRE_APPROVAL" && !options.approvalGranted) {
-    const result: CapabilityResult<TOutput> = {
-      ok: false,
-      error: { code: "APPROVAL_REQUIRED", message: policy.reason }
-    };
-    return {
-      ...result,
-      audit: createAuditEvent(request.context, request.capabilityId, policy, result)
-    };
+    const result: CapabilityResult<TOutput> = { ok: false, error: { code: "APPROVAL_REQUIRED", message: policy.reason } };
+    return { ...result, audit: createAuditEvent(request.context, request.capabilityId, policy, result) };
   }
 
   const adapter = registry.resolve(request.capabilityId, request.context.employeeId);
   if (!adapter) {
-    const result: CapabilityResult<TOutput> = {
-      ok: false,
-      error: { code: "ADAPTER_NOT_FOUND", message: "No compatible adapter registered" }
-    };
-    return {
-      ...result,
-      audit: createAuditEvent(request.context, request.capabilityId, policy, result)
-    };
+    const result: CapabilityResult<TOutput> = { ok: false, error: { code: "ADAPTER_NOT_FOUND", message: "No compatible adapter registered" } };
+    return { ...result, audit: createAuditEvent(request.context, request.capabilityId, policy, result) };
   }
 
   try {
@@ -57,13 +47,11 @@ export async function executeCapability<TInput = unknown, TOutput = unknown>(
       ...adapterResult,
       evidence: {
         ...(adapterResult.evidence ?? {}),
+        ...(request.idempotencyKey ? { idempotencyKey: request.idempotencyKey } : {}),
         ...(policy.decision === "REQUIRE_APPROVAL" ? { approvalGranted: true } : {})
       }
     };
-    return {
-      ...result,
-      audit: createAuditEvent(request.context, request.capabilityId, policy, result)
-    };
+    return { ...result, audit: createAuditEvent(request.context, request.capabilityId, policy, result) };
   } catch (error) {
     const result: CapabilityResult<TOutput> = {
       ok: false,
@@ -72,9 +60,6 @@ export async function executeCapability<TInput = unknown, TOutput = unknown>(
         message: error instanceof Error ? error.message : "Unknown adapter error"
       }
     };
-    return {
-      ...result,
-      audit: createAuditEvent(request.context, request.capabilityId, policy, result)
-    };
+    return { ...result, audit: createAuditEvent(request.context, request.capabilityId, policy, result) };
   }
 }
