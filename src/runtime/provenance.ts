@@ -1,4 +1,7 @@
-export type IdentityAssurance = "UNVERIFIED" | "SERVICE_VERIFIED" | "OWNER_VERIFIED";
+export type IdentityAssurance =
+  | "UNVERIFIED"
+  | "SERVICE_VERIFIED"
+  | "OWNER_VERIFIED";
 
 export interface RuntimeProvenance {
   assurance: IdentityAssurance;
@@ -7,7 +10,9 @@ export interface RuntimeProvenance {
   source: string;
 }
 
-export function unverifiedProvenance(source = "session-state"): RuntimeProvenance {
+export function unverifiedProvenance(
+  source = "session-state"
+): RuntimeProvenance {
   return { assurance: "UNVERIFIED", source };
 }
 
