@@ -44,22 +44,30 @@ jobs:
       - name: Lint
         id: lint
         continue-on-error: true
-        run: npx oxlint src/
+        run: npm run lint
 
       - name: TypeScript
         id: typescript
         continue-on-error: true
-        run: npx tsc
+        run: npx tsc --noEmit
 
       - name: Core tests
         id: tests
         continue-on-error: true
         run: npm run test:core
 
-      - name: Validation gate
+      - name: Validation result
         if: always()
+        env:
+          FORMATTING: ${{ steps.formatting.outcome }}
+          LINT: ${{ steps.lint.outcome }}
+          TYPESCRIPT: ${{ steps.typescript.outcome }}
+          TESTS: ${{ steps.tests.outcome }}
         run: |
-          test "${{ steps.formatting.outcome }}" = "success"
-          test "${{ steps.lint.outcome }}" = "success"
-          test "${{ steps.typescript.outcome }}" = "success"
-          test "${{ steps.tests.outcome }}" = "success"
+          echo "Formatting: $FORMATTING"
+          echo "Lint:       $LINT"
+          echo "TypeScript: $TYPESCRIPT"
+          echo "Tests:      $TESTS"
+          if [ "$FORMATTING" != "success" ] || [ "$LINT" != "success" ] || [ "$TYPESCRIPT" != "success" ] || [ "$TESTS" != "success" ]; then
+            exit 1
+          fi
