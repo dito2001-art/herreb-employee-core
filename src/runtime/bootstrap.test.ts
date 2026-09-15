@@ -47,12 +47,22 @@ test("bootstrap fails closed when bindings or tokens are missing", () => {
   });
 });
 
+test("CRM binding fails closed without an explicit tenant scope", () => {
+  const current = buildReadOnlyRuntime({
+    AG002_GATEWAY: service(() => Response.json({ ok: true })),
+    HERREB_RUNTIME_TOKEN: "runtime-token"
+  });
+  assert.equal(current.diagnostics.crm, "MISSING_TENANT_SCOPE");
+  assert.equal(current.connectedCapabilities.has("crm.read"), false);
+});
+
 test("configured bootstrap exposes only read-only capabilities", () => {
   const current = buildReadOnlyRuntime({
     SALES_OPS: service(() => Response.json({ ok: true, products: [] })),
     SALES_OPS_TOKEN: "sales-token",
     AG002_GATEWAY: service(() => Response.json({ ok: true, data: [] })),
     HERREB_RUNTIME_TOKEN: "runtime-token",
+    AG002_TENANT_ID: "herreb",
     CALENDAR_READ: service(() => Response.json({ ok: true, data: [] })),
     CALENDAR_READ_TOKEN: "calendar-token",
     EMAIL_READ: service(() => Response.json({ ok: true, data: [] })),
@@ -122,7 +132,8 @@ test("EMP-002 CRM read forwards tenant and correlation evidence through AG-002",
       observed = request;
       return Response.json({ ok: true, data: [{ id: 140 }] });
     }),
-    HERREB_RUNTIME_TOKEN: "runtime-token"
+    HERREB_RUNTIME_TOKEN: "runtime-token",
+    AG002_TENANT_ID: "herreb"
   });
   const runtime = new HerreBEmployeeRuntime({
     modelRouter: router,
@@ -151,6 +162,37 @@ test("EMP-002 CRM read forwards tenant and correlation evidence through AG-002",
   );
   assert.match(observed?.url ?? "", /entity=tasks/);
   assert.match(observed?.url ?? "", /completed=false/);
+});
+
+test("EMP-002 CRM binding rejects another tenant before upstream execution", async () => {
+  let calls = 0;
+  const current = buildReadOnlyRuntime({
+    AG002_GATEWAY: service(() => {
+      calls += 1;
+      return Response.json({ ok: true });
+    }),
+    HERREB_RUNTIME_TOKEN: "runtime-token",
+    AG002_TENANT_ID: "herreb"
+  });
+  const runtime = new HerreBEmployeeRuntime({
+    modelRouter: router,
+    adapters: current.adapters
+  });
+  const session = await runtime.start({
+    tenantId: "client-b",
+    employeeId: "EMP-002",
+    workspaceId: "executive",
+    actorId: "owner",
+    channel: "test"
+  });
+  const result = await session.execute("crm.read", {
+    operation: "read",
+    entity: "tasks",
+    payload: { limit: 1 }
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "AG002_TENANT_SCOPE_MISMATCH");
+  assert.equal(calls, 0);
 });
 
 test("EMP-002 calendar and email remain GET-only through read-only transports", async () => {
@@ -182,6 +224,8 @@ test("EMP-002 calendar and email remain GET-only through read-only transports", 
 
   const calendar = await session.execute("calendar.read", {
     operation: "search",
+    timeMin: "2026-09-15T00:00:00-03:00",
+    timeMax: "2026-09-16T00:00:00-03:00",
     query: "today"
   });
   const email = await session.execute("email.read", {
