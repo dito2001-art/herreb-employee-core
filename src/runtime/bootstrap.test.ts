@@ -25,16 +25,26 @@ test("bootstrap fails closed when bindings or tokens are missing", () => {
   const empty = buildReadOnlyRuntime({});
   assert.equal(empty.adapters.length, 0);
   assert.equal(empty.connectedCapabilities.size, 0);
-  assert.equal(empty.diagnostics.salesOps, "MISSING_BINDING");
-  assert.equal(empty.diagnostics.crm, "MISSING_BINDING");
+  assert.deepEqual(empty.diagnostics, {
+    salesOps: "MISSING_BINDING",
+    crm: "MISSING_BINDING",
+    calendar: "MISSING_BINDING",
+    email: "MISSING_BINDING"
+  });
 
   const boundWithoutTokens = buildReadOnlyRuntime({
     SALES_OPS: service(() => new Response("{}")),
-    AG002_GATEWAY: service(() => new Response("{}"))
+    AG002_GATEWAY: service(() => new Response("{}")),
+    CALENDAR_READ: service(() => new Response("{}")),
+    EMAIL_READ: service(() => new Response("{}"))
   });
   assert.equal(boundWithoutTokens.adapters.length, 0);
-  assert.equal(boundWithoutTokens.diagnostics.salesOps, "MISSING_TOKEN");
-  assert.equal(boundWithoutTokens.diagnostics.crm, "MISSING_TOKEN");
+  assert.deepEqual(boundWithoutTokens.diagnostics, {
+    salesOps: "MISSING_TOKEN",
+    crm: "MISSING_TOKEN",
+    calendar: "MISSING_TOKEN",
+    email: "MISSING_TOKEN"
+  });
 });
 
 test("configured bootstrap exposes only read-only capabilities", () => {
@@ -42,14 +52,28 @@ test("configured bootstrap exposes only read-only capabilities", () => {
     SALES_OPS: service(() => Response.json({ ok: true, products: [] })),
     SALES_OPS_TOKEN: "sales-token",
     AG002_GATEWAY: service(() => Response.json({ ok: true, data: [] })),
-    HERREB_RUNTIME_TOKEN: "runtime-token"
+    HERREB_RUNTIME_TOKEN: "runtime-token",
+    CALENDAR_READ: service(() => Response.json({ ok: true, data: [] })),
+    CALENDAR_READ_TOKEN: "calendar-token",
+    EMAIL_READ: service(() => Response.json({ ok: true, data: [] })),
+    EMAIL_READ_TOKEN: "email-token"
   });
   assert.deepEqual(
     [...current.connectedCapabilities].sort(),
-    ["crm.read", "offering.read", "offering.recommend"].sort()
+    [
+      "calendar.read",
+      "crm.read",
+      "email.read",
+      "offering.read",
+      "offering.recommend"
+    ].sort()
   );
-  assert.equal(current.diagnostics.salesOps, "CONNECTED");
-  assert.equal(current.diagnostics.crm, "CONNECTED");
+  assert.deepEqual(current.diagnostics, {
+    salesOps: "CONNECTED",
+    crm: "CONNECTED",
+    calendar: "CONNECTED",
+    email: "CONNECTED"
+  });
 });
 
 test("EMP-002 CRM read forwards tenant and correlation evidence through AG-002", async () => {
@@ -88,4 +112,42 @@ test("EMP-002 CRM read forwards tenant and correlation evidence through AG-002",
   );
   assert.match(observed?.url ?? "", /entity=tasks/);
   assert.match(observed?.url ?? "", /completed=false/);
+});
+
+test("EMP-002 calendar and email remain GET-only through read-only transports", async () => {
+  const methods: string[] = [];
+  const current = buildReadOnlyRuntime({
+    CALENDAR_READ: service((request) => {
+      methods.push(request.method);
+      return Response.json({ ok: true, data: [] });
+    }),
+    CALENDAR_READ_TOKEN: "calendar-token",
+    EMAIL_READ: service((request) => {
+      methods.push(request.method);
+      return Response.json({ ok: true, data: [] });
+    }),
+    EMAIL_READ_TOKEN: "email-token"
+  });
+  const runtime = new HerreBEmployeeRuntime({ modelRouter: router, adapters: current.adapters });
+  const session = await runtime.start({
+    tenantId: "herreb",
+    employeeId: "EMP-002",
+    workspaceId: "executive",
+    actorId: "fernando",
+    channel: "test",
+    correlationId: "corr-emp002-read"
+  });
+
+  const calendar = await session.execute("calendar.read", {
+    operation: "search",
+    query: "today"
+  });
+  const email = await session.execute("email.read", {
+    operation: "search",
+    query: "invoice"
+  });
+
+  assert.equal(calendar.ok, true);
+  assert.equal(email.ok, true);
+  assert.deepEqual(methods, ["GET", "GET"]);
 });
