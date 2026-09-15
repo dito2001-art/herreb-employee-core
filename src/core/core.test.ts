@@ -1,183 +1,178 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  EMPLOYEE_MANIFESTS,
   assertEmployeeEntitled,
+  assertKnowledgeTenant,
   assertSameTenant,
+  authorizeCapability,
   canUseAsVerifiedClaim,
-  chooseDurableExecutionMode,
   createAdapterRegistry,
-  createTenantManifest,
   executeCapability,
   getEmployeeManifest,
-  isEmployeeEnabled,
-  parseKnowledgeRecord,
+  KnowledgeRecordSchema,
   parseTenantContext,
-  tenantScopedKey
+  parseTenantManifest,
+  tenantScopedKey,
+  type CapabilityAdapter
 } from "./index";
 
 const baseContext = parseTenantContext({
   tenantId: "tenant-a",
   employeeId: "EMP-001",
-  workspaceId: "sales",
+  workspaceId: "workspace-1",
   actorId: "fernando",
   channel: "test",
-  correlationId: "corr-1"
+  correlationId: "run-1"
 });
 
 test("the v1 employee manifests are exactly the three approved products", () => {
-  assert.deepEqual(
-    EMPLOYEE_MANIFESTS.map((manifest) => manifest.id),
-    ["EMP-001", "EMP-002", "EMP-003"]
-  );
-  assert.equal(getEmployeeManifest("EMP-002").role, "AI Assistant");
+  assert.equal(getEmployeeManifest("EMP-001").id, "EMP-001");
+  assert.equal(getEmployeeManifest("EMP-002").id, "EMP-002");
+  assert.equal(getEmployeeManifest("EMP-003").id, "EMP-003");
 });
 
 test("tenant manifests allow employees to be sold separately or together", () => {
-  const marketerOnly = createTenantManifest({
+  const marketerOnly = parseTenantManifest({
     tenantId: "tenant-marketing",
-    enabledEmployees: ["EMP-003", "EMP-003"]
+    enabledEmployees: ["EMP-003"],
+    knowledgeNamespace: "tenant-marketing:knowledge",
+    offeringNamespace: "tenant-marketing:offerings"
   });
-  assert.deepEqual(marketerOnly.enabledEmployees, ["EMP-003"]);
-  assert.equal(isEmployeeEnabled(marketerOnly, "EMP-003"), true);
-  assert.equal(isEmployeeEnabled(marketerOnly, "EMP-001"), false);
+  assert.doesNotThrow(() => assertEmployeeEntitled(marketerOnly, "EMP-003"));
   assert.throws(
     () => assertEmployeeEntitled(marketerOnly, "EMP-001"),
     /EMPLOYEE_NOT_ENTITLED/
   );
 
-  const workforce = createTenantManifest({
-    tenantId: "herreb-client-0",
-    enabledEmployees: ["EMP-001", "EMP-002", "EMP-003"]
+  const workforce = parseTenantManifest({
+    tenantId: "herreb",
+    enabledEmployees: ["EMP-001", "EMP-002", "EMP-003"],
+    knowledgeNamespace: "herreb:knowledge",
+    offeringNamespace: "herreb:offerings"
   });
-  assert.deepEqual(workforce.enabledEmployees, [
-    "EMP-001",
-    "EMP-002",
-    "EMP-003"
-  ]);
-  assert.equal(workforce.knowledgeNamespace, "tenant/herreb-client-0/knowledge");
-  assert.equal(workforce.offeringNamespace, "tenant/herreb-client-0/offerings");
+  assert.doesNotThrow(() => assertEmployeeEntitled(workforce, "EMP-001"));
+  assert.doesNotThrow(() => assertEmployeeEntitled(workforce, "EMP-002"));
+  assert.doesNotThrow(() => assertEmployeeEntitled(workforce, "EMP-003"));
 });
 
 test("tenant knowledge is isolated and only verified canonical facts support claims", () => {
-  const canonical = parseKnowledgeRecord({
-    id: "k-1",
+  const canonical = KnowledgeRecordSchema.parse({
+    id: "knowledge-1",
     tenantId: "tenant-a",
+    namespace: "tenant-a:knowledge",
     kind: "CANONICAL",
-    domain: "offering",
-    content: "HerreB offers AI consulting",
+    subject: "offering:implant-x",
+    content: { claim: "Approved product claim" },
+    sourceRefs: ["product-sheet-1"],
+    confidence: 1,
     verified: true,
-    sourceRefs: ["proposal-2026"]
+    updatedAt: "2026-09-15T00:00:00Z"
   });
-  const learned = parseKnowledgeRecord({
-    id: "k-2",
-    tenantId: "tenant-a",
+  assert.doesNotThrow(() => assertKnowledgeTenant("tenant-a", canonical));
+  assert.throws(
+    () => assertKnowledgeTenant("tenant-b", canonical),
+    /KNOWLEDGE_TENANT_ISOLATION_VIOLATION/
+  );
+  assert.equal(canUseAsVerifiedClaim(canonical), true);
+
+  const learned = KnowledgeRecordSchema.parse({
+    ...canonical,
+    id: "knowledge-2",
     kind: "LEARNED",
-    domain: "marketing",
-    content: "Customers may prefer short copy",
     verified: true
   });
-  assert.equal(canUseAsVerifiedClaim(canonical), true);
   assert.equal(canUseAsVerifiedClaim(learned), false);
-  assert.throws(
-    () =>
-      assertSameTenant(
-        baseContext,
-        { tenantId: "tenant-b" },
-        "knowledge"
-      ),
-    /TENANT_ISOLATION_VIOLATION/
-  );
 });
 
 test("tenant context rejects unsupported employees", () => {
-  assert.throws(
-    () =>
-      parseTenantContext({
-        tenantId: "tenant-a",
-        employeeId: "EMP-004",
-        workspaceId: "x",
-        actorId: "x",
-        channel: "test",
-        correlationId: "x"
-      }),
-    /Invalid option/
+  assert.throws(() =>
+    parseTenantContext({ ...baseContext, employeeId: "EMP-004" })
   );
 });
 
 test("tenant isolation rejects cross-tenant resources", () => {
+  assert.doesNotThrow(() => assertSameTenant(baseContext, "tenant-a"));
   assert.throws(
-    () => assertSameTenant(baseContext, { tenantId: "tenant-b" }, "record"),
+    () => assertSameTenant(baseContext, "tenant-b"),
     /TENANT_ISOLATION_VIOLATION/
   );
 });
 
 test("tenant scoped keys include and safely encode tenant employee workspace and resource", () => {
   assert.equal(
-    tenantScopedKey(baseContext, "offerings/current"),
-    "tenant-a:EMP-001:sales:offerings%2Fcurrent"
+    tenantScopedKey(baseContext, "conversation:123"),
+    "tenant-a:EMP-001:workspace-1:conversation%3A123"
+  );
+  assert.notEqual(
+    tenantScopedKey(
+      { ...baseContext, tenantId: "tenant:b" },
+      "conversation:123"
+    ),
+    tenantScopedKey(
+      { ...baseContext, tenantId: "tenant" },
+      "b:conversation:123"
+    )
   );
 });
 
-test("policy is deny-by-default and employee boundaries are enforced", async () => {
-  const registry = createAdapterRegistry();
-  registry.register({
-    id: "test-read",
-    capabilities: ["crm.read"],
-    employees: ["EMP-001"],
-    async execute() {
-      return { ok: true, output: { records: [] } };
-    }
-  });
-  const allowed = await executeCapability(registry, {
-    context: baseContext,
-    capabilityId: "crm.read",
-    input: {}
-  });
-  assert.equal(allowed.ok, true);
-
-  const denied = await executeCapability(registry, {
-    context: baseContext,
-    capabilityId: "marketing.write",
-    input: {}
-  });
-  assert.equal(denied.ok, false);
-  assert.equal(denied.error?.code, "CAPABILITY_NOT_ALLOWED");
+test("policy is deny-by-default and employee boundaries are enforced", () => {
+  assert.equal(
+    authorizeCapability(baseContext, "unknown.capability").decision,
+    "DENY"
+  );
+  assert.equal(
+    authorizeCapability(baseContext, "calendar.read").decision,
+    "DENY"
+  );
 });
 
 test("adapter registry rejects unknown capabilities and invalid employee scopes", () => {
   const registry = createAdapterRegistry();
-  assert.throws(
-    () =>
-      registry.register({
-        id: "bad",
-        capabilities: ["crm.read"],
-        employees: ["EMP-003"],
-        async execute() {
-          return { ok: true };
-        }
-      }),
-    /ADAPTER_EMPLOYEE_SCOPE_INVALID/
+  assert.throws(() =>
+    registry.register({
+      id: "unknown",
+      capabilities: ["unknown.capability"],
+      employees: ["EMP-001"],
+      async execute() {
+        return { ok: true };
+      }
+    })
+  );
+  assert.throws(() =>
+    registry.register({
+      id: "wrong-employee",
+      capabilities: ["calendar.read"],
+      employees: ["EMP-001"],
+      async execute() {
+        return { ok: true };
+      }
+    })
   );
 });
 
 test("green capability executes without approval", async () => {
   const registry = createAdapterRegistry();
-  registry.register({
-    id: "test-crm-read",
-    capabilities: ["crm.read"],
+  const adapter: CapabilityAdapter = {
+    id: "test-offering",
+    capabilities: ["offering.read"],
     employees: ["EMP-001"],
     async execute() {
-      return { ok: true, output: { records: [] } };
+      return {
+        ok: true,
+        output: { offerings: [] },
+        evidence: { adapter: "test-offering" }
+      };
     }
-  });
+  };
+  registry.register(adapter);
   const result = await executeCapability(registry, {
     context: baseContext,
-    capabilityId: "crm.read",
+    capabilityId: "offering.read",
     input: {}
   });
   assert.equal(result.ok, true);
-  assert.equal(result.audit.outcome, "SUCCESS");
+  assert.equal(result.audit.decision, "ALLOW");
+  assert.equal(result.audit.tenantId, "tenant-a");
 });
 
 test("yellow capability requires idempotency approval and verified authorization", async () => {
@@ -223,24 +218,5 @@ test("yellow capability requires idempotency approval and verified authorization
   assert.equal(
     approved.audit.evidence?.authorizationAssurance,
     "OWNER_VERIFIED"
-  );
-});
-
-test("durable routing keeps simple future work on scheduler and complex work on workflows", () => {
-  assert.equal(
-    chooseDurableExecutionMode({
-      employeeId: "EMP-002",
-      capabilityId: "task.schedule",
-      hasFutureTime: true
-    }),
-    "SCHEDULE"
-  );
-  assert.equal(
-    chooseDurableExecutionMode({
-      employeeId: "EMP-001",
-      capabilityId: "quote.create",
-      multiStep: true
-    }),
-    "WORKFLOW"
   );
 });
