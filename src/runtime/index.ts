@@ -4,3 +4,4 @@ export * from "./prompt";
 export * from "./read-only";
 export * from "./bootstrap";
 export * from "./provenance";
+export * from "./tenant-manifest-resolver";
