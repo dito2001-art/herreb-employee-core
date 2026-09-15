@@ -18,6 +18,6 @@ export async function createEmployeeAgentSession(
 
   return {
     runtime: session,
-    systemPrompt: buildEmployeeSystemPrompt(session)
+    systemPrompt: buildEmployeeSystemPrompt(session.context, session.manifest)
   };
 }
