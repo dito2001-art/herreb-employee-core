@@ -52,7 +52,9 @@ export function buildTenantMarketingBrain(
   }
 
   const knowledgeById = new Map(knowledge.map((record) => [record.id, record]));
-  const offeringIds = new Set((input.offerings ?? []).map((offering) => offering.id));
+  const offeringIds = new Set(
+    (input.offerings ?? []).map((offering) => offering.id)
+  );
   const publishableClaims = (input.claims ?? []).filter((claim) => {
     if (claim.tenantId !== input.tenantId)
       throw new Error("MARKETING_TENANT_ISOLATION_VIOLATION");
