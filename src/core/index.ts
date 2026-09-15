@@ -10,6 +10,7 @@ export * from "./knowledge";
 export * from "./marketing";
 export * from "./marketing-brain";
 export * from "./proactive-sales";
+export * from "./sales-loop";
 export * from "./adapters";
 export * from "./executor";
 export * from "./durable";
