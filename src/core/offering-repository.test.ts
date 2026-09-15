@@ -7,7 +7,8 @@ const offering = (tenantId: string, id: string, active = true) => ({
   tenantId,
   type: "SERVICE" as const,
   name: `${tenantId}:${id}`,
-  active
+  active,
+  metadata: {}
 });
 
 test("offering repository isolates identical ids by tenant", async () => {
