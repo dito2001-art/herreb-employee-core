@@ -19,8 +19,8 @@ const manifests = {
       "crm.read",
       "crm.write",
       "whatsapp.send",
-      "followup.schedule"
-    ]
+      "followup.schedule",
+    ],
   },
   "EMP-002": {
     id: "EMP-002",
@@ -35,8 +35,8 @@ const manifests = {
       "calendar.write",
       "email.read",
       "email.send",
-      "task.schedule"
-    ]
+      "task.schedule",
+    ],
   },
   "EMP-003": {
     id: "EMP-003",
@@ -51,9 +51,9 @@ const manifests = {
       "marketing.write",
       "research.web",
       "content.create",
-      "campaign.schedule"
-    ]
-  }
+      "campaign.schedule",
+    ],
+  },
 } as const satisfies Record<EmployeeId, EmployeeManifest>;
 
 export function getEmployeeManifest(id: EmployeeId): EmployeeManifest {
