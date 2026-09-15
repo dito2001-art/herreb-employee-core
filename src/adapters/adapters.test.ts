@@ -19,28 +19,29 @@ const salesContext = parseTenantContext({
 
 test("Sales Ops adapter propagates tenant and maps products to offerings", async () => {
   let seenTenant = "";
+  let seenUrl = "";
+  let seenMethod = "";
   const registry = createAdapterRegistry();
   registry.register(
     createSalesOpsAdapter({
-      async listProducts(tenantId) {
-        seenTenant = tenantId;
-        return [
-          {
-            id: "p-1",
-            name: "Product 1",
-            price: 10,
-            currency: "USD"
-          }
-        ];
-      },
-      async recommendProducts() {
-        return [];
-      },
-      async createQuote() {
-        return { quoteId: "Q-1" };
-      },
-      async progressSale() {
-        return { orderId: "O-1" };
+      token: "test-token",
+      service: {
+        async fetch(input, init) {
+          const request = new Request(input, init);
+          seenTenant = request.headers.get("X-Tenant-ID") ?? "";
+          seenUrl = request.url;
+          seenMethod = request.method;
+          return Response.json({
+            products: [
+              {
+                id: "p-1",
+                name: "Product 1",
+                price: 10,
+                currency: "USD"
+              }
+            ]
+          });
+        }
       }
     })
   );
@@ -53,6 +54,8 @@ test("Sales Ops adapter propagates tenant and maps products to offerings", async
 
   assert.equal(result.ok, true);
   assert.equal(seenTenant, "tenant-a");
+  assert.equal(seenUrl, "https://sales-ops.internal/api/v1/products");
+  assert.equal(seenMethod, "GET");
   const offerings = (result.output as { offerings: Array<{ type: string }> })
     .offerings;
   assert.equal(offerings[0]?.type, "PHYSICAL_PRODUCT");
