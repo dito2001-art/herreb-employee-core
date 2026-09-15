@@ -1,7 +1,7 @@
 import type {
   ProactiveSalesPolicy,
   SalesChannel,
-  SalesLead,
+  SalesLead
 } from "./proactive-sales";
 import { canAutonomouslyContactLead } from "./proactive-sales";
 
@@ -31,7 +31,7 @@ export interface SalesLoopDecision {
 
 function withinTouchLimits(
   policy: ProactiveSalesPolicy,
-  lead: SalesLoopLead,
+  lead: SalesLoopLead
 ): boolean {
   return (
     (lead.touchesToday ?? 0) < policy.maxTouchesPerLeadPerDay &&
@@ -54,24 +54,24 @@ export function nextSalesLoopAction(input: {
   }
 
   const optedOut = leads.find(
-    (lead) => lead.tenantId === tenantId && lead.optedOut,
+    (lead) => lead.tenantId === tenantId && lead.optedOut
   );
   if (optedOut) {
     return {
       action: "SUPPRESS",
       leadId: optedOut.id,
-      reason: "LEAD_OPTED_OUT",
+      reason: "LEAD_OPTED_OUT"
     };
   }
 
   const unqualified = leads.find(
-    (lead) => lead.tenantId === tenantId && !lead.qualified && !lead.optedOut,
+    (lead) => lead.tenantId === tenantId && !lead.qualified && !lead.optedOut
   );
   if (unqualified) {
     return {
       action: "QUALIFY",
       leadId: unqualified.id,
-      reason: "LEAD_NEEDS_QUALIFICATION",
+      reason: "LEAD_NEEDS_QUALIFICATION"
     };
   }
 
@@ -91,14 +91,14 @@ export function nextSalesLoopAction(input: {
         tenantId,
         lead,
         channel,
-        kind,
+        kind
       });
       if (decision.allowed) {
         return {
           action: kind,
           leadId: lead.id,
           channel,
-          reason: decision.reason,
+          reason: decision.reason
         };
       }
     }
