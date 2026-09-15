@@ -60,7 +60,10 @@ export class ChatAgent extends AIChatAgent<Env> {
       reason: "employee-runtime-v0.1 default route"
     });
     const bootstrap = buildReadOnlyRuntime(this.env as RuntimeEnv);
-    const runtime = new HerreBEmployeeRuntime({ modelRouter, adapters: bootstrap.adapters });
+    const runtime = new HerreBEmployeeRuntime({
+      modelRouter,
+      adapters: bootstrap.adapters
+    });
     const session = await runtime.start({
       tenantId,
       employeeId,

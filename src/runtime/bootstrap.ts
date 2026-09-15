@@ -29,22 +29,32 @@ function nonBlank(value: string | undefined): string | undefined {
   return clean ? clean : undefined;
 }
 
-export function buildReadOnlyRuntime(env: ReadOnlyRuntimeEnv): ReadOnlyRuntimeBootstrap {
+export function buildReadOnlyRuntime(
+  env: ReadOnlyRuntimeEnv
+): ReadOnlyRuntimeBootstrap {
   const adapters: CapabilityAdapter[] = [];
   const salesToken = nonBlank(env.SALES_OPS_TOKEN);
   const runtimeToken = nonBlank(env.HERREB_RUNTIME_TOKEN);
 
   const diagnostics: ReadOnlyRuntimeBootstrap["diagnostics"] = {
-    salesOps: !env.SALES_OPS ? "MISSING_BINDING" : !salesToken ? "MISSING_TOKEN" : "CONNECTED",
-    crm: !env.AG002_GATEWAY ? "MISSING_BINDING" : !runtimeToken ? "MISSING_TOKEN" : "CONNECTED"
+    salesOps: !env.SALES_OPS
+      ? "MISSING_BINDING"
+      : !salesToken
+        ? "MISSING_TOKEN"
+        : "CONNECTED",
+    crm: !env.AG002_GATEWAY
+      ? "MISSING_BINDING"
+      : !runtimeToken
+        ? "MISSING_TOKEN"
+        : "CONNECTED"
   };
 
   if (env.SALES_OPS && salesToken) {
     adapters.push(
-      projectReadOnlyAdapter(createSalesOpsAdapter({ service: env.SALES_OPS, token: salesToken }), [
-        "offering.read",
-        "offering.recommend"
-      ])
+      projectReadOnlyAdapter(
+        createSalesOpsAdapter({ service: env.SALES_OPS, token: salesToken }),
+        ["offering.read", "offering.recommend"]
+      )
     );
   }
 
@@ -53,13 +63,17 @@ export function buildReadOnlyRuntime(env: ReadOnlyRuntimeEnv): ReadOnlyRuntimeBo
       service: env.AG002_GATEWAY,
       runtimeToken
     });
-    adapters.push(projectReadOnlyAdapter(createCrmAdapter(crmTransport), ["crm.read"]));
+    adapters.push(
+      projectReadOnlyAdapter(createCrmAdapter(crmTransport), ["crm.read"])
+    );
   }
 
   assertReadOnlyAdapters(adapters);
   return {
     adapters,
-    connectedCapabilities: new Set(adapters.flatMap((adapter) => [...adapter.capabilities])),
+    connectedCapabilities: new Set(
+      adapters.flatMap((adapter) => [...adapter.capabilities])
+    ),
     diagnostics
   };
 }

@@ -38,7 +38,11 @@ export function chooseDurableExecutionMode(
   input: DurableRouteInput
 ): DurableExecutionMode {
   if (input.fanOut) return "QUEUE";
-  if (input.multiStep || input.waitsForExternalEvent || input.needsRetryBoundary) {
+  if (
+    input.multiStep ||
+    input.waitsForExternalEvent ||
+    input.needsRetryBoundary
+  ) {
     return "WORKFLOW";
   }
   if (input.hasFutureTime) return "SCHEDULE";
@@ -47,6 +51,7 @@ export function chooseDurableExecutionMode(
 
 export function assertDurableJob(job: DurableJob): void {
   if (!job.jobId.trim()) throw new Error("DURABLE_JOB_ID_REQUIRED");
-  if (!job.idempotencyKey.trim()) throw new Error("DURABLE_IDEMPOTENCY_KEY_REQUIRED");
+  if (!job.idempotencyKey.trim())
+    throw new Error("DURABLE_IDEMPOTENCY_KEY_REQUIRED");
   if (!job.context.tenantId.trim()) throw new Error("DURABLE_TENANT_REQUIRED");
 }

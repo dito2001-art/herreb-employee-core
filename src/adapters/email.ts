@@ -42,7 +42,8 @@ export function createEmailAdapter(
     capabilities: ["email.read", "email.send"],
     async execute(request: CapabilityRequest<EmailInput>) {
       const isRead =
-        request.input.operation === "search" || request.input.operation === "read";
+        request.input.operation === "search" ||
+        request.input.operation === "read";
 
       if (request.capabilityId === "email.read" && !isRead) {
         return {

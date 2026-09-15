@@ -23,12 +23,17 @@ export interface CapabilityAdapter<TInput = unknown, TOutput = unknown> {
   readonly id: string;
   readonly capabilities: readonly string[];
   readonly employees: readonly EmployeeId[];
-  execute(request: CapabilityRequest<TInput>): Promise<CapabilityResult<TOutput>>;
+  execute(
+    request: CapabilityRequest<TInput>
+  ): Promise<CapabilityResult<TOutput>>;
 }
 
 export interface AdapterRegistry {
   register(adapter: CapabilityAdapter): void;
-  resolve(capabilityId: string, employeeId: EmployeeId): CapabilityAdapter | undefined;
+  resolve(
+    capabilityId: string,
+    employeeId: EmployeeId
+  ): CapabilityAdapter | undefined;
 }
 
 export function createAdapterRegistry(): AdapterRegistry {
@@ -47,7 +52,9 @@ export function createAdapterRegistry(): AdapterRegistry {
         if (!capability) throw new Error(`UNKNOWN_CAPABILITY:${capabilityId}`);
         for (const employeeId of adapter.employees) {
           if (!capability.allowedEmployees.includes(employeeId)) {
-            throw new Error(`INVALID_ADAPTER_EMPLOYEE_SCOPE:${adapter.id}:${employeeId}:${capabilityId}`);
+            throw new Error(
+              `INVALID_ADAPTER_EMPLOYEE_SCOPE:${adapter.id}:${employeeId}:${capabilityId}`
+            );
           }
         }
       }

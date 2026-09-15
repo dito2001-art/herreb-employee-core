@@ -1,6 +1,13 @@
 import type { ModelRouter } from "../core";
-import { buildEmployeeSystemPrompt, HerreBEmployeeRuntime, type EmployeeRuntimeSession } from "../runtime";
-import { resolveEmployeeRequestIdentity, type EmployeeRequestDefaults } from "./request-context";
+import {
+  buildEmployeeSystemPrompt,
+  HerreBEmployeeRuntime,
+  type EmployeeRuntimeSession
+} from "../runtime";
+import {
+  resolveEmployeeRequestIdentity,
+  type EmployeeRequestDefaults
+} from "./request-context";
 
 export interface EmployeeAgentSession {
   runtime: EmployeeRuntimeSession;

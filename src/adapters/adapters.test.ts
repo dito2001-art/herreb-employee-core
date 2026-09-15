@@ -23,7 +23,13 @@ test("Sales Ops adapter propagates tenant and maps products to offerings", async
         JSON.stringify({
           ok: true,
           products: [
-            { sku: "SKU-1", name: "Demo", price: 100, currency: "PYG", stock: 2 }
+            {
+              sku: "SKU-1",
+              name: "Demo",
+              price: 100,
+              currency: "PYG",
+              stock: 2
+            }
           ]
         }),
         { status: 200 }
@@ -41,7 +47,9 @@ test("Sales Ops adapter propagates tenant and maps products to offerings", async
 
   assert.equal(result.ok, true);
   assert.equal(tenantHeader, "tenant-a");
-  const output = result.output as { offerings: Array<{ id: string; type: string }> };
+  const output = result.output as {
+    offerings: Array<{ id: string; type: string }>;
+  };
   assert.equal(output.offerings[0]?.id, "SKU-1");
   assert.equal(output.offerings[0]?.type, "PHYSICAL_PRODUCT");
 });
@@ -84,7 +92,11 @@ test("CRM write requires policy approval and idempotency", async () => {
   const request = {
     context: salesContext,
     capabilityId: "crm.write",
-    input: { operation: "update" as const, entity: "tasks", payload: { id: 140 } },
+    input: {
+      operation: "update" as const,
+      entity: "tasks",
+      payload: { id: 140 }
+    },
     idempotencyKey: "task-140-update-1"
   };
 
@@ -92,7 +104,9 @@ test("CRM write requires policy approval and idempotency", async () => {
   assert.equal(blocked.error?.code, "APPROVAL_REQUIRED");
   assert.equal(calls, 0);
 
-  const approved = await executeCapability(registry, request, { approvalGranted: true });
+  const approved = await executeCapability(registry, request, {
+    approvalGranted: true
+  });
   assert.equal(approved.ok, true);
   assert.equal(calls, 1);
 });

@@ -14,7 +14,9 @@ export function isReadOnlyCapability(capabilityId: string): boolean {
   return READ_ONLY_CAPABILITIES.has(capabilityId);
 }
 
-export function readOnlyCapabilityIds(adapters: readonly CapabilityAdapter[]): Set<string> {
+export function readOnlyCapabilityIds(
+  adapters: readonly CapabilityAdapter[]
+): Set<string> {
   const ids = new Set<string>();
   for (const adapter of adapters) {
     for (const capabilityId of adapter.capabilities) {
@@ -24,11 +26,17 @@ export function readOnlyCapabilityIds(adapters: readonly CapabilityAdapter[]): S
   return ids;
 }
 
-export function assertReadOnlyAdapters(adapters: readonly CapabilityAdapter[]): void {
+export function assertReadOnlyAdapters(
+  adapters: readonly CapabilityAdapter[]
+): void {
   for (const adapter of adapters) {
-    const unsafe = adapter.capabilities.filter((id) => !READ_ONLY_CAPABILITIES.has(id));
+    const unsafe = adapter.capabilities.filter(
+      (id) => !READ_ONLY_CAPABILITIES.has(id)
+    );
     if (unsafe.length > 0) {
-      throw new Error(`READ_ONLY_RUNTIME_REJECTED_ADAPTER:${adapter.id}:${unsafe.join(",")}`);
+      throw new Error(
+        `READ_ONLY_RUNTIME_REJECTED_ADAPTER:${adapter.id}:${unsafe.join(",")}`
+      );
     }
   }
 }

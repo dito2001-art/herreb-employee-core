@@ -12,9 +12,12 @@ const TOOL_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/;
 
 export function capabilityIdToToolName(capabilityId: string): string {
   const normalized = capabilityId.replace(/[^A-Za-z0-9_-]/g, "_");
-  const prefixed = /^[A-Za-z_]/.test(normalized) ? normalized : `cap_${normalized}`;
+  const prefixed = /^[A-Za-z_]/.test(normalized)
+    ? normalized
+    : `cap_${normalized}`;
   const name = prefixed.slice(0, 64);
-  if (!TOOL_NAME_PATTERN.test(name)) throw new Error(`INVALID_TOOL_NAME:${capabilityId}`);
+  if (!TOOL_NAME_PATTERN.test(name))
+    throw new Error(`INVALID_TOOL_NAME:${capabilityId}`);
   return name;
 }
 
@@ -22,7 +25,9 @@ export function toolNameToCapabilityId(
   manifest: EmployeeManifest,
   toolName: string
 ): string | undefined {
-  return manifest.capabilities.find((capabilityId) => capabilityIdToToolName(capabilityId) === toolName);
+  return manifest.capabilities.find(
+    (capabilityId) => capabilityIdToToolName(capabilityId) === toolName
+  );
 }
 
 export function buildEmployeeTools(
@@ -61,7 +66,9 @@ export function buildEmployeeTools(
           };
         }
 
-        const result = await session.execute(capabilityId, input, { idempotencyKey });
+        const result = await session.execute(capabilityId, input, {
+          idempotencyKey
+        });
         return {
           ok: result.ok,
           output: result.output,

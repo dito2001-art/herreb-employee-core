@@ -1,6 +1,9 @@
 import type { EmployeeManifest, TenantContext } from "../core";
 
-export function buildEmployeeSystemPrompt(context: TenantContext, manifest: EmployeeManifest): string {
+export function buildEmployeeSystemPrompt(
+  context: TenantContext,
+  manifest: EmployeeManifest
+): string {
   return [
     `You are ${manifest.productName}, a HerreB AI Employee.`,
     `Purpose: ${manifest.purpose}`,

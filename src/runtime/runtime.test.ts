@@ -28,7 +28,10 @@ const modelRouter = new StaticModelRouter({
 });
 
 test("runtime starts only one of the three declared employees", async () => {
-  const runtime = new HerreBEmployeeRuntime({ modelRouter, adapters: [crmReadAdapter] });
+  const runtime = new HerreBEmployeeRuntime({
+    modelRouter,
+    adapters: [crmReadAdapter]
+  });
   const session = await runtime.start({
     tenantId: "tenant-a",
     employeeId: "EMP-002",
@@ -53,9 +56,26 @@ test("runtime starts only one of the three declared employees", async () => {
 });
 
 test("runtime preserves tenant boundary in capability execution", async () => {
-  const runtime = new HerreBEmployeeRuntime({ modelRouter, adapters: [crmReadAdapter] });
-  const a = await runtime.start({ tenantId: "tenant-a", employeeId: "EMP-002", workspaceId: "w", actorId: "a", channel: "test", correlationId: "a-1" });
-  const b = await runtime.start({ tenantId: "tenant-b", employeeId: "EMP-002", workspaceId: "w", actorId: "b", channel: "test", correlationId: "b-1" });
+  const runtime = new HerreBEmployeeRuntime({
+    modelRouter,
+    adapters: [crmReadAdapter]
+  });
+  const a = await runtime.start({
+    tenantId: "tenant-a",
+    employeeId: "EMP-002",
+    workspaceId: "w",
+    actorId: "a",
+    channel: "test",
+    correlationId: "a-1"
+  });
+  const b = await runtime.start({
+    tenantId: "tenant-b",
+    employeeId: "EMP-002",
+    workspaceId: "w",
+    actorId: "b",
+    channel: "test",
+    correlationId: "b-1"
+  });
   const ra = await a.execute("crm.read", { query: "x" });
   const rb = await b.execute("crm.read", { query: "x" });
   assert.equal((ra.output as { tenantId: string }).tenantId, "tenant-a");
@@ -63,14 +83,32 @@ test("runtime preserves tenant boundary in capability execution", async () => {
 });
 
 test("runtime blocks capabilities outside employee manifest before adapter execution", async () => {
-  const runtime = new HerreBEmployeeRuntime({ modelRouter, adapters: [crmReadAdapter] });
-  const session = await runtime.start({ tenantId: "tenant-a", employeeId: "EMP-002", workspaceId: "w", actorId: "a", channel: "test" });
-  await assert.rejects(session.execute("offering.read", {}), /EMPLOYEE_CAPABILITY_NOT_DECLARED/);
+  const runtime = new HerreBEmployeeRuntime({
+    modelRouter,
+    adapters: [crmReadAdapter]
+  });
+  const session = await runtime.start({
+    tenantId: "tenant-a",
+    employeeId: "EMP-002",
+    workspaceId: "w",
+    actorId: "a",
+    channel: "test"
+  });
+  await assert.rejects(
+    session.execute("offering.read", {}),
+    /EMPLOYEE_CAPABILITY_NOT_DECLARED/
+  );
 });
 
 test("manifest-driven prompt carries tenant and evidence rules", async () => {
   const runtime = new HerreBEmployeeRuntime({ modelRouter });
-  const session = await runtime.start({ tenantId: "tenant-a", employeeId: "EMP-001", workspaceId: "sales", actorId: "a", channel: "test" });
+  const session = await runtime.start({
+    tenantId: "tenant-a",
+    employeeId: "EMP-001",
+    workspaceId: "sales",
+    actorId: "a",
+    channel: "test"
+  });
   const prompt = buildEmployeeSystemPrompt(session.context, session.manifest);
   assert.match(prompt, /EMP-001 AI Sales Rep/);
   assert.match(prompt, /Tenant: tenant-a/);

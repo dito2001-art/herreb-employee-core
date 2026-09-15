@@ -52,7 +52,11 @@ async function callReadOnlyService(
           message: `Read-only service returned HTTP ${response.status}`,
           retryable: response.status >= 500
         },
-        evidence: { executed: true, upstreamStatus: response.status, upstream: body }
+        evidence: {
+          executed: true,
+          upstreamStatus: response.status,
+          upstream: body
+        }
       };
     }
 
@@ -66,7 +70,8 @@ async function callReadOnlyService(
       ok: false,
       error: {
         code: "READ_ONLY_SERVICE_TRANSPORT_ERROR",
-        message: error instanceof Error ? error.message : "Read-only service failed",
+        message:
+          error instanceof Error ? error.message : "Read-only service failed",
         retryable: true
       },
       evidence: { executed: false }
@@ -74,44 +79,76 @@ async function callReadOnlyService(
   }
 }
 
-export function createCalendarReadOnlyTransport(options: ReadOnlyServiceOptions): CalendarTransport {
+export function createCalendarReadOnlyTransport(
+  options: ReadOnlyServiceOptions
+): CalendarTransport {
   return {
     async execute(input) {
       const request: CalendarInput = input.request;
-      if (request.operation !== "search" && request.operation !== "availability") {
+      if (
+        request.operation !== "search" &&
+        request.operation !== "availability"
+      ) {
         return {
           ok: false,
-          error: { code: "CALENDAR_READ_ONLY", message: "Calendar transport is READ_ONLY" },
+          error: {
+            code: "CALENDAR_READ_ONLY",
+            message: "Calendar transport is READ_ONLY"
+          },
           evidence: { executed: false }
         };
       }
-      return callReadOnlyService(options, "/calendar/read", input.tenantId, input.correlationId, {
-        operation: request.operation,
-        timeMin: request.timeMin,
-        timeMax: request.timeMax,
-        query: request.operation === "search" ? request.query : undefined,
-        calendarId: request.operation === "search" ? request.calendarId : undefined,
-        calendarIds: request.operation === "availability" ? request.calendarIds : undefined,
-        timezone: request.operation === "availability" ? request.timezone : undefined
-      });
+      return callReadOnlyService(
+        options,
+        "/calendar/read",
+        input.tenantId,
+        input.correlationId,
+        {
+          operation: request.operation,
+          timeMin: request.timeMin,
+          timeMax: request.timeMax,
+          query: request.operation === "search" ? request.query : undefined,
+          calendarId:
+            request.operation === "search" ? request.calendarId : undefined,
+          calendarIds:
+            request.operation === "availability"
+              ? request.calendarIds
+              : undefined,
+          timezone:
+            request.operation === "availability" ? request.timezone : undefined
+        }
+      );
     }
   };
 }
 
-export function createEmailReadOnlyTransport(options: ReadOnlyServiceOptions): EmailTransport {
+export function createEmailReadOnlyTransport(
+  options: ReadOnlyServiceOptions
+): EmailTransport {
   return {
     async execute(input) {
       const request: EmailInput = input.request;
       if (request.operation === "send") {
         return {
           ok: false,
-          error: { code: "EMAIL_READ_ONLY", message: "Email transport is READ_ONLY" },
+          error: {
+            code: "EMAIL_READ_ONLY",
+            message: "Email transport is READ_ONLY"
+          },
           evidence: { executed: false }
         };
       }
-      return callReadOnlyService(options, "/email/read", input.tenantId, input.correlationId,
+      return callReadOnlyService(
+        options,
+        "/email/read",
+        input.tenantId,
+        input.correlationId,
         request.operation === "search"
-          ? { operation: "search", query: request.query, maxResults: request.maxResults }
+          ? {
+              operation: "search",
+              query: request.query,
+              maxResults: request.maxResults
+            }
           : { operation: "read", messageId: request.messageId }
       );
     }

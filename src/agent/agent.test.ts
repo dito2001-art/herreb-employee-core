@@ -53,7 +53,10 @@ test("tenant identity is mandatory and cannot silently fall back", async () => {
     }
   });
 
-  await assert.rejects(() => createEmployeeAgentSession(request, router), /TENANT_ID_REQUIRED/);
+  await assert.rejects(
+    () => createEmployeeAgentSession(request, router),
+    /TENANT_ID_REQUIRED/
+  );
 });
 
 test("persistent session state accepts only the three catalog employees", () => {

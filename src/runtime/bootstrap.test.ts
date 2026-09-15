@@ -5,7 +5,9 @@ import { HerreBEmployeeRuntime } from "./runtime";
 import { StaticModelRouter } from "../core";
 import type { ServiceFetcher } from "../adapters";
 
-function service(handler: (request: Request) => Promise<Response> | Response): ServiceFetcher {
+function service(
+  handler: (request: Request) => Promise<Response> | Response
+): ServiceFetcher {
   return {
     async fetch(input, init) {
       return handler(new Request(input, init));
@@ -13,7 +15,11 @@ function service(handler: (request: Request) => Promise<Response> | Response): S
   };
 }
 
-const router = new StaticModelRouter({ provider: "workers-ai", model: "test", reason: "test" });
+const router = new StaticModelRouter({
+  provider: "workers-ai",
+  model: "test",
+  reason: "test"
+});
 
 test("bootstrap fails closed when bindings or tokens are missing", () => {
   const empty = buildReadOnlyRuntime({});
@@ -55,7 +61,10 @@ test("EMP-002 CRM read forwards tenant and correlation evidence through AG-002",
     }),
     HERREB_RUNTIME_TOKEN: "runtime-token"
   });
-  const runtime = new HerreBEmployeeRuntime({ modelRouter: router, adapters: current.adapters });
+  const runtime = new HerreBEmployeeRuntime({
+    modelRouter: router,
+    adapters: current.adapters
+  });
   const session = await runtime.start({
     tenantId: "herreb",
     employeeId: "EMP-002",
@@ -73,7 +82,10 @@ test("EMP-002 CRM read forwards tenant and correlation evidence through AG-002",
   assert.equal(observed?.method, "GET");
   assert.equal(observed?.headers.get("X-Tenant-ID"), "herreb");
   assert.equal(observed?.headers.get("X-Correlation-ID"), "corr-bootstrap");
-  assert.equal(observed?.headers.get("X-HerreB-Runtime-Token"), "runtime-token");
+  assert.equal(
+    observed?.headers.get("X-HerreB-Runtime-Token"),
+    "runtime-token"
+  );
   assert.match(observed?.url ?? "", /entity=tasks/);
   assert.match(observed?.url ?? "", /completed=false/);
 });

@@ -14,7 +14,10 @@ test("AG-002 transport sends GET read with tenant and runtime auth", async () =>
       });
     }
   };
-  const transport = createAg002GatewayReadOnlyTransport({ service, runtimeToken: "secret" });
+  const transport = createAg002GatewayReadOnlyTransport({
+    service,
+    runtimeToken: "secret"
+  });
   const result = await transport.execute({
     tenantId: "herreb",
     operation: "read",
@@ -45,7 +48,10 @@ test("AG-002 transport refuses writes before calling service", async () => {
       return new Response("{}", { status: 200 });
     }
   };
-  const transport = createAg002GatewayReadOnlyTransport({ service, runtimeToken: "secret" });
+  const transport = createAg002GatewayReadOnlyTransport({
+    service,
+    runtimeToken: "secret"
+  });
   const result = await transport.execute({
     tenantId: "herreb",
     operation: "update",

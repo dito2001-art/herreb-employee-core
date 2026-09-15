@@ -28,8 +28,14 @@ async function session(employeeId: "EMP-001" | "EMP-002" | "EMP-003") {
 test("capability IDs map deterministically to provider-safe tool names", async () => {
   const current = await session("EMP-002");
   assert.equal(capabilityIdToToolName("calendar.read"), "calendar_read");
-  assert.equal(toolNameToCapabilityId(current.manifest, "calendar_read"), "calendar.read");
-  assert.match(capabilityIdToToolName("crm.read"), /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/);
+  assert.equal(
+    toolNameToCapabilityId(current.manifest, "calendar_read"),
+    "calendar.read"
+  );
+  assert.match(
+    capabilityIdToToolName("crm.read"),
+    /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/
+  );
 });
 
 test("EMP-001 receives sales tools but not assistant or marketer tools", async () => {
@@ -61,7 +67,10 @@ test("EMP-003 receives marketer tools but not sales or assistant tools", async (
 
 test("unconnected manifest tool returns evidence and performs no side effect", async () => {
   const current = await session("EMP-002");
-  const tools = buildEmployeeTools(current) as Record<string, { execute?: Function }>;
+  const tools = buildEmployeeTools(current) as Record<
+    string,
+    { execute?: Function }
+  >;
   const execute = tools.email_send?.execute;
   assert.equal(typeof execute, "function");
   const result = await execute?.({ input: { to: "nobody@example.test" } }, {});

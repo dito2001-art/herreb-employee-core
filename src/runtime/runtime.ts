@@ -30,9 +30,14 @@ export interface EmployeeRuntimeSession {
   ): Promise<ExecutionResult<TOutput>>;
 }
 
-function assertManifestCapability(manifest: EmployeeManifest, capabilityId: string): void {
+function assertManifestCapability(
+  manifest: EmployeeManifest,
+  capabilityId: string
+): void {
   if (!manifest.capabilities.includes(capabilityId)) {
-    throw new Error(`EMPLOYEE_CAPABILITY_NOT_DECLARED:${manifest.id}:${capabilityId}`);
+    throw new Error(
+      `EMPLOYEE_CAPABILITY_NOT_DECLARED:${manifest.id}:${capabilityId}`
+    );
   }
 }
 
@@ -41,7 +46,8 @@ export class HerreBEmployeeRuntime {
 
   constructor(private readonly dependencies: EmployeeRuntimeDependencies) {
     this.registry = createAdapterRegistry();
-    for (const adapter of dependencies.adapters ?? []) this.registry.register(adapter);
+    for (const adapter of dependencies.adapters ?? [])
+      this.registry.register(adapter);
   }
 
   async start(input: RuntimeIdentityInput): Promise<EmployeeRuntimeSession> {
@@ -77,6 +83,9 @@ export class HerreBEmployeeRuntime {
   }
 }
 
-export function successfulCapability<T>(output: T, evidence?: Record<string, unknown>): CapabilityResult<T> {
+export function successfulCapability<T>(
+  output: T,
+  evidence?: Record<string, unknown>
+): CapabilityResult<T> {
   return { ok: true, output, evidence };
 }

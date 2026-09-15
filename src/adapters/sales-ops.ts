@@ -16,19 +16,27 @@ export interface SalesOpsAdapterOptions {
 
 type SalesOpsInput =
   | { customerId?: string; need?: string }
-  | { customerId: string; lines: Array<{ offeringId: string; quantity: number }> }
+  | {
+      customerId: string;
+      lines: Array<{ offeringId: string; quantity: number }>;
+    }
   | { quoteId: string }
   | { transactionId: string };
 
-function mapProductToOffering(product: Record<string, unknown>, tenantId: string) {
+function mapProductToOffering(
+  product: Record<string, unknown>,
+  tenantId: string
+) {
   return {
     id: String(product.productId ?? product.id ?? product.sku ?? ""),
     tenantId,
     type: "PHYSICAL_PRODUCT" as const,
     name: String(product.name ?? ""),
     active: product.active !== false,
-    description: typeof product.description === "string" ? product.description : undefined,
-    currency: typeof product.currency === "string" ? product.currency : undefined,
+    description:
+      typeof product.description === "string" ? product.description : undefined,
+    currency:
+      typeof product.currency === "string" ? product.currency : undefined,
     price: typeof product.price === "number" ? product.price : undefined,
     metadata: {
       legacySku: product.sku,
@@ -100,7 +108,9 @@ export function createSalesOpsAdapter(
 
       switch (req.capabilityId) {
         case "offering.read": {
-          const result = await request(req, "/api/v1/products", { method: "GET" });
+          const result = await request(req, "/api/v1/products", {
+            method: "GET"
+          });
           if (!result.ok) return result;
           const payload = result.output as Record<string, unknown>;
           const products = Array.isArray(payload?.products)
@@ -132,10 +142,12 @@ export function createSalesOpsAdapter(
             body: JSON.stringify({
               customer_id: input.customerId,
               lines: Array.isArray(input.lines)
-                ? (input.lines as Array<Record<string, unknown>>).map((line) => ({
-                    sku: line.offeringId,
-                    qty: line.quantity
-                  }))
+                ? (input.lines as Array<Record<string, unknown>>).map(
+                    (line) => ({
+                      sku: line.offeringId,
+                      qty: line.quantity
+                    })
+                  )
                 : []
             })
           });

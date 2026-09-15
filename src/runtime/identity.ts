@@ -20,7 +20,9 @@ function required(value: string, name: string): string {
   return clean;
 }
 
-export function resolveRuntimeIdentity(input: RuntimeIdentityInput): RuntimeIdentity {
+export function resolveRuntimeIdentity(
+  input: RuntimeIdentityInput
+): RuntimeIdentity {
   const employeeId = EmployeeIdSchema.parse(input.employeeId);
   const context: TenantContext = {
     tenantId: required(input.tenantId, "TENANT_ID"),

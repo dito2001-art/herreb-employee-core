@@ -5,7 +5,8 @@ const manifests = {
     id: "EMP-001",
     name: "AI Sales Rep",
     productName: "EMP-001 AI Sales Rep",
-    purpose: "Sell tenant offerings end-to-end without inventing commercial facts.",
+    purpose:
+      "Sell tenant offerings end-to-end without inventing commercial facts.",
     capabilities: [
       "offering.read",
       "offering.recommend",
@@ -21,7 +22,8 @@ const manifests = {
     id: "EMP-002",
     name: "AI Assistant",
     productName: "EMP-002 AI Assistant",
-    purpose: "Coordinate work, communications, tasks and schedules for the tenant.",
+    purpose:
+      "Coordinate work, communications, tasks and schedules for the tenant.",
     capabilities: [
       "crm.read",
       "crm.write",
@@ -36,7 +38,8 @@ const manifests = {
     id: "EMP-003",
     name: "AI Marketer",
     productName: "EMP-003 AI Marketer",
-    purpose: "Research, plan, create, execute and measure tenant marketing work.",
+    purpose:
+      "Research, plan, create, execute and measure tenant marketing work.",
     capabilities: [
       "crm.read",
       "marketing.read",

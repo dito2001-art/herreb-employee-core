@@ -11,6 +11,8 @@ export const EmployeeSessionStateSchema = z.object({
 
 export type EmployeeSessionState = z.infer<typeof EmployeeSessionStateSchema>;
 
-export function parseEmployeeSessionState(state: unknown): EmployeeSessionState {
+export function parseEmployeeSessionState(
+  state: unknown
+): EmployeeSessionState {
   return EmployeeSessionStateSchema.parse(state);
 }

@@ -22,20 +22,40 @@ export function authorizeCapability(
   }
 
   if (!manifest.capabilities.includes(capabilityId)) {
-    return { decision: "DENY", risk: "RED", reason: "Capability not declared by employee manifest" };
+    return {
+      decision: "DENY",
+      risk: "RED",
+      reason: "Capability not declared by employee manifest"
+    };
   }
 
   if (!capability.allowedEmployees.includes(context.employeeId)) {
-    return { decision: "DENY", risk: "RED", reason: "Employee is not allowed to use capability" };
+    return {
+      decision: "DENY",
+      risk: "RED",
+      reason: "Employee is not allowed to use capability"
+    };
   }
 
   if (capability.risk === "RED") {
-    return { decision: "DENY", risk: "RED", reason: "Red actions are blocked by default" };
+    return {
+      decision: "DENY",
+      risk: "RED",
+      reason: "Red actions are blocked by default"
+    };
   }
 
   if (capability.risk === "YELLOW") {
-    return { decision: "REQUIRE_APPROVAL", risk: "YELLOW", reason: "Controlled side effect requires authorization" };
+    return {
+      decision: "REQUIRE_APPROVAL",
+      risk: "YELLOW",
+      reason: "Controlled side effect requires authorization"
+    };
   }
 
-  return { decision: "ALLOW", risk: "GREEN", reason: "Read-only or low-risk capability" };
+  return {
+    decision: "ALLOW",
+    risk: "GREEN",
+    reason: "Read-only or low-risk capability"
+  };
 }

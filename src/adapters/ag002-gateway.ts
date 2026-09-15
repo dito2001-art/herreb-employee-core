@@ -10,7 +10,11 @@ export interface Ag002GatewayTransportOptions {
 
 function asQueryValue(value: unknown): string | undefined {
   if (value === undefined || value === null) return undefined;
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
     return String(value);
   }
   return undefined;
@@ -89,7 +93,10 @@ export function createAg002GatewayReadOnlyTransport(
           ok: false,
           error: {
             code: "AG002_TRANSPORT_ERROR",
-            message: error instanceof Error ? error.message : "AG-002 transport failed",
+            message:
+              error instanceof Error
+                ? error.message
+                : "AG-002 transport failed",
             retryable: true
           },
           evidence: { executed: false }

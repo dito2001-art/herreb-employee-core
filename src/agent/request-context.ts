@@ -24,11 +24,15 @@ export function resolveEmployeeRequestIdentity(
   defaults: EmployeeRequestDefaults = {}
 ): RuntimeIdentityInput {
   const tenantId = readHeader(request, "X-Tenant-ID") ?? defaults.tenantId;
-  const employeeRaw = readHeader(request, "X-HerreB-Employee-ID") ?? defaults.employeeId;
-  const workspaceId = readHeader(request, "X-HerreB-Workspace-ID") ?? defaults.workspaceId;
+  const employeeRaw =
+    readHeader(request, "X-HerreB-Employee-ID") ?? defaults.employeeId;
+  const workspaceId =
+    readHeader(request, "X-HerreB-Workspace-ID") ?? defaults.workspaceId;
   const actorId = readHeader(request, "X-HerreB-Actor-ID") ?? defaults.actorId;
-  const channel = readHeader(request, "X-HerreB-Channel") ?? defaults.channel ?? "web";
-  const correlationId = readHeader(request, "X-Correlation-ID") ?? crypto.randomUUID();
+  const channel =
+    readHeader(request, "X-HerreB-Channel") ?? defaults.channel ?? "web";
+  const correlationId =
+    readHeader(request, "X-Correlation-ID") ?? crypto.randomUUID();
 
   return {
     tenantId: required(tenantId, "TENANT_ID"),
