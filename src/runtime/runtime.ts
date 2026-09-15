@@ -1,4 +1,5 @@
 import {
+  assertEmployeeEntitled,
   createAdapterRegistry,
   executeCapability,
   getEmployeeManifest,
@@ -10,18 +11,23 @@ import {
   type ExecutionResult,
   type ModelRoute,
   type ModelRouter,
-  type TenantContext
+  type TenantContext,
+  type TenantManifest
 } from "../core";
 import { resolveRuntimeIdentity, type RuntimeIdentityInput } from "./identity";
 
 export interface EmployeeRuntimeDependencies {
   modelRouter: ModelRouter;
   adapters?: readonly CapabilityAdapter[];
+  resolveTenantManifest?: (
+    tenantId: string
+  ) => TenantManifest | Promise<TenantManifest>;
 }
 
 export interface EmployeeRuntimeSession {
   context: TenantContext;
   manifest: EmployeeManifest;
+  tenantManifest?: TenantManifest;
   modelRoute: ModelRoute;
   execute<TInput = unknown, TOutput = unknown>(
     capabilityId: string,
@@ -52,6 +58,15 @@ export class HerreBEmployeeRuntime {
 
   async start(input: RuntimeIdentityInput): Promise<EmployeeRuntimeSession> {
     const { context, employeeId } = resolveRuntimeIdentity(input);
+    const tenantManifest = this.dependencies.resolveTenantManifest
+      ? await this.dependencies.resolveTenantManifest(context.tenantId)
+      : undefined;
+    if (tenantManifest) {
+      if (tenantManifest.tenantId !== context.tenantId)
+        throw new Error("TENANT_MANIFEST_MISMATCH");
+      assertEmployeeEntitled(tenantManifest, employeeId);
+    }
+
     const manifest = getEmployeeManifest(employeeId);
     const modelRoute = await this.dependencies.modelRouter.resolve({
       tenantId: context.tenantId,
@@ -62,6 +77,7 @@ export class HerreBEmployeeRuntime {
     return {
       context,
       manifest,
+      tenantManifest,
       modelRoute,
       execute: async <TInput, TOutput>(
         capabilityId: string,
