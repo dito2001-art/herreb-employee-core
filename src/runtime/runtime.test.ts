@@ -216,10 +216,7 @@ test("runtime permits controlled write only for matching owner-verified provenan
     { approvalGranted: true, idempotencyKey: "crm:update:2" }
   );
   assert.equal(result.ok, true);
-  assert.equal(
-    result.audit.evidence?.authorizationAssurance,
-    "OWNER_VERIFIED"
-  );
+  assert.equal(result.audit.evidence?.authorizationAssurance, "OWNER_VERIFIED");
   assert.equal(result.audit.evidence?.authorizationSubjectId, "fernando");
   assert.equal(result.audit.evidence?.authorizationTenantId, "tenant-a");
 });
