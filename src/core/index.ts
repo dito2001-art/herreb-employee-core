@@ -13,6 +13,7 @@ export * from "./proactive-sales";
 export * from "./sales-loop";
 export * from "./sales-loop-executor";
 export * from "./sales-state";
+export * from "./sales-state-persistent";
 export * from "./sales-cycle";
 export * from "./adapters";
 export * from "./executor";
