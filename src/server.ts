@@ -7,16 +7,41 @@ import {
   streamText
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
+import { projectReadOnlyAdapter, createSalesOpsAdapter, type ServiceFetcher } from "./adapters";
 import { buildEmployeeTools } from "./agent/tools";
-import { StaticModelRouter } from "./core";
-import { buildEmployeeSystemPrompt, HerreBEmployeeRuntime } from "./runtime";
+import { StaticModelRouter, type CapabilityAdapter } from "./core";
+import {
+  assertReadOnlyAdapters,
+  buildEmployeeSystemPrompt,
+  HerreBEmployeeRuntime,
+  readOnlyCapabilityIds
+} from "./runtime";
 
 const DEFAULT_MODEL = "@cf/moonshotai/kimi-k2.7-code";
+
+type RuntimeEnv = Env & {
+  SALES_OPS?: ServiceFetcher;
+  SALES_OPS_TOKEN?: string;
+};
 
 function readStateString(state: unknown, key: string): string | undefined {
   if (!state || typeof state !== "object") return undefined;
   const value = (state as Record<string, unknown>)[key];
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function buildReadOnlyAdapters(env: RuntimeEnv): CapabilityAdapter[] {
+  const adapters: CapabilityAdapter[] = [];
+  if (env.SALES_OPS && env.SALES_OPS_TOKEN?.trim()) {
+    adapters.push(
+      projectReadOnlyAdapter(
+        createSalesOpsAdapter({ service: env.SALES_OPS, token: env.SALES_OPS_TOKEN }),
+        ["offering.read", "offering.recommend"]
+      )
+    );
+  }
+  assertReadOnlyAdapters(adapters);
+  return adapters;
 }
 
 export class ChatAgent extends AIChatAgent<Env> {
@@ -47,7 +72,8 @@ export class ChatAgent extends AIChatAgent<Env> {
       model: DEFAULT_MODEL,
       reason: "employee-runtime-v0.1 default route"
     });
-    const runtime = new HerreBEmployeeRuntime({ modelRouter });
+    const adapters = buildReadOnlyAdapters(this.env as RuntimeEnv);
+    const runtime = new HerreBEmployeeRuntime({ modelRouter, adapters });
     const session = await runtime.start({
       tenantId,
       employeeId,
@@ -69,7 +95,7 @@ export class ChatAgent extends AIChatAgent<Env> {
         toolCalls: "before-last-2-messages",
         reasoning: "before-last-message"
       }),
-      tools: buildEmployeeTools(session),
+      tools: buildEmployeeTools(session, readOnlyCapabilityIds(adapters)),
       stopWhen: stepCountIs(12),
       abortSignal: options?.abortSignal
     });
