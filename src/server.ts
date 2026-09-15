@@ -13,6 +13,7 @@ import { StaticModelRouter } from "./core";
 import {
   buildEmployeeSystemPrompt,
   buildReadOnlyRuntime,
+  createTenantManifestResolverFromJson,
   HerreBEmployeeRuntime
 } from "./runtime";
 
@@ -27,6 +28,7 @@ type RuntimeEnv = Env & {
   CALENDAR_READ_TOKEN?: string;
   EMAIL_READ?: ServiceFetcher;
   EMAIL_READ_TOKEN?: string;
+  TENANT_MANIFESTS_JSON?: string;
 };
 
 function readStateString(state: unknown, key: string): string | undefined {
@@ -63,10 +65,14 @@ export class ChatAgent extends AIChatAgent<Env> {
       model: DEFAULT_MODEL,
       reason: "employee-runtime-v0.1 default route"
     });
-    const bootstrap = buildReadOnlyRuntime(this.env as RuntimeEnv);
+    const runtimeEnv = this.env as RuntimeEnv;
+    const bootstrap = buildReadOnlyRuntime(runtimeEnv);
     const runtime = new HerreBEmployeeRuntime({
       modelRouter,
-      adapters: bootstrap.adapters
+      adapters: bootstrap.adapters,
+      resolveTenantManifest: createTenantManifestResolverFromJson(
+        runtimeEnv.TENANT_MANIFESTS_JSON
+      )
     });
     const session = await runtime.start({
       tenantId,
