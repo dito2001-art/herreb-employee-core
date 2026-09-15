@@ -1,3 +1,4 @@
+import { getCapability } from "./capabilities";
 import type { EmployeeId, TenantContext } from "./contracts";
 
 export interface CapabilityRequest<TInput = unknown> {
@@ -37,6 +38,18 @@ export function createAdapterRegistry(): AdapterRegistry {
     register(adapter) {
       if (adapters.some((existing) => existing.id === adapter.id)) {
         throw new Error(`ADAPTER_ALREADY_REGISTERED:${adapter.id}`);
+      }
+      if (adapter.capabilities.length === 0 || adapter.employees.length === 0) {
+        throw new Error(`INVALID_ADAPTER_SCOPE:${adapter.id}`);
+      }
+      for (const capabilityId of adapter.capabilities) {
+        const capability = getCapability(capabilityId);
+        if (!capability) throw new Error(`UNKNOWN_CAPABILITY:${capabilityId}`);
+        for (const employeeId of adapter.employees) {
+          if (!capability.allowedEmployees.includes(employeeId)) {
+            throw new Error(`INVALID_ADAPTER_EMPLOYEE_SCOPE:${adapter.id}:${employeeId}:${capabilityId}`);
+          }
+        }
       }
       adapters.push(adapter);
     },
