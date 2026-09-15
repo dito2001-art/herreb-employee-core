@@ -1,20 +1,37 @@
-import { KnowledgeRecordSchema, assertKnowledgeTenant, type KnowledgeRecord } from "./knowledge";
+import {
+  KnowledgeRecordSchema,
+  assertKnowledgeTenant,
+  canUseAsVerifiedClaim,
+  type KnowledgeRecord
+} from "./knowledge";
 
 export interface TenantKnowledgeRepository {
   list(tenantId: string, namespace?: string): Promise<KnowledgeRecord[]>;
+  listVerifiedCanonical(
+    tenantId: string,
+    namespace?: string
+  ): Promise<KnowledgeRecord[]>;
   get(tenantId: string, id: string): Promise<KnowledgeRecord | undefined>;
   put(tenantId: string, record: KnowledgeRecord): Promise<KnowledgeRecord>;
 }
 
 export function createInMemoryTenantKnowledgeRepository(): TenantKnowledgeRepository {
   const records = new Map<string, KnowledgeRecord>();
-  const key = (tenantId: string, id: string) => `${tenantId}\u0000${id}`;
+  const key = (tenantId: string, id: string) => `${tenantId}:${id}`;
+
+  const listForTenant = (tenantId: string, namespace?: string) =>
+    [...records.values()].filter(
+      (record) =>
+        record.tenantId === tenantId &&
+        (!namespace || record.namespace === namespace)
+    );
 
   return {
     async list(tenantId, namespace) {
-      return [...records.values()].filter(
-        (record) => record.tenantId === tenantId && (!namespace || record.namespace === namespace)
-      );
+      return listForTenant(tenantId, namespace);
+    },
+    async listVerifiedCanonical(tenantId, namespace) {
+      return listForTenant(tenantId, namespace).filter(canUseAsVerifiedClaim);
     },
     async get(tenantId, id) {
       return records.get(key(tenantId, id));
