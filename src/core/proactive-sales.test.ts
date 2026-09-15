@@ -3,20 +3,20 @@ import test from "node:test";
 import {
   ProactiveSalesPolicySchema,
   canAutonomouslyContactLead,
-  type SalesLead
+  type SalesLead,
 } from "./proactive-sales";
 
 const lead: SalesLead = {
   id: "lead-1",
   tenantId: "herreb-client-0",
   source: "DATABASE",
-  contactKey: "lead@example.com"
+  contactKey: "lead@example.com",
 };
 
 const policy = () =>
   ProactiveSalesPolicySchema.parse({
     tenantId: "herreb-client-0",
-    channels: ["WHATSAPP", "EMAIL", "CRM"]
+    channels: ["WHATSAPP", "EMAIL", "CRM"],
   });
 
 test("EMP001 proactive sales is ACTIVE and autonomous by default", () => {
@@ -32,9 +32,9 @@ test("EMP001 proactive sales is ACTIVE and autonomous by default", () => {
       tenantId: "herreb-client-0",
       lead,
       channel: "EMAIL",
-      kind: "OUTREACH"
+      kind: "OUTREACH",
     }).allowed,
-    true
+    true,
   );
 });
 
@@ -45,7 +45,7 @@ test("explicit PAUSED state stops proactive contact", () => {
     tenantId: "herreb-client-0",
     lead,
     channel: "WHATSAPP",
-    kind: "FOLLOWUP"
+    kind: "FOLLOWUP",
   });
   assert.deepEqual(decision, { allowed: false, reason: "SALES_PAUSED" });
 });
@@ -58,9 +58,9 @@ test("opt-out and suppression fail closed", () => {
       tenantId: "herreb-client-0",
       lead: { ...lead, optedOut: true },
       channel: "EMAIL",
-      kind: "OUTREACH"
+      kind: "OUTREACH",
     }).reason,
-    "LEAD_OPTED_OUT"
+    "LEAD_OPTED_OUT",
   );
   assert.equal(
     canAutonomouslyContactLead({
@@ -68,9 +68,9 @@ test("opt-out and suppression fail closed", () => {
       tenantId: "herreb-client-0",
       lead,
       channel: "EMAIL",
-      kind: "OUTREACH"
+      kind: "OUTREACH",
     }).reason,
-    "LEAD_SUPPRESSED"
+    "LEAD_SUPPRESSED",
   );
 });
 
@@ -80,7 +80,10 @@ test("cross-tenant sales contact fails closed", () => {
     tenantId: "tenant-b",
     lead,
     channel: "EMAIL",
-    kind: "OUTREACH"
+    kind: "OUTREACH",
   });
-  assert.deepEqual(decision, { allowed: false, reason: "TENANT_MISMATCH" });
+  assert.deepEqual(decision, {
+    allowed: false,
+    reason: "TENANT_MISMATCH",
+  });
 });
