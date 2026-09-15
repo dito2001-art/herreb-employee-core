@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { executeCapability, parseTenantContext } from "../core";
-import { createAdapterRegistry } from "../core/adapters";
+import {
+  createAdapterRegistry,
+  executeCapability,
+  parseTenantContext
+} from "../core";
 import { createCrmAdapter } from "./crm";
 import { createSalesOpsAdapter } from "./sales-ops";
 
@@ -9,36 +12,39 @@ const salesContext = parseTenantContext({
   tenantId: "tenant-a",
   employeeId: "EMP-001",
   workspaceId: "sales",
-  actorId: "tester",
+  actorId: "fernando",
   channel: "test",
   correlationId: "corr-sales"
 });
 
 test("Sales Ops adapter propagates tenant and maps products to offerings", async () => {
-  let tenantHeader = "";
-  const service = {
-    async fetch(_input: RequestInfo | URL, init?: RequestInit) {
-      tenantHeader = new Headers(init?.headers).get("X-Tenant-ID") ?? "";
-      return new Response(
-        JSON.stringify({
-          ok: true,
-          products: [
-            {
-              sku: "SKU-1",
-              name: "Demo",
-              price: 100,
-              currency: "PYG",
-              stock: 2
-            }
-          ]
-        }),
-        { status: 200 }
-      );
-    }
-  };
-
+  let seenTenant = "";
   const registry = createAdapterRegistry();
-  registry.register(createSalesOpsAdapter({ service, token: "test-token" }));
+  registry.register(
+    createSalesOpsAdapter({
+      async listProducts(tenantId) {
+        seenTenant = tenantId;
+        return [
+          {
+            id: "p-1",
+            name: "Product 1",
+            price: 10,
+            currency: "USD"
+          }
+        ];
+      },
+      async recommendProducts() {
+        return [];
+      },
+      async createQuote() {
+        return { quoteId: "Q-1" };
+      },
+      async progressSale() {
+        return { orderId: "O-1" };
+      }
+    })
+  );
+
   const result = await executeCapability(registry, {
     context: salesContext,
     capabilityId: "offering.read",
@@ -46,12 +52,10 @@ test("Sales Ops adapter propagates tenant and maps products to offerings", async
   });
 
   assert.equal(result.ok, true);
-  assert.equal(tenantHeader, "tenant-a");
-  const output = result.output as {
-    offerings: Array<{ id: string; type: string }>;
-  };
-  assert.equal(output.offerings[0]?.id, "SKU-1");
-  assert.equal(output.offerings[0]?.type, "PHYSICAL_PRODUCT");
+  assert.equal(seenTenant, "tenant-a");
+  const offerings = (result.output as { offerings: Array<{ type: string }> })
+    .offerings;
+  assert.equal(offerings[0]?.type, "PHYSICAL_PRODUCT");
 });
 
 test("CRM adapter blocks entities outside the commercial allowlist", async () => {
@@ -77,7 +81,7 @@ test("CRM adapter blocks entities outside the commercial allowlist", async () =>
   assert.equal(calls, 0);
 });
 
-test("CRM write requires policy approval and idempotency", async () => {
+test("CRM write requires policy approval idempotency and verified authorization", async () => {
   let calls = 0;
   const registry = createAdapterRegistry();
   registry.register(
@@ -104,8 +108,24 @@ test("CRM write requires policy approval and idempotency", async () => {
   assert.equal(blocked.error?.code, "APPROVAL_REQUIRED");
   assert.equal(calls, 0);
 
-  const approved = await executeCapability(registry, request, {
+  const approvalOnly = await executeCapability(registry, request, {
     approvalGranted: true
+  });
+  assert.equal(
+    approvalOnly.error?.code,
+    "VERIFIED_AUTHORIZATION_REQUIRED"
+  );
+  assert.equal(calls, 0);
+
+  const approved = await executeCapability(registry, request, {
+    approvalGranted: true,
+    controlledWriteAuthorization: {
+      authorized: true,
+      assurance: "OWNER_VERIFIED",
+      subjectId: "fernando",
+      tenantId: "tenant-a",
+      source: "trusted-authenticator"
+    }
   });
   assert.equal(approved.ok, true);
   assert.equal(calls, 1);
