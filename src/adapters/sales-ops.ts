@@ -181,3 +181,28 @@ export function createSalesOpsAdapter(
     }
   };
 }
+
+export function createSharedOfferingReadAdapter(
+  options: SalesOpsAdapterOptions
+): CapabilityAdapter<SalesOpsInput, unknown> {
+  const salesOps = createSalesOpsAdapter(options);
+  return {
+    ...salesOps,
+    id: "shared-offering-read-v1",
+    employees: ["EMP-001", "EMP-003"],
+    capabilities: ["offering.read"],
+    async execute(request) {
+      if (request.capabilityId !== "offering.read") {
+        return {
+          ok: false,
+          error: {
+            code: "SHARED_OFFERING_READ_ONLY",
+            message: `${request.capabilityId} is not available through shared offering read`
+          },
+          evidence: { executed: false, adapterId: "shared-offering-read-v1" }
+        };
+      }
+      return salesOps.execute(request);
+    }
+  };
+}
