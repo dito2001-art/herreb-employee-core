@@ -69,3 +69,19 @@ test("verified canonical query excludes retrieved unverified and other tenants",
     ["verified"]
   );
 });
+
+test("standalone EMP003 reads tenant marketing truth without EMP001 state", async () => {
+  const repository = createInMemoryTenantKnowledgeRepository();
+  await repository.put(
+    "herreb-client-0",
+    record("herreb-client-0", "consulting", "marketing")
+  );
+
+  const truth = await repository.listVerifiedCanonical(
+    "herreb-client-0",
+    "marketing"
+  );
+  assert.equal(truth.length, 1);
+  assert.equal(truth[0]?.id, "consulting");
+  assert.equal(truth[0]?.tenantId, "herreb-client-0");
+});
