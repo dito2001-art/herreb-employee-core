@@ -9,7 +9,10 @@ import {
 
 test("claimed session identity cannot authorize controlled writes", () => {
   const provenance = unverifiedProvenance("session-state");
-  assert.equal(canAuthorizeControlledWrite(provenance, "herreb", "fernando"), false);
+  assert.equal(
+    canAuthorizeControlledWrite(provenance, "herreb", "fernando"),
+    false
+  );
 });
 
 test("only matching owner-verified provenance can authorize controlled writes", () => {
@@ -19,9 +22,18 @@ test("only matching owner-verified provenance can authorize controlled writes", 
     tenantId: "herreb",
     source: "trusted-authenticator"
   };
-  assert.equal(canAuthorizeControlledWrite(verified, "herreb", "fernando"), true);
-  assert.equal(canAuthorizeControlledWrite(verified, "other", "fernando"), false);
-  assert.equal(canAuthorizeControlledWrite(verified, "herreb", "other"), false);
+  assert.equal(
+    canAuthorizeControlledWrite(verified, "herreb", "fernando"),
+    true
+  );
+  assert.equal(
+    canAuthorizeControlledWrite(verified, "other", "fernando"),
+    false
+  );
+  assert.equal(
+    canAuthorizeControlledWrite(verified, "herreb", "other"),
+    false
+  );
 });
 
 test("service verification alone does not become owner authorization", () => {
@@ -31,5 +43,8 @@ test("service verification alone does not become owner authorization", () => {
     tenantId: "herreb",
     source: "internal-service"
   };
-  assert.equal(canAuthorizeControlledWrite(serviceVerified, "herreb", "fernando"), false);
+  assert.equal(
+    canAuthorizeControlledWrite(serviceVerified, "herreb", "fernando"),
+    false
+  );
 });
