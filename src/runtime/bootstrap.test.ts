@@ -14,12 +14,15 @@ test("bootstrap exposes nothing when bindings or tokens are incomplete", () => {
   assert.deepEqual(buildReadOnlyRuntimeAdapters({}), []);
   assert.deepEqual(buildReadOnlyRuntimeAdapters({ salesOps: service }), []);
   assert.deepEqual(buildReadOnlyRuntimeAdapters({ salesOpsToken: "token" }), []);
+  assert.deepEqual(buildReadOnlyRuntimeAdapters({ crmRead: service }), []);
 });
 
 test("bootstrap exposes only explicitly projected read-only capabilities", () => {
   const adapters = buildReadOnlyRuntimeAdapters({
     salesOps: service,
     salesOpsToken: "sales-token",
+    crmRead: service,
+    crmReadToken: "crm-token",
     calendarRead: service,
     calendarReadToken: "calendar-token",
     emailRead: service,
@@ -27,9 +30,14 @@ test("bootstrap exposes only explicitly projected read-only capabilities", () =>
   });
   assert.deepEqual([...readOnlyCapabilityIds(adapters)].sort(), [
     "calendar.read",
+    "crm.read",
     "email.read",
     "offering.read",
     "offering.recommend"
   ]);
-  assert.ok(adapters.every((adapter) => adapter.capabilities.every((id) => id.endsWith(".read") || id === "offering.recommend")));
+  assert.ok(
+    adapters.every((adapter) =>
+      adapter.capabilities.every((id) => id.endsWith(".read") || id === "offering.recommend")
+    )
+  );
 });
