@@ -29,7 +29,8 @@ const definitions: CapabilityDefinition[] = [
   },
   {
     id: "lead.discover",
-    description: "Discover prospective leads within the tenant sales policy and ICP",
+    description:
+      "Discover prospective leads within the tenant sales policy and ICP",
     risk: "GREEN",
     allowedEmployees: ["EMP-001"]
   },
@@ -138,7 +139,9 @@ const definitions: CapabilityDefinition[] = [
   }
 ];
 
-const registry = new Map(definitions.map((definition) => [definition.id, definition]));
+const registry = new Map(
+  definitions.map((definition) => [definition.id, definition])
+);
 
 export function getCapability(id: string): CapabilityDefinition | undefined {
   return registry.get(id);
