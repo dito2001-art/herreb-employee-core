@@ -19,13 +19,18 @@ export interface ReadOnlyRuntimeEnv {
   SALES_OPS_TOKEN?: string;
   AG002_GATEWAY?: ServiceFetcher;
   HERREB_RUNTIME_TOKEN?: string;
+  AG002_TENANT_ID?: string;
   CALENDAR_READ?: ServiceFetcher;
   CALENDAR_READ_TOKEN?: string;
   EMAIL_READ?: ServiceFetcher;
   EMAIL_READ_TOKEN?: string;
 }
 
-type ConnectionState = "CONNECTED" | "MISSING_BINDING" | "MISSING_TOKEN";
+type ConnectionState =
+  | "CONNECTED"
+  | "MISSING_BINDING"
+  | "MISSING_TOKEN"
+  | "MISSING_TENANT_SCOPE";
 
 export interface ReadOnlyRuntimeBootstrap {
   adapters: CapabilityAdapter[];
@@ -52,6 +57,16 @@ function connectionState(
   return "CONNECTED";
 }
 
+function crmConnectionState(
+  binding: ServiceFetcher | undefined,
+  token: string | undefined,
+  tenantId: string | undefined
+): ConnectionState {
+  const state = connectionState(binding, token);
+  if (state !== "CONNECTED") return state;
+  return tenantId ? "CONNECTED" : "MISSING_TENANT_SCOPE";
+}
+
 function readOnlyService(
   service: ServiceFetcher,
   token: string
@@ -65,12 +80,13 @@ export function buildReadOnlyRuntime(
   const adapters: CapabilityAdapter[] = [];
   const salesToken = nonBlank(env.SALES_OPS_TOKEN);
   const runtimeToken = nonBlank(env.HERREB_RUNTIME_TOKEN);
+  const ag002TenantId = nonBlank(env.AG002_TENANT_ID);
   const calendarToken = nonBlank(env.CALENDAR_READ_TOKEN);
   const emailToken = nonBlank(env.EMAIL_READ_TOKEN);
 
   const diagnostics: ReadOnlyRuntimeBootstrap["diagnostics"] = {
     salesOps: connectionState(env.SALES_OPS, salesToken),
-    crm: connectionState(env.AG002_GATEWAY, runtimeToken),
+    crm: crmConnectionState(env.AG002_GATEWAY, runtimeToken, ag002TenantId),
     calendar: connectionState(env.CALENDAR_READ, calendarToken),
     email: connectionState(env.EMAIL_READ, emailToken)
   };
@@ -90,10 +106,11 @@ export function buildReadOnlyRuntime(
     );
   }
 
-  if (env.AG002_GATEWAY && runtimeToken) {
+  if (env.AG002_GATEWAY && runtimeToken && ag002TenantId) {
     const crmTransport = createAg002GatewayReadOnlyTransport({
       service: env.AG002_GATEWAY,
-      runtimeToken
+      runtimeToken,
+      tenantId: ag002TenantId
     });
     adapters.push(
       projectReadOnlyAdapter(createCrmAdapter(crmTransport), ["crm.read"])
