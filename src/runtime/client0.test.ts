@@ -64,6 +64,7 @@ function client0Runtime(
       return Response.json({ ok: true, data: [{ id: "client0-task" }] });
     }),
     HERREB_RUNTIME_TOKEN: "client0-runtime",
+    AG002_TENANT_ID: "herreb-client-0",
     CALENDAR_READ: service((request) => {
       calls.push({
         service: "calendar",
