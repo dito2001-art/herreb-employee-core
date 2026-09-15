@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createAdapterRegistry } from "./adapters";
 import type { TenantContext } from "./contracts";
+import type { ProactiveSalesPolicy } from "./proactive-sales";
 import { executeSalesCycle } from "./sales-cycle";
 import { createInMemorySalesLoopExecutionStore } from "./sales-loop-executor";
 import { createInMemorySalesStateRepository } from "./sales-state";
@@ -15,16 +16,16 @@ const context: TenantContext = {
   correlationId: "corr-sales-cycle"
 };
 
-const policy = {
+const policy: ProactiveSalesPolicy = {
   tenantId: "tenant-a",
-  mode: "ACTIVE" as const,
-  channels: ["WHATSAPP"] as const,
+  mode: "ACTIVE",
+  channels: ["WHATSAPP"],
   allowLeadDiscovery: true,
   allowDatabaseSelling: true,
   allowAutonomousOutreach: true,
   allowAutonomousFollowup: true,
-  maxTouchesPerDay: 3,
-  maxTouchesPerWeek: 7,
+  maxTouchesPerLeadPerDay: 3,
+  maxTouchesPerLeadPerWeek: 7,
   suppressionList: []
 };
 
@@ -130,7 +131,10 @@ test("failed or unauthorized outreach never mutates sales state or schedules fol
   assert.equal(result.execution.reason, "APPROVAL_REQUIRED");
   assert.equal(adapterCalls, 0);
   assert.equal(dispatched, 0);
-  assert.equal((await stateRepository.get("tenant-a", "lead-1"))?.contacted, undefined);
+  assert.equal(
+    (await stateRepository.get("tenant-a", "lead-1"))?.contacted,
+    undefined
+  );
 });
 
 test("paused sales cycle performs no adapter call, persistence mutation or scheduling", async () => {
@@ -165,5 +169,8 @@ test("paused sales cycle performs no adapter call, persistence mutation or sched
   assert.equal(result.execution.executed, false);
   assert.equal(result.execution.reason, "SALES_PAUSED");
   assert.equal(adapterCalls, 0);
-  assert.equal((await stateRepository.get("tenant-a", "lead-1"))?.contacted, undefined);
+  assert.equal(
+    (await stateRepository.get("tenant-a", "lead-1"))?.contacted,
+    undefined
+  );
 });
