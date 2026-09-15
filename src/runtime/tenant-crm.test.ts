@@ -88,7 +88,10 @@ test("tenant CRM resolution selects only the connector owned by that tenant", ()
     }
   ];
 
-  assert.equal(resolveTenantCrm("herreb", registry, bindings)?.binding.service, herrebService);
+  assert.equal(
+    resolveTenantCrm("herreb", registry, bindings)?.binding.service,
+    herrebService
+  );
   assert.equal(
     resolveTenantCrm("client-b", registry, bindings)?.binding.service,
     clientBService
@@ -115,15 +118,27 @@ test("tenant CRM resolution fails closed for missing duplicate or tokenless bind
   assert.throws(
     () =>
       resolveTenantCrm("herreb", registry, [
-        { connectorId: "crm-herreb", service: crmService, runtimeToken: "one" },
-        { connectorId: "crm-herreb", service: crmService, runtimeToken: "two" }
+        {
+          connectorId: "crm-herreb",
+          service: crmService,
+          runtimeToken: "one"
+        },
+        {
+          connectorId: "crm-herreb",
+          service: crmService,
+          runtimeToken: "two"
+        }
       ]),
     /TENANT_CRM_BINDING_DUPLICATE/
   );
   assert.throws(
     () =>
       resolveTenantCrm("herreb", registry, [
-        { connectorId: "crm-herreb", service: crmService, runtimeToken: " " }
+        {
+          connectorId: "crm-herreb",
+          service: crmService,
+          runtimeToken: " "
+        }
       ]),
     /TENANT_CRM_BINDING_TOKEN_MISSING/
   );
