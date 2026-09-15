@@ -82,25 +82,26 @@ export class ChatAgent extends AIChatAgent<Env> {
       actorId,
       channel
     });
-    const modelRoute = session.modelRoute;
-    const model = createWorkersAI({ binding: this.env.AI })(modelRoute.model);
-    const system = buildEmployeeSystemPrompt(session.context, session.manifest);
-    const tools = buildEmployeeTools(session, bootstrap.connectedCapabilities);
-    const messages = pruneMessages({
-      messages: await convertToModelMessages(this.messages),
-      reasoning: "all",
-      toolCalls: "before-last-2-messages",
-      emptyMessages: "remove"
+
+    const workersai = createWorkersAI({ binding: this.env.AI });
+    const model = workersai(session.modelRoute.model, {
+      sessionAffinity: this.sessionAffinity
     });
 
-    return streamText({
+    const result = streamText({
       model,
-      system,
-      messages,
-      tools,
-      stopWhen: stepCountIs(8),
+      system: buildEmployeeSystemPrompt(session.context, session.manifest),
+      messages: pruneMessages({
+        messages: await convertToModelMessages(this.messages),
+        toolCalls: "before-last-2-messages",
+        reasoning: "before-last-message"
+      }),
+      tools: buildEmployeeTools(session, bootstrap.connectedCapabilities),
+      stopWhen: stepCountIs(12),
       abortSignal: options?.abortSignal
-    }).toUIMessageStreamResponse();
+    });
+
+    return result.toUIMessageStreamResponse();
   }
 }
 
@@ -111,4 +112,4 @@ export default {
       new Response("Not found", { status: 404 })
     );
   }
-};
+} satisfies ExportedHandler<Env>;
