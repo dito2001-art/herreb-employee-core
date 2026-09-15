@@ -41,12 +41,6 @@ jobs:
         continue-on-error: true
         run: npx oxfmt --check .
 
-      - name: Formatter diagnostic
-        if: steps.formatting.outcome == 'failure'
-        run: |
-          npx oxfmt src/runtime/client0.test.ts
-          git diff -- src/runtime/client0.test.ts
-
       - name: Lint
         id: lint
         continue-on-error: true
