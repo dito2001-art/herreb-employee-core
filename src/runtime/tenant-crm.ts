@@ -1,3 +1,5 @@
+import type { ServiceFetcher } from "../adapters";
+
 export type TenantCrmMode = "EXTERNAL_CRM" | "HERREB_MANAGED_CRM";
 
 export interface TenantCrmConnector {
@@ -8,6 +10,17 @@ export interface TenantCrmConnector {
 
 export interface TenantCrmRegistry {
   resolve(tenantId: string): TenantCrmConnector | undefined;
+}
+
+export interface TenantCrmBinding {
+  connectorId: string;
+  service: ServiceFetcher;
+  runtimeToken: string;
+}
+
+export interface ResolvedTenantCrm {
+  connector: TenantCrmConnector;
+  binding: TenantCrmBinding;
 }
 
 function clean(value: unknown): string | undefined {
@@ -65,4 +78,31 @@ export function createTenantCrmRegistry(
       return byTenant.get(tenantId);
     }
   };
+}
+
+export function resolveTenantCrm(
+  tenantId: string,
+  registry: TenantCrmRegistry,
+  bindings: readonly TenantCrmBinding[]
+): ResolvedTenantCrm | undefined {
+  const connector = registry.resolve(tenantId);
+  if (!connector) return undefined;
+
+  const matches = bindings.filter(
+    (binding) => binding.connectorId === connector.connectorId
+  );
+  if (matches.length !== 1) {
+    throw new Error(
+      matches.length === 0
+        ? "TENANT_CRM_BINDING_MISSING"
+        : "TENANT_CRM_BINDING_DUPLICATE"
+    );
+  }
+
+  const binding = matches[0];
+  if (!binding.runtimeToken.trim()) {
+    throw new Error("TENANT_CRM_BINDING_TOKEN_MISSING");
+  }
+
+  return { connector, binding };
 }
