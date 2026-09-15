@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { ServiceFetcher } from "../adapters";
+import { StaticModelRouter } from "../core";
 import { buildReadOnlyRuntime } from "./bootstrap";
 import { HerreBEmployeeRuntime } from "./runtime";
-import { StaticModelRouter } from "../core";
-import type { ServiceFetcher } from "../adapters";
 
 function service(
   handler: (request: Request) => Promise<Response> | Response
@@ -128,7 +128,10 @@ test("EMP-002 calendar and email remain GET-only through read-only transports", 
     }),
     EMAIL_READ_TOKEN: "email-token"
   });
-  const runtime = new HerreBEmployeeRuntime({ modelRouter: router, adapters: current.adapters });
+  const runtime = new HerreBEmployeeRuntime({
+    modelRouter: router,
+    adapters: current.adapters
+  });
   const session = await runtime.start({
     tenantId: "herreb",
     employeeId: "EMP-002",
