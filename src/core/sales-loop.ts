@@ -29,7 +29,10 @@ export interface SalesLoopDecision {
   reason: string;
 }
 
-function withinTouchLimits(policy: ProactiveSalesPolicy, lead: SalesLoopLead) {
+function withinTouchLimits(
+  policy: ProactiveSalesPolicy,
+  lead: SalesLoopLead,
+): boolean {
   return (
     (lead.touchesToday ?? 0) < policy.maxTouchesPerLeadPerDay &&
     (lead.touchesThisWeek ?? 0) < policy.maxTouchesPerLeadPerWeek
@@ -54,18 +57,28 @@ export function nextSalesLoopAction(input: {
     (lead) => lead.tenantId === tenantId && lead.optedOut,
   );
   if (optedOut) {
-    return { action: "SUPPRESS", leadId: optedOut.id, reason: "LEAD_OPTED_OUT" };
+    return {
+      action: "SUPPRESS",
+      leadId: optedOut.id,
+      reason: "LEAD_OPTED_OUT",
+    };
   }
 
   const unqualified = leads.find(
     (lead) => lead.tenantId === tenantId && !lead.qualified && !lead.optedOut,
   );
   if (unqualified) {
-    return { action: "QUALIFY", leadId: unqualified.id, reason: "LEAD_NEEDS_QUALIFICATION" };
+    return {
+      action: "QUALIFY",
+      leadId: unqualified.id,
+      reason: "LEAD_NEEDS_QUALIFICATION",
+    };
   }
 
   for (const lead of leads) {
-    if (lead.tenantId !== tenantId || lead.optedOut || !lead.qualified) continue;
+    if (lead.tenantId !== tenantId || lead.optedOut || !lead.qualified) {
+      continue;
+    }
     if (!withinTouchLimits(policy, lead)) continue;
 
     const kind = lead.contacted ? "FOLLOWUP" : "OUTREACH";
