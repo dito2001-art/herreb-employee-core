@@ -253,9 +253,7 @@ test("Client 0 workforce shares tenant offerings without sharing employee permis
     true
   );
   assert.equal(
-    calls.every(
-      (call) => call.method === "GET" || call.service === "sales"
-    ),
+    calls.every((call) => call.method === "GET" || call.service === "sales"),
     true
   );
 });
