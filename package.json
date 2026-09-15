@@ -13,7 +13,7 @@
     "types": "wrangler types env.d.ts",
     "format": "oxfmt --write .",
     "lint": "oxlint src/",
-    "test:core": "node --experimental-strip-types --experimental-specifier-resolution=node --test src/core/core.test.ts src/adapters/adapters.test.ts",
+    "test:core": "node --experimental-strip-types --experimental-specifier-resolution=node --test src/core/core.test.ts src/adapters/adapters.test.ts src/adapters/emp002.test.ts",
     "check": "oxfmt --check . && oxlint src/ && tsc"
   },
   "dependencies": {
