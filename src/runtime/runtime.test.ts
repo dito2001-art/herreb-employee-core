@@ -22,6 +22,19 @@ const crmReadAdapter: CapabilityAdapter = {
   }
 };
 
+const crmWriteAdapter: CapabilityAdapter = {
+  id: "runtime-test-crm-write",
+  capabilities: ["crm.write"],
+  employees: ["EMP-002"],
+  async execute(request: CapabilityRequest): Promise<CapabilityResult> {
+    return {
+      ok: true,
+      output: { tenantId: request.context.tenantId, input: request.input },
+      evidence: { source: "test-write-adapter" }
+    };
+  }
+};
+
 const modelRouter = new StaticModelRouter({
   provider: "test-provider",
   model: "test-model",
@@ -156,6 +169,59 @@ test("runtime blocks capabilities outside employee manifest before adapter execu
     session.execute("offering.read", {}),
     /EMPLOYEE_CAPABILITY_NOT_DECLARED/
   );
+});
+
+test("runtime refuses controlled write when identity is only claimed", async () => {
+  const runtime = new HerreBEmployeeRuntime({
+    modelRouter,
+    adapters: [crmWriteAdapter]
+  });
+  const session = await runtime.start({
+    tenantId: "tenant-a",
+    employeeId: "EMP-002",
+    workspaceId: "assistant",
+    actorId: "fernando",
+    channel: "test"
+  });
+  assert.equal(session.provenance.assurance, "UNVERIFIED");
+  const result = await session.execute(
+    "crm.write",
+    { operation: "update" },
+    { approvalGranted: true, idempotencyKey: "crm:update:1" }
+  );
+  assert.equal(result.error?.code, "VERIFIED_AUTHORIZATION_REQUIRED");
+});
+
+test("runtime permits controlled write only for matching owner-verified provenance", async () => {
+  const runtime = new HerreBEmployeeRuntime({
+    modelRouter,
+    adapters: [crmWriteAdapter],
+    resolveProvenance: (_input, context) => ({
+      assurance: "OWNER_VERIFIED",
+      subjectId: context.actorId,
+      tenantId: context.tenantId,
+      source: "trusted-authenticator"
+    })
+  });
+  const session = await runtime.start({
+    tenantId: "tenant-a",
+    employeeId: "EMP-002",
+    workspaceId: "assistant",
+    actorId: "fernando",
+    channel: "test"
+  });
+  const result = await session.execute(
+    "crm.write",
+    { operation: "update" },
+    { approvalGranted: true, idempotencyKey: "crm:update:2" }
+  );
+  assert.equal(result.ok, true);
+  assert.equal(
+    result.audit.evidence?.authorizationAssurance,
+    "OWNER_VERIFIED"
+  );
+  assert.equal(result.audit.evidence?.authorizationSubjectId, "fernando");
+  assert.equal(result.audit.evidence?.authorizationTenantId, "tenant-a");
 });
 
 test("manifest-driven prompt carries tenant and evidence rules", async () => {
