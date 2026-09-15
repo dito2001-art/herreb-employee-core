@@ -52,7 +52,14 @@ export async function executeCapability<TInput = unknown, TOutput = unknown>(
   }
 
   try {
-    const result = (await adapter.execute(request)) as CapabilityResult<TOutput>;
+    const adapterResult = (await adapter.execute(request)) as CapabilityResult<TOutput>;
+    const result: CapabilityResult<TOutput> = {
+      ...adapterResult,
+      evidence: {
+        ...(adapterResult.evidence ?? {}),
+        ...(policy.decision === "REQUIRE_APPROVAL" ? { approvalGranted: true } : {})
+      }
+    };
     return {
       ...result,
       audit: createAuditEvent(request.context, request.capabilityId, policy, result)
