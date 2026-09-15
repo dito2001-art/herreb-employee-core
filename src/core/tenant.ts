@@ -4,20 +4,24 @@ export function parseTenantContext(input: unknown): TenantContext {
   return TenantContextSchema.parse(input);
 }
 
-export function assertSameTenant(
-  context: TenantContext,
-  resourceTenantId: string
-): void {
-  if (context.tenantId !== resourceTenantId) {
-    throw new Error("TENANT_ISOLATION_VIOLATION");
-  }
+export function assertSameTenant(context: TenantContext, resourceTenantId: string): void {
+  if (context.tenantId !== resourceTenantId) throw new Error("TENANT_ISOLATION_VIOLATION");
+}
+
+function safeKeyPart(value: string, label: string): string {
+  const clean = value.trim();
+  if (!clean) throw new Error(`${label}_REQUIRED`);
+  return encodeURIComponent(clean);
 }
 
 export function tenantScopedKey(
   context: Pick<TenantContext, "tenantId" | "employeeId" | "workspaceId">,
   resource: string
 ): string {
-  const clean = resource.trim();
-  if (!clean) throw new Error("RESOURCE_KEY_REQUIRED");
-  return `${context.tenantId}:${context.employeeId}:${context.workspaceId}:${clean}`;
+  return [
+    safeKeyPart(context.tenantId, "TENANT_ID"),
+    safeKeyPart(context.employeeId, "EMPLOYEE_ID"),
+    safeKeyPart(context.workspaceId, "WORKSPACE_ID"),
+    safeKeyPart(resource, "RESOURCE_KEY")
+  ].join(":");
 }
