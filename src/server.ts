@@ -7,21 +7,13 @@ import {
   streamText
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
-import {
-  createAg002GatewayReadOnlyTransport,
-  createCrmAdapter,
-  createMarketingCrmAdapter,
-  projectReadOnlyAdapter,
-  createSalesOpsAdapter,
-  type ServiceFetcher
-} from "./adapters";
+import type { ServiceFetcher } from "./adapters";
 import { buildEmployeeTools } from "./agent/tools";
-import { StaticModelRouter, type CapabilityAdapter } from "./core";
+import { StaticModelRouter } from "./core";
 import {
-  assertReadOnlyAdapters,
   buildEmployeeSystemPrompt,
-  HerreBEmployeeRuntime,
-  readOnlyCapabilityIds
+  buildReadOnlyRuntime,
+  HerreBEmployeeRuntime
 } from "./runtime";
 
 const DEFAULT_MODEL = "@cf/moonshotai/kimi-k2.7-code";
@@ -30,40 +22,13 @@ type RuntimeEnv = Env & {
   SALES_OPS?: ServiceFetcher;
   SALES_OPS_TOKEN?: string;
   AG002_GATEWAY?: ServiceFetcher;
-  RUNTIME_GATEWAY_TOKEN?: string;
+  HERREB_RUNTIME_TOKEN?: string;
 };
 
 function readStateString(state: unknown, key: string): string | undefined {
   if (!state || typeof state !== "object") return undefined;
   const value = (state as Record<string, unknown>)[key];
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function buildReadOnlyAdapters(env: RuntimeEnv): CapabilityAdapter[] {
-  const adapters: CapabilityAdapter[] = [];
-
-  if (env.SALES_OPS && env.SALES_OPS_TOKEN?.trim()) {
-    adapters.push(
-      projectReadOnlyAdapter(
-        createSalesOpsAdapter({ service: env.SALES_OPS, token: env.SALES_OPS_TOKEN }),
-        ["offering.read", "offering.recommend"]
-      )
-    );
-  }
-
-  if (env.AG002_GATEWAY && env.RUNTIME_GATEWAY_TOKEN?.trim()) {
-    const crmTransport = createAg002GatewayReadOnlyTransport({
-      service: env.AG002_GATEWAY,
-      runtimeToken: env.RUNTIME_GATEWAY_TOKEN
-    });
-    adapters.push(
-      projectReadOnlyAdapter(createCrmAdapter(crmTransport), ["crm.read"]),
-      projectReadOnlyAdapter(createMarketingCrmAdapter(crmTransport), ["crm.read", "marketing.read"])
-    );
-  }
-
-  assertReadOnlyAdapters(adapters);
-  return adapters;
 }
 
 export class ChatAgent extends AIChatAgent<Env> {
@@ -94,8 +59,8 @@ export class ChatAgent extends AIChatAgent<Env> {
       model: DEFAULT_MODEL,
       reason: "employee-runtime-v0.1 default route"
     });
-    const adapters = buildReadOnlyAdapters(this.env as RuntimeEnv);
-    const runtime = new HerreBEmployeeRuntime({ modelRouter, adapters });
+    const bootstrap = buildReadOnlyRuntime(this.env as RuntimeEnv);
+    const runtime = new HerreBEmployeeRuntime({ modelRouter, adapters: bootstrap.adapters });
     const session = await runtime.start({
       tenantId,
       employeeId,
@@ -117,7 +82,7 @@ export class ChatAgent extends AIChatAgent<Env> {
         toolCalls: "before-last-2-messages",
         reasoning: "before-last-message"
       }),
-      tools: buildEmployeeTools(session, readOnlyCapabilityIds(adapters)),
+      tools: buildEmployeeTools(session, bootstrap.connectedCapabilities),
       stopWhen: stepCountIs(12),
       abortSignal: options?.abortSignal
     });
