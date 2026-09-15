@@ -25,7 +25,8 @@ export function createInMemorySalesStateRepository(): SalesStateRepository {
       return records.get(key(tenantId, leadId));
     },
     async put(tenantId, lead) {
-      if (lead.tenantId !== tenantId) throw new Error("SALES_STATE_TENANT_MISMATCH");
+      if (lead.tenantId !== tenantId)
+        throw new Error("SALES_STATE_TENANT_MISMATCH");
       records.set(key(tenantId, lead.id), { ...lead });
     }
   };

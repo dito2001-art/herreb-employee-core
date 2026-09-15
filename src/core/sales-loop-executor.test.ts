@@ -3,7 +3,10 @@ import test from "node:test";
 import type { CapabilityAdapter } from "./adapters";
 import { createAdapterRegistry } from "./adapters";
 import type { TenantContext } from "./contracts";
-import { ProactiveSalesPolicySchema, type ProactiveSalesPolicy } from "./proactive-sales";
+import {
+  ProactiveSalesPolicySchema,
+  type ProactiveSalesPolicy
+} from "./proactive-sales";
 import {
   createInMemorySalesLoopExecutionStore,
   executeNextSalesLoopAction
@@ -19,7 +22,9 @@ const context: TenantContext = {
   correlationId: "corr-sales-loop"
 };
 
-function policy(overrides: Partial<ProactiveSalesPolicy> = {}): ProactiveSalesPolicy {
+function policy(
+  overrides: Partial<ProactiveSalesPolicy> = {}
+): ProactiveSalesPolicy {
   return ProactiveSalesPolicySchema.parse({
     tenantId: "tenant-a",
     channels: ["WHATSAPP"],

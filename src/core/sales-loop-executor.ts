@@ -65,7 +65,10 @@ function capabilityFor(
   return undefined;
 }
 
-function findLead(leads: SalesLoopLead[], leadId?: string): SalesLoopLead | undefined {
+function findLead(
+  leads: SalesLoopLead[],
+  leadId?: string
+): SalesLoopLead | undefined {
   return leadId ? leads.find((lead) => lead.id === leadId) : undefined;
 }
 
@@ -97,32 +100,54 @@ export async function executeNextSalesLoopAction(
       return { decision, executed: false, reason: decision.reason };
     case "DISCOVER":
       if (!input.safePorts?.discoverLeads) {
-        return { decision, executed: false, reason: "DISCOVERY_PORT_NOT_CONFIGURED" };
+        return {
+          decision,
+          executed: false,
+          reason: "DISCOVERY_PORT_NOT_CONFIGURED"
+        };
       }
       result = await input.safePorts.discoverLeads(input.context.tenantId);
       break;
     case "IMPORT_DATABASE":
       if (!input.safePorts?.importDatabaseLeads) {
-        return { decision, executed: false, reason: "DATABASE_PORT_NOT_CONFIGURED" };
+        return {
+          decision,
+          executed: false,
+          reason: "DATABASE_PORT_NOT_CONFIGURED"
+        };
       }
-      result = await input.safePorts.importDatabaseLeads(input.context.tenantId);
+      result = await input.safePorts.importDatabaseLeads(
+        input.context.tenantId
+      );
       break;
     case "QUALIFY":
       if (!lead || !input.safePorts?.qualifyLead) {
-        return { decision, executed: false, reason: "QUALIFICATION_PORT_NOT_CONFIGURED" };
+        return {
+          decision,
+          executed: false,
+          reason: "QUALIFICATION_PORT_NOT_CONFIGURED"
+        };
       }
       result = await input.safePorts.qualifyLead(lead);
       break;
     case "SUPPRESS":
       if (!lead || !input.safePorts?.suppressLead) {
-        return { decision, executed: false, reason: "SUPPRESSION_PORT_NOT_CONFIGURED" };
+        return {
+          decision,
+          executed: false,
+          reason: "SUPPRESSION_PORT_NOT_CONFIGURED"
+        };
       }
       result = await input.safePorts.suppressLead(lead);
       break;
     case "OUTREACH":
     case "FOLLOWUP": {
       if (!lead || !capabilityId || !key) {
-        return { decision, executed: false, reason: "INVALID_CONTACT_DECISION" };
+        return {
+          decision,
+          executed: false,
+          reason: "INVALID_CONTACT_DECISION"
+        };
       }
       const execution = await executeCapability(
         input.registry,
@@ -150,7 +175,9 @@ export async function executeNextSalesLoopAction(
     ...(key ? { idempotencyKey: key } : {}),
     ...(capabilityId ? { capabilityId } : {}),
     result,
-    reason: result?.ok ? "EXECUTED" : (result?.error?.code ?? "EXECUTION_FAILED")
+    reason: result?.ok
+      ? "EXECUTED"
+      : (result?.error?.code ?? "EXECUTION_FAILED")
   };
 
   if (key && result?.ok) await input.store.record(executionResult);
