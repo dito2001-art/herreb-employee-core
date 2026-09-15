@@ -221,6 +221,56 @@ test("runtime permits controlled write only for matching owner-verified provenan
   assert.equal(result.audit.evidence?.authorizationTenantId, "tenant-a");
 });
 
+for (const scenario of [
+  {
+    name: "service verification",
+    assurance: "SERVICE_VERIFIED" as const,
+    subjectId: "fernando",
+    tenantId: "tenant-a"
+  },
+  {
+    name: "owner verification for another tenant",
+    assurance: "OWNER_VERIFIED" as const,
+    subjectId: "fernando",
+    tenantId: "tenant-b"
+  },
+  {
+    name: "owner verification for another actor",
+    assurance: "OWNER_VERIFIED" as const,
+    subjectId: "other",
+    tenantId: "tenant-a"
+  }
+]) {
+  test(`runtime refuses controlled write with ${scenario.name}`, async () => {
+    const runtime = new HerreBEmployeeRuntime({
+      modelRouter,
+      adapters: [crmWriteAdapter],
+      resolveProvenance: () => ({
+        assurance: scenario.assurance,
+        subjectId: scenario.subjectId,
+        tenantId: scenario.tenantId,
+        source: "trusted-authenticator"
+      })
+    });
+    const session = await runtime.start({
+      tenantId: "tenant-a",
+      employeeId: "EMP-002",
+      workspaceId: "assistant",
+      actorId: "fernando",
+      channel: "test"
+    });
+    const result = await session.execute(
+      "crm.write",
+      { operation: "update" },
+      {
+        approvalGranted: true,
+        idempotencyKey: `crm:update:${scenario.name}`
+      }
+    );
+    assert.equal(result.error?.code, "VERIFIED_AUTHORIZATION_REQUIRED");
+  });
+}
+
 test("manifest-driven prompt carries tenant and evidence rules", async () => {
   const runtime = new HerreBEmployeeRuntime({ modelRouter });
   const session = await runtime.start({
