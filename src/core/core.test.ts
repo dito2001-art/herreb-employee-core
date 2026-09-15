@@ -30,10 +30,7 @@ test("tenant isolation rejects cross-tenant resources", () => {
 
 test("tenant scoped keys include and safely encode tenant employee workspace and resource", () => {
   assert.equal(tenantScopedKey(baseContext, "conversation:123"), "tenant-a:EMP-001:workspace-1:conversation%3A123");
-  assert.notEqual(
-    tenantScopedKey({ ...baseContext, tenantId: "tenant:b" }, "conversation:123"),
-    tenantScopedKey({ ...baseContext, tenantId: "tenant" }, "b:conversation:123")
-  );
+  assert.notEqual(tenantScopedKey({ ...baseContext, tenantId: "tenant:b" }, "conversation:123"), tenantScopedKey({ ...baseContext, tenantId: "tenant" }, "b:conversation:123"));
 });
 
 test("policy is deny-by-default and employee boundaries are enforced", () => {
