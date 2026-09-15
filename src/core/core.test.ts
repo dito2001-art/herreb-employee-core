@@ -28,8 +28,12 @@ test("tenant isolation rejects cross-tenant resources", () => {
   assert.throws(() => assertSameTenant(baseContext, "tenant-b"), /TENANT_ISOLATION_VIOLATION/);
 });
 
-test("tenant scoped keys include tenant employee and workspace", () => {
-  assert.equal(tenantScopedKey(baseContext, "conversation:123"), "tenant-a:EMP-001:workspace-1:conversation:123");
+test("tenant scoped keys include and safely encode tenant employee workspace and resource", () => {
+  assert.equal(tenantScopedKey(baseContext, "conversation:123"), "tenant-a:EMP-001:workspace-1:conversation%3A123");
+  assert.notEqual(
+    tenantScopedKey({ ...baseContext, tenantId: "tenant:b" }, "conversation:123"),
+    tenantScopedKey({ ...baseContext, tenantId: "tenant" }, "b:conversation:123")
+  );
 });
 
 test("policy is deny-by-default and employee boundaries are enforced", () => {
@@ -56,13 +60,10 @@ test("green capability executes without approval", async () => {
 test("yellow capability requires idempotency and explicit approval", async () => {
   const registry = createAdapterRegistry();
   registry.register({ id: "test-quote", capabilities: ["quote.create"], employees: ["EMP-001"], async execute() { return { ok: true, output: { quoteId: "Q-1" } }; } });
-
   const missingKey = await executeCapability(registry, { context: baseContext, capabilityId: "quote.create", input: {} });
   assert.equal(missingKey.error?.code, "IDEMPOTENCY_KEY_REQUIRED");
-
   const blocked = await executeCapability(registry, { context: baseContext, capabilityId: "quote.create", input: {}, idempotencyKey: "quote:run-1" });
   assert.equal(blocked.error?.code, "APPROVAL_REQUIRED");
-
   const approved = await executeCapability(registry, { context: baseContext, capabilityId: "quote.create", input: {}, idempotencyKey: "quote:run-1" }, { approvalGranted: true });
   assert.equal(approved.ok, true);
   assert.equal(approved.audit.evidence?.approvalGranted, true);
