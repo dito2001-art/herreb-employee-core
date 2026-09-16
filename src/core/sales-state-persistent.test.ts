@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createPersistentSalesStateRepository, type SalesStateStorage } from "./sales-state-persistent";
+import {
+  createPersistentSalesStateRepository,
+  type SalesStateStorage
+} from "./sales-state-persistent";
 
 function memoryStorage(): SalesStateStorage {
   const records = new Map<string, string>();
@@ -55,8 +58,14 @@ test("persistent sales state isolates identical lead ids by tenant", async () =>
     qualified: true
   });
 
-  assert.equal((await repository.get("tenant-a", "lead-1"))?.contactKey, "a");
-  assert.equal((await repository.get("tenant-b", "lead-1"))?.contactKey, "b");
+  assert.equal(
+    (await repository.get("tenant-a", "lead-1"))?.contactKey,
+    "a"
+  );
+  assert.equal(
+    (await repository.get("tenant-b", "lead-1"))?.contactKey,
+    "b"
+  );
   assert.equal((await repository.list("tenant-a")).length, 1);
 });
 
@@ -87,5 +96,8 @@ test("persistent sales state rejects poisoned tenant records", async () => {
     })
   );
   const repository = createPersistentSalesStateRepository(storage);
-  await assert.rejects(repository.get("tenant-a", "lead-1"), /SALES_STATE_TENANT_MISMATCH/);
+  await assert.rejects(
+    repository.get("tenant-a", "lead-1"),
+    /SALES_STATE_TENANT_MISMATCH/
+  );
 });
