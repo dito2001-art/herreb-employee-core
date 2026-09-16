@@ -34,8 +34,7 @@ class E2EAuditSql implements AuditSqlStorage {
       return this.events
         .filter(
           (event) =>
-            event.tenantId === tenantId &&
-            event.correlationId === correlationId
+            event.tenantId === tenantId && event.correlationId === correlationId
         )
         .map((event) => ({ payload: JSON.stringify(event) }) as T);
     }
