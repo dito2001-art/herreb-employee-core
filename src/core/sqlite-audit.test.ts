@@ -32,8 +32,7 @@ class MemoryAuditSql implements AuditSqlStorage {
       return [...this.rows.values()]
         .filter(
           (event) =>
-            event.tenantId === tenantId &&
-            event.correlationId === correlationId
+            event.tenantId === tenantId && event.correlationId === correlationId
         )
         .sort(
           (a, b) =>
@@ -91,7 +90,9 @@ test("SQLite audit survives sink recreation and preserves EMP-002 correlation ch
 test("SQLite audit lookup is tenant isolated even with same correlation id", async () => {
   const sql = new MemoryAuditSql();
   const sink = new SqliteAuditSink(sql);
-  await sink.record(event("evt-a", "herreb-client-0", "shared-corr", "crm.read"));
+  await sink.record(
+    event("evt-a", "herreb-client-0", "shared-corr", "crm.read")
+  );
   await sink.record(event("evt-b", "client-b", "shared-corr", "crm.read"));
 
   const client0 = sink.listByCorrelation("herreb-client-0", "shared-corr");
