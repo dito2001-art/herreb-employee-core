@@ -15,6 +15,7 @@ export * from "./sales-loop-executor";
 export * from "./sales-state";
 export * from "./sales-state-persistent";
 export * from "./sales-cycle";
+export * from "./sales-cognitive-state";
 export * from "./adapters";
 export * from "./executor";
 export * from "./durable";
