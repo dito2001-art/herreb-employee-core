@@ -9,3 +9,4 @@ export * from "./tenant-crm";
 export * from "./tenant-capabilities";
 export * from "./emp002-readiness";
 export * from "./emp002-scheduling";
+export * from "./emp002-slot-recovery";
