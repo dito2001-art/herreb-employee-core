@@ -11,6 +11,7 @@ export * from "./knowledge";
 export * from "./knowledge-repository";
 export * from "./knowledge-onboarding";
 export * from "./offering-repository";
+export * from "./sqlite-marketing-repositories";
 export * from "./tenant-marketing-foundation";
 export * from "./marketing";
 export * from "./marketing-brain";
