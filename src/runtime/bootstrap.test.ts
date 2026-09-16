@@ -65,8 +65,10 @@ test("configured bootstrap exposes only read-only capabilities", () => {
     AG002_TENANT_ID: "herreb",
     CALENDAR_READ: service(() => Response.json({ ok: true, data: [] })),
     CALENDAR_READ_TOKEN: "calendar-token",
+    CALENDAR_TENANT_ID: "herreb",
     EMAIL_READ: service(() => Response.json({ ok: true, data: [] })),
-    EMAIL_READ_TOKEN: "email-token"
+    EMAIL_READ_TOKEN: "email-token",
+    EMAIL_TENANT_ID: "herreb"
   });
   assert.deepEqual(
     [...current.connectedCapabilities].sort(),
@@ -203,11 +205,13 @@ test("EMP-002 calendar and email remain GET-only through read-only transports", 
       return Response.json({ ok: true, data: [] });
     }),
     CALENDAR_READ_TOKEN: "calendar-token",
+    CALENDAR_TENANT_ID: "herreb",
     EMAIL_READ: service((request) => {
       methods.push(request.method);
       return Response.json({ ok: true, data: [] });
     }),
-    EMAIL_READ_TOKEN: "email-token"
+    EMAIL_READ_TOKEN: "email-token",
+    EMAIL_TENANT_ID: "herreb"
   });
   const runtime = new HerreBEmployeeRuntime({
     modelRouter: router,

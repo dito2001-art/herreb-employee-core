@@ -74,6 +74,7 @@ function client0Runtime(
       return Response.json({ ok: true, data: [{ id: "client0-event" }] });
     }),
     CALENDAR_READ_TOKEN: "client0-calendar",
+    CALENDAR_TENANT_ID: "herreb-client-0",
     EMAIL_READ: service((request) => {
       calls.push({
         service: "email",
@@ -82,7 +83,8 @@ function client0Runtime(
       });
       return Response.json({ ok: true, data: [{ id: "client0-email" }] });
     }),
-    EMAIL_READ_TOKEN: "client0-email"
+    EMAIL_READ_TOKEN: "client0-email",
+    EMAIL_TENANT_ID: "herreb-client-0"
   });
   const runtime = new HerreBEmployeeRuntime({
     modelRouter: router,

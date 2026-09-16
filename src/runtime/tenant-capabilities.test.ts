@@ -24,25 +24,31 @@ const connectors = JSON.stringify([
   }
 ]);
 
-test("tenant runtime exposes only its own CRM and calendar connector", () => {
+test("tenant runtime exposes only its own CRM Calendar and Email connectors", () => {
   const herrebCrm = service();
   const herrebCalendar = service();
+  const herrebEmail = service();
   const clientBCrm = service();
   const clientBCalendar = service();
+  const clientBEmail = service();
   const bindings = [
     {
       connectorId: "crm-herreb",
       service: herrebCrm,
       runtimeToken: "herreb-crm-token",
       calendarService: herrebCalendar,
-      calendarToken: "herreb-calendar-token"
+      calendarToken: "herreb-calendar-token",
+      emailService: herrebEmail,
+      emailToken: "herreb-email-token"
     },
     {
       connectorId: "crm-client-b",
       service: clientBCrm,
       runtimeToken: "client-b-crm-token",
       calendarService: clientBCalendar,
-      calendarToken: "client-b-calendar-token"
+      calendarToken: "client-b-calendar-token",
+      emailService: clientBEmail,
+      emailToken: "client-b-email-token"
     }
   ];
 
@@ -59,11 +65,13 @@ test("tenant runtime exposes only its own CRM and calendar connector", () => {
 
   assert.equal(herreb.diagnostics.crm, "CONNECTED");
   assert.equal(herreb.diagnostics.calendar, "CONNECTED");
+  assert.equal(herreb.diagnostics.email, "CONNECTED");
   assert.equal(clientB.diagnostics.crm, "CONNECTED");
   assert.equal(clientB.diagnostics.calendar, "CONNECTED");
+  assert.equal(clientB.diagnostics.email, "CONNECTED");
 });
 
-test("managed CRM without a calendar connector does not invent calendar access", () => {
+test("managed CRM without Google connectors does not invent Google access", () => {
   const current = buildTenantReadOnlyRuntime(
     { TENANT_CRM_CONNECTORS_JSON: connectors },
     "herreb",
@@ -78,24 +86,77 @@ test("managed CRM without a calendar connector does not invent calendar access",
 
   assert.equal(current.diagnostics.crm, "CONNECTED");
   assert.equal(current.diagnostics.calendar, "MISSING_BINDING");
+  assert.equal(current.diagnostics.email, "MISSING_BINDING");
   assert.equal(current.connectedCapabilities.has("calendar.read"), false);
+  assert.equal(current.connectedCapabilities.has("email.read"), false);
 });
 
-test("unknown tenant receives no managed CRM or calendar capability", () => {
+test("shared Google fallback requires an explicit tenant scope", () => {
   const current = buildTenantReadOnlyRuntime(
-    { TENANT_CRM_CONNECTORS_JSON: connectors },
-    "unknown",
+    {
+      TENANT_CRM_CONNECTORS_JSON: connectors,
+      CALENDAR_READ: service(),
+      CALENDAR_READ_TOKEN: "calendar-token",
+      EMAIL_READ: service(),
+      EMAIL_READ_TOKEN: "email-token"
+    },
+    "herreb",
     [
       {
         connectorId: "crm-herreb",
         service: service(),
-        runtimeToken: "crm-token",
-        calendarService: service(),
-        calendarToken: "calendar-token"
+        runtimeToken: "crm-token"
       }
     ]
   );
 
+  assert.equal(current.diagnostics.calendar, "MISSING_BINDING");
+  assert.equal(current.diagnostics.email, "MISSING_BINDING");
+  assert.equal(current.connectedCapabilities.has("calendar.read"), false);
+  assert.equal(current.connectedCapabilities.has("email.read"), false);
+});
+
+test("matching shared Client0 scope exposes read capabilities", () => {
+  const current = buildTenantReadOnlyRuntime(
+    {
+      CALENDAR_READ: service(),
+      CALENDAR_READ_TOKEN: "calendar-token",
+      CALENDAR_TENANT_ID: "herreb-client-0",
+      EMAIL_READ: service(),
+      EMAIL_READ_TOKEN: "email-token",
+      EMAIL_TENANT_ID: "herreb-client-0"
+    },
+    "herreb-client-0",
+    []
+  );
+
+  assert.equal(current.diagnostics.calendar, "CONNECTED");
+  assert.equal(current.diagnostics.email, "CONNECTED");
+  assert.equal(current.connectedCapabilities.has("calendar.read"), true);
+  assert.equal(current.connectedCapabilities.has("email.read"), true);
+});
+
+test("unknown tenant cannot inherit Client0 shared connector scope", () => {
+  const current = buildTenantReadOnlyRuntime(
+    {
+      AG002_GATEWAY: service(),
+      HERREB_RUNTIME_TOKEN: "crm-token",
+      AG002_TENANT_ID: "herreb-client-0",
+      CALENDAR_READ: service(),
+      CALENDAR_READ_TOKEN: "calendar-token",
+      CALENDAR_TENANT_ID: "herreb-client-0",
+      EMAIL_READ: service(),
+      EMAIL_READ_TOKEN: "email-token",
+      EMAIL_TENANT_ID: "herreb-client-0"
+    },
+    "unknown",
+    []
+  );
+
   assert.equal(current.diagnostics.crm, "MISSING_BINDING");
   assert.equal(current.diagnostics.calendar, "MISSING_BINDING");
+  assert.equal(current.diagnostics.email, "MISSING_BINDING");
+  assert.equal(current.connectedCapabilities.has("crm.read"), false);
+  assert.equal(current.connectedCapabilities.has("calendar.read"), false);
+  assert.equal(current.connectedCapabilities.has("email.read"), false);
 });
