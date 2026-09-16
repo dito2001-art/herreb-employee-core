@@ -8,3 +8,4 @@ export * from "./tenant-manifest-resolver";
 export * from "./tenant-crm";
 export * from "./tenant-capabilities";
 export * from "./emp002-readiness";
+export * from "./emp002-scheduling";
