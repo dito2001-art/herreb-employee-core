@@ -7,7 +7,8 @@ export interface SalesStateStorage {
 }
 
 const prefixFor = (tenantId: string) => `sales-state:${tenantId}:`;
-const keyFor = (tenantId: string, leadId: string) => `${prefixFor(tenantId)}${leadId}`;
+const keyFor = (tenantId: string, leadId: string) =>
+  `${prefixFor(tenantId)}${leadId}`;
 
 function parseLead(tenantId: string, raw: string): SalesLeadState {
   const lead = JSON.parse(raw) as SalesLeadState;
