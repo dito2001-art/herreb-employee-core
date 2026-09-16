@@ -23,7 +23,10 @@ test("onboards knowledge only into the requested tenant", async () => {
   const repository = createInMemoryTenantKnowledgeRepository();
   const result = await onboardTenantKnowledge(repository, {
     tenantId: "tenant-a",
-    knowledge: [knowledge("tenant-a", "k-1"), knowledge("tenant-a", "k-2")]
+    knowledge: [
+      knowledge("tenant-a", "k-1"),
+      knowledge("tenant-a", "k-2")
+    ]
   });
 
   assert.deepEqual(result.storedKnowledgeIds, ["k-1", "k-2"]);
@@ -37,7 +40,10 @@ test("fails closed before storing any record when onboarding contains another te
   await assert.rejects(
     onboardTenantKnowledge(repository, {
       tenantId: "tenant-a",
-      knowledge: [knowledge("tenant-a", "valid"), knowledge("tenant-b", "forbidden")]
+      knowledge: [
+        knowledge("tenant-a", "valid"),
+        knowledge("tenant-b", "forbidden")
+      ]
     }),
     /TENANT_ISOLATION/
   );
@@ -55,7 +61,8 @@ test("offerings used during onboarding must belong to the same tenant", () => {
           tenantId: "tenant-b",
           type: "SERVICE",
           name: "Forbidden service",
-          active: true
+          active: true,
+          metadata: {}
         }
       ]),
     /OFFERING_TENANT_ISOLATION/
