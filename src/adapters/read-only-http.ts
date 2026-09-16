@@ -24,7 +24,8 @@ async function callReadOnlyService(
       ok: false,
       error: {
         code: "READ_ONLY_TENANT_SCOPE_MISMATCH",
-        message: "Read-only service tenant does not match authorized tenant scope",
+        message:
+          "Read-only service tenant does not match authorized tenant scope",
         retryable: false
       },
       evidence: { ...baseEvidence, executed: false }
