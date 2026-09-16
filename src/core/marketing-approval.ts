@@ -46,6 +46,7 @@ export function authorizeApprovedMarketingAction(input: {
   context: TenantContext;
   request: ApprovalRequest;
   planId: string;
+  capabilityId: string;
 }): void {
   if (
     !isApprovalValidForAction({
@@ -53,7 +54,7 @@ export function authorizeApprovedMarketingAction(input: {
       tenantId: input.context.tenantId,
       employeeId: input.context.employeeId,
       correlationId: input.context.correlationId,
-      capabilityId: input.request.capabilityId,
+      capabilityId: input.capabilityId,
       subjectId: input.planId
     })
   ) {
@@ -65,6 +66,14 @@ export function createMarketingApprovalAuditEvent(input: {
   context: TenantContext;
   request: ApprovalRequest;
 }): AuditEvent {
+  if (
+    input.context.tenantId !== input.request.tenantId ||
+    input.context.employeeId !== input.request.employeeId ||
+    input.context.correlationId !== input.request.correlationId
+  ) {
+    throw new Error("MARKETING_APPROVAL_CONTEXT_MISMATCH");
+  }
+
   const approved = input.request.status === "APPROVED";
   return {
     eventId: `approval-audit:${input.request.id}`,
