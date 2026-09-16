@@ -95,25 +95,23 @@ test("EMP-002 read-only preflight propagates tenant and correlation on every ups
 test("EMP-002 read capability cannot be turned into Calendar or Email write", async () => {
   const { requests, session } = runtimeFor();
   const assistant = await session;
-  await assert.rejects(
-    assistant.execute("calendar.read", {
-      operation: "create",
-      title: "forbidden",
-      startTime: "2026-09-16T10:00:00-03:00",
-      endTime: "2026-09-16T11:00:00-03:00",
-      timezone: "America/Asuncion"
-    }),
-    /CALENDAR_OPERATION_MISMATCH/
-  );
-  await assert.rejects(
-    assistant.execute("email.read", {
-      operation: "send",
-      to: ["test@example.com"],
-      subject: "forbidden",
-      body: "forbidden"
-    }),
-    /EMAIL_OPERATION_MISMATCH/
-  );
+  const calendar = await assistant.execute("calendar.read", {
+    operation: "create",
+    title: "forbidden",
+    startTime: "2026-09-16T10:00:00-03:00",
+    endTime: "2026-09-16T11:00:00-03:00",
+    timezone: "America/Asuncion"
+  });
+  const email = await assistant.execute("email.read", {
+    operation: "send",
+    to: ["test@example.com"],
+    subject: "forbidden",
+    body: "forbidden"
+  });
+  assert.equal(calendar.ok, false);
+  assert.equal(calendar.error?.code, "CALENDAR_OPERATION_MISMATCH");
+  assert.equal(email.ok, false);
+  assert.equal(email.error?.code, "EMAIL_OPERATION_MISMATCH");
   assert.equal(requests.length, 0);
 });
 
