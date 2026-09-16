@@ -130,8 +130,17 @@ test("EMP-002 Client0 CRM Calendar Gmail read-only cycle is tenant scoped and du
     audit.map((event) => event.capabilityId),
     ["crm.read", "calendar.read", "email.read"]
   );
+  assert.deepEqual(
+    audit.map((event) => event.evidence?.operation),
+    ["read", "search", "search"]
+  );
   assert.ok(audit.every((event) => event.employeeId === "EMP-002"));
   assert.ok(audit.every((event) => event.outcome === "SUCCESS"));
+  assert.ok(audit.every((event) => event.evidence?.upstreamStatus === 200));
+  const serializedAudit = JSON.stringify(audit);
+  assert.equal(serializedAudit.includes("crm-token"), false);
+  assert.equal(serializedAudit.includes("calendar-token"), false);
+  assert.equal(serializedAudit.includes("email-token"), false);
 });
 
 test("EMP-002 unknown tenant gets no Client0 CRM Calendar or Gmail capability", () => {
