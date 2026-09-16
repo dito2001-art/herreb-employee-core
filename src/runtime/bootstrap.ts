@@ -22,8 +22,10 @@ export interface ReadOnlyRuntimeEnv {
   AG002_TENANT_ID?: string;
   CALENDAR_READ?: ServiceFetcher;
   CALENDAR_READ_TOKEN?: string;
+  CALENDAR_TENANT_ID?: string;
   EMAIL_READ?: ServiceFetcher;
   EMAIL_READ_TOKEN?: string;
+  EMAIL_TENANT_ID?: string;
 }
 
 type ConnectionState =
@@ -57,7 +59,7 @@ function connectionState(
   return "CONNECTED";
 }
 
-function crmConnectionState(
+function scopedConnectionState(
   binding: ServiceFetcher | undefined,
   token: string | undefined,
   tenantId: string | undefined
@@ -69,9 +71,10 @@ function crmConnectionState(
 
 function readOnlyService(
   service: ServiceFetcher,
-  token: string
+  token: string,
+  tenantId: string
 ): ReadOnlyServiceOptions {
-  return { service, token };
+  return { service, token, tenantId };
 }
 
 export function buildReadOnlyRuntime(
@@ -82,13 +85,19 @@ export function buildReadOnlyRuntime(
   const runtimeToken = nonBlank(env.HERREB_RUNTIME_TOKEN);
   const ag002TenantId = nonBlank(env.AG002_TENANT_ID);
   const calendarToken = nonBlank(env.CALENDAR_READ_TOKEN);
+  const calendarTenantId = nonBlank(env.CALENDAR_TENANT_ID);
   const emailToken = nonBlank(env.EMAIL_READ_TOKEN);
+  const emailTenantId = nonBlank(env.EMAIL_TENANT_ID);
 
   const diagnostics: ReadOnlyRuntimeBootstrap["diagnostics"] = {
     salesOps: connectionState(env.SALES_OPS, salesToken),
-    crm: crmConnectionState(env.AG002_GATEWAY, runtimeToken, ag002TenantId),
-    calendar: connectionState(env.CALENDAR_READ, calendarToken),
-    email: connectionState(env.EMAIL_READ, emailToken)
+    crm: scopedConnectionState(env.AG002_GATEWAY, runtimeToken, ag002TenantId),
+    calendar: scopedConnectionState(
+      env.CALENDAR_READ,
+      calendarToken,
+      calendarTenantId
+    ),
+    email: scopedConnectionState(env.EMAIL_READ, emailToken, emailTenantId)
   };
 
   if (env.SALES_OPS && salesToken) {
@@ -117,12 +126,12 @@ export function buildReadOnlyRuntime(
     );
   }
 
-  if (env.CALENDAR_READ && calendarToken) {
+  if (env.CALENDAR_READ && calendarToken && calendarTenantId) {
     adapters.push(
       projectReadOnlyAdapter(
         createCalendarAdapter(
           createCalendarReadOnlyTransport(
-            readOnlyService(env.CALENDAR_READ, calendarToken)
+            readOnlyService(env.CALENDAR_READ, calendarToken, calendarTenantId)
           )
         ),
         ["calendar.read"]
@@ -130,12 +139,12 @@ export function buildReadOnlyRuntime(
     );
   }
 
-  if (env.EMAIL_READ && emailToken) {
+  if (env.EMAIL_READ && emailToken && emailTenantId) {
     adapters.push(
       projectReadOnlyAdapter(
         createEmailAdapter(
           createEmailReadOnlyTransport(
-            readOnlyService(env.EMAIL_READ, emailToken)
+            readOnlyService(env.EMAIL_READ, emailToken, emailTenantId)
           )
         ),
         ["email.read"]
