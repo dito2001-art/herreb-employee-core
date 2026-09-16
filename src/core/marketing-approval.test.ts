@@ -37,7 +37,7 @@ test("approved decision authorizes exact marketing plan and creates correlated a
   assert.ok(request);
   const approved = await repository.decide({ tenantId: "tenant-a", approvalId: request.id, actorId: "manager-1", decision: "APPROVE", decidedAt: "2026-09-16T00:05:00Z" });
 
-  assert.doesNotThrow(() => authorizeApprovedMarketingAction({ context, request: approved, planId: cycle.plan.id }));
+  assert.doesNotThrow(() => authorizeApprovedMarketingAction({ context, request: approved, planId: cycle.plan.id, capabilityId: "campaign.schedule" }));
   const audit = createMarketingApprovalAuditEvent({ context, request: approved });
   assert.equal(audit.tenantId, "tenant-a");
   assert.equal(audit.correlationId, "corr-003");
@@ -51,8 +51,18 @@ test("rejected or cross-scope decision cannot authorize execution", async () => 
   const request = await submitMarketingApproval({ context, cycle, repository });
   assert.ok(request);
   const rejected = await repository.decide({ tenantId: "tenant-a", approvalId: request.id, actorId: "manager-1", decision: "REJECT" });
-  assert.throws(() => authorizeApprovedMarketingAction({ context, request: rejected, planId: cycle.plan.id }), /MARKETING_APPROVAL_NOT_VALID_FOR_ACTION/);
+  assert.throws(() => authorizeApprovedMarketingAction({ context, request: rejected, planId: cycle.plan.id, capabilityId: "campaign.schedule" }), /MARKETING_APPROVAL_NOT_VALID_FOR_ACTION/);
 
   const forged = { ...rejected, status: "APPROVED" as const };
-  assert.throws(() => authorizeApprovedMarketingAction({ context, request: forged, planId: "plan:other" }), /MARKETING_APPROVAL_NOT_VALID_FOR_ACTION/);
+  assert.throws(() => authorizeApprovedMarketingAction({ context, request: forged, planId: "plan:other", capabilityId: "campaign.schedule" }), /MARKETING_APPROVAL_NOT_VALID_FOR_ACTION/);
+  assert.throws(() => authorizeApprovedMarketingAction({ context, request: forged, planId: cycle.plan.id, capabilityId: "content.publish" }), /MARKETING_APPROVAL_NOT_VALID_FOR_ACTION/);
+});
+
+test("audit evidence fails closed when approval scope does not match execution context", async () => {
+  const repository = createInMemoryApprovalRepository();
+  const request = await submitMarketingApproval({ context, cycle, repository });
+  assert.ok(request);
+  const approved = await repository.decide({ tenantId: "tenant-a", approvalId: request.id, actorId: "manager-1", decision: "APPROVE" });
+  const wrongContext = { ...context, tenantId: "tenant-b" };
+  assert.throws(() => createMarketingApprovalAuditEvent({ context: wrongContext, request: approved }), /MARKETING_APPROVAL_CONTEXT_MISMATCH/);
 });
