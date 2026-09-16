@@ -31,6 +31,14 @@ export interface TenantCapabilityEnv {
   EMAIL_TENANT_ID?: string;
 }
 
+function scopedFallback<T>(
+  value: T | undefined,
+  authorizedTenantId: string | undefined,
+  requestedTenantId: string
+): T | undefined {
+  return authorizedTenantId?.trim() === requestedTenantId ? value : undefined;
+}
+
 export function buildTenantReadOnlyRuntime(
   env: TenantCapabilityEnv,
   tenantId: string,
@@ -44,22 +52,48 @@ export function buildTenantReadOnlyRuntime(
       )
     : undefined;
 
-  const calendarService = scoped?.calendarService ?? env.CALENDAR_READ;
-  const calendarToken = scoped?.calendarToken ?? env.CALENDAR_READ_TOKEN;
+  const sharedCrm = scopedFallback(
+    env.AG002_GATEWAY,
+    env.AG002_TENANT_ID,
+    tenantId
+  );
+  const sharedCrmToken = sharedCrm ? env.HERREB_RUNTIME_TOKEN : undefined;
+  const sharedCalendar = scopedFallback(
+    env.CALENDAR_READ,
+    env.CALENDAR_TENANT_ID,
+    tenantId
+  );
+  const sharedCalendarToken = sharedCalendar
+    ? env.CALENDAR_READ_TOKEN
+    : undefined;
+  const sharedEmail = scopedFallback(
+    env.EMAIL_READ,
+    env.EMAIL_TENANT_ID,
+    tenantId
+  );
+  const sharedEmailToken = sharedEmail ? env.EMAIL_READ_TOKEN : undefined;
+
+  const calendarService = scoped?.calendarService ?? sharedCalendar;
+  const calendarToken = scoped?.calendarToken ?? sharedCalendarToken;
   const calendarTenantId = scoped?.calendarService
     ? tenantId
-    : env.CALENDAR_TENANT_ID;
-  const emailService = scoped?.emailService ?? env.EMAIL_READ;
-  const emailToken = scoped?.emailToken ?? env.EMAIL_READ_TOKEN;
-  const emailTenantId = scoped?.emailService ? tenantId : env.EMAIL_TENANT_ID;
+    : sharedCalendar
+      ? tenantId
+      : undefined;
+  const emailService = scoped?.emailService ?? sharedEmail;
+  const emailToken = scoped?.emailToken ?? sharedEmailToken;
+  const emailTenantId = scoped?.emailService
+    ? tenantId
+    : sharedEmail
+      ? tenantId
+      : undefined;
 
   return buildReadOnlyRuntime({
     SALES_OPS: env.SALES_OPS,
     SALES_OPS_TOKEN: env.SALES_OPS_TOKEN,
-    AG002_GATEWAY: resolved?.binding.service ?? env.AG002_GATEWAY,
-    HERREB_RUNTIME_TOKEN:
-      resolved?.binding.runtimeToken ?? env.HERREB_RUNTIME_TOKEN,
-    AG002_TENANT_ID: resolved ? tenantId : env.AG002_TENANT_ID,
+    AG002_GATEWAY: resolved?.binding.service ?? sharedCrm,
+    HERREB_RUNTIME_TOKEN: resolved?.binding.runtimeToken ?? sharedCrmToken,
+    AG002_TENANT_ID: resolved || sharedCrm ? tenantId : undefined,
     CALENDAR_READ: calendarService,
     CALENDAR_READ_TOKEN: calendarToken,
     CALENDAR_TENANT_ID: calendarTenantId,
