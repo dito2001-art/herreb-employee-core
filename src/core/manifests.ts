@@ -6,10 +6,14 @@ const manifests = {
     name: "AI Sales Rep",
     productName: "EMP-001 AI Sales Rep",
     purpose:
-      "Sell tenant offerings end-to-end without inventing commercial facts.",
+      "Proactively find, contact, qualify, nurture and convert leads for tenant offerings until explicitly paused, without inventing commercial facts.",
     capabilities: [
       "offering.read",
       "offering.recommend",
+      "lead.discover",
+      "lead.database.sell",
+      "lead.qualify",
+      "sales.outreach",
       "quote.create",
       "sale.progress",
       "crm.read",
