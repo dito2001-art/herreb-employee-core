@@ -43,7 +43,12 @@ const authorization = {
 
 test("EMP001 simulated E2E sends once, persists state, schedules followup and suppresses duplicate", async () => {
   const registry = createAdapterRegistry();
-  const sent: Array<{ tenantId: string; correlationId: string; key: string; to: string }> = [];
+  const sent: Array<{
+    tenantId: string;
+    correlationId: string;
+    key: string;
+    to: string;
+  }> = [];
   registry.register(
     createEmp001WhatsAppAdapter({
       async send(input) {
@@ -55,7 +60,11 @@ test("EMP001 simulated E2E sends once, persists state, schedules followup and su
         });
         return {
           ok: true,
-          output: { messageId: "wamid.e2e.mock", provider: "mock-meta", status: "SENT" },
+          output: {
+            messageId: "wamid.e2e.mock",
+            provider: "mock-meta",
+            status: "SENT"
+          },
           evidence: { upstreamStatus: 200 }
         };
       }
