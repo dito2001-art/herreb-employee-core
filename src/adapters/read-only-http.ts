@@ -13,10 +13,12 @@ export interface ReadOnlyServiceOptions {
 async function callReadOnlyService(
   options: ReadOnlyServiceOptions,
   path: string,
+  operation: string,
   tenantId: string,
   correlationId: string,
   params: Record<string, string | number | boolean | string[] | undefined>
 ): Promise<CapabilityResult> {
+  const baseEvidence = { tenantId, correlationId, path, operation };
   if (!tenantId || tenantId !== options.tenantId) {
     return {
       ok: false,
@@ -25,7 +27,7 @@ async function callReadOnlyService(
         message: "Read-only service tenant does not match authorized tenant scope",
         retryable: false
       },
-      evidence: { executed: false }
+      evidence: { ...baseEvidence, executed: false }
     };
   }
   if (!correlationId.trim()) {
@@ -36,7 +38,7 @@ async function callReadOnlyService(
         message: "Read-only service requires correlation provenance",
         retryable: false
       },
-      evidence: { executed: false }
+      evidence: { ...baseEvidence, executed: false }
     };
   }
 
@@ -65,7 +67,7 @@ async function callReadOnlyService(
     try {
       body = text ? JSON.parse(text) : null;
     } catch {
-      // Preserve exact upstream response when it is not JSON.
+      // Return the exact non-JSON upstream response to the caller only.
     }
 
     if (!response.ok) {
@@ -77,9 +79,9 @@ async function callReadOnlyService(
           retryable: response.status >= 500
         },
         evidence: {
+          ...baseEvidence,
           executed: true,
-          upstreamStatus: response.status,
-          upstream: body
+          upstreamStatus: response.status
         }
       };
     }
@@ -88,11 +90,9 @@ async function callReadOnlyService(
       ok: true,
       output: body,
       evidence: {
+        ...baseEvidence,
         executed: true,
-        upstreamStatus: response.status,
-        tenantId,
-        correlationId,
-        path
+        upstreamStatus: response.status
       }
     };
   } catch (error) {
@@ -104,7 +104,7 @@ async function callReadOnlyService(
           error instanceof Error ? error.message : "Read-only service failed",
         retryable: true
       },
-      evidence: { executed: false, tenantId, correlationId, path }
+      evidence: { ...baseEvidence, executed: false }
     };
   }
 }
@@ -125,12 +125,18 @@ export function createCalendarReadOnlyTransport(
             code: "CALENDAR_READ_ONLY",
             message: "Calendar transport is READ_ONLY"
           },
-          evidence: { executed: false }
+          evidence: {
+            executed: false,
+            tenantId: input.tenantId,
+            correlationId: input.correlationId,
+            operation: request.operation
+          }
         };
       }
       return callReadOnlyService(
         options,
         "/calendar/read",
+        request.operation,
         input.tenantId,
         input.correlationId,
         {
@@ -165,12 +171,18 @@ export function createEmailReadOnlyTransport(
             code: "EMAIL_READ_ONLY",
             message: "Email transport is READ_ONLY"
           },
-          evidence: { executed: false }
+          evidence: {
+            executed: false,
+            tenantId: input.tenantId,
+            correlationId: input.correlationId,
+            operation: request.operation
+          }
         };
       }
       return callReadOnlyService(
         options,
         "/email/read",
+        request.operation,
         input.tenantId,
         input.correlationId,
         request.operation === "search"
