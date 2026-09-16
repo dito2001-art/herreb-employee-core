@@ -18,6 +18,7 @@ export * from "./marketing-brain";
 export * from "./marketing-brain-repository";
 export * from "./marketing-cycle";
 export * from "./marketing-approval";
+export * from "./marketing-execution-receipt";
 export * from "./adapters";
 export * from "./executor";
 export * from "./durable";
