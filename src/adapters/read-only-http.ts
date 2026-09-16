@@ -6,6 +6,7 @@ import type { ServiceFetcher } from "./sales-ops";
 export interface ReadOnlyServiceOptions {
   service: ServiceFetcher;
   token: string;
+  tenantId: string;
   baseUrl?: string;
 }
 
@@ -16,6 +17,29 @@ async function callReadOnlyService(
   correlationId: string,
   params: Record<string, string | number | boolean | string[] | undefined>
 ): Promise<CapabilityResult> {
+  if (!tenantId || tenantId !== options.tenantId) {
+    return {
+      ok: false,
+      error: {
+        code: "READ_ONLY_TENANT_SCOPE_MISMATCH",
+        message: "Read-only service tenant does not match authorized tenant scope",
+        retryable: false
+      },
+      evidence: { executed: false }
+    };
+  }
+  if (!correlationId.trim()) {
+    return {
+      ok: false,
+      error: {
+        code: "READ_ONLY_CORRELATION_ID_REQUIRED",
+        message: "Read-only service requires correlation provenance",
+        retryable: false
+      },
+      evidence: { executed: false }
+    };
+  }
+
   const url = new URL(path, options.baseUrl ?? "https://internal");
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined) continue;
@@ -63,7 +87,13 @@ async function callReadOnlyService(
     return {
       ok: true,
       output: body,
-      evidence: { executed: true, upstreamStatus: response.status }
+      evidence: {
+        executed: true,
+        upstreamStatus: response.status,
+        tenantId,
+        correlationId,
+        path
+      }
     };
   } catch (error) {
     return {
@@ -74,7 +104,7 @@ async function callReadOnlyService(
           error instanceof Error ? error.message : "Read-only service failed",
         retryable: true
       },
-      evidence: { executed: false }
+      evidence: { executed: false, tenantId, correlationId, path }
     };
   }
 }
