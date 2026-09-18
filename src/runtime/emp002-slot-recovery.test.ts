@@ -36,7 +36,10 @@ function request(
 }
 
 test("EMP-002 offers a released slot to the highest-ranked eligible request", () => {
-  const requests = [request("low", "contact-low", 5), request("high", "contact-high", 10)];
+  const requests = [
+    request("low", "contact-low", 5),
+    request("high", "contact-high", 10)
+  ];
   const result = startSlotRecovery({
     tenantId: "herreb-client-0",
     correlationId: "corr-recovery",
@@ -62,7 +65,10 @@ test("EMP-002 never matches a request from another tenant", () => {
 });
 
 test("EMP-002 moves to the next candidate after a decline", () => {
-  const requests = [request("first", "contact-1", 10), request("second", "contact-2", 5)];
+  const requests = [
+    request("first", "contact-1", 10),
+    request("second", "contact-2", 5)
+  ];
   const started = startSlotRecovery({
     tenantId: "herreb-client-0",
     correlationId: "corr-recovery",
@@ -81,7 +87,10 @@ test("EMP-002 moves to the next candidate after a decline", () => {
 });
 
 test("EMP-002 moves to the next candidate after offer timeout", () => {
-  const requests = [request("first", "contact-1", 10), request("second", "contact-2", 5)];
+  const requests = [
+    request("first", "contact-1", 10),
+    request("second", "contact-2", 5)
+  ];
   const started = startSlotRecovery({
     tenantId: "herreb-client-0",
     correlationId: "corr-recovery",

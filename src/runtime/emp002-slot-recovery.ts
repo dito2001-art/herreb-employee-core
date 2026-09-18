@@ -1,6 +1,14 @@
-import { matchWaitlist, type AvailableSlot, type WaitlistRequest } from "./emp002-scheduling";
+import {
+  matchWaitlist,
+  type AvailableSlot,
+  type WaitlistRequest
+} from "./emp002-scheduling";
 
-export type SlotRecoveryStatus = "OPEN" | "OFFER_PENDING" | "FILLED" | "EXHAUSTED";
+export type SlotRecoveryStatus =
+  | "OPEN"
+  | "OFFER_PENDING"
+  | "FILLED"
+  | "EXHAUSTED";
 
 export interface SlotOffer {
   requestId: string;
@@ -37,9 +45,11 @@ export function startSlotRecovery(input: {
   now: string;
   offerTtlMinutes?: number;
 }): RecoveryDecision {
-  const candidates = matchWaitlist(input.requests, input.slot, input.now).filter(
-    (match) => match.request.tenantId === input.tenantId
-  );
+  const candidates = matchWaitlist(
+    input.requests,
+    input.slot,
+    input.now
+  ).filter((match) => match.request.tenantId === input.tenantId);
   const recovery: SlotRecovery = {
     tenantId: input.tenantId,
     correlationId: input.correlationId,
@@ -49,7 +59,12 @@ export function startSlotRecovery(input: {
     offers: []
   };
   if (!candidates.length) return { recovery };
-  return offerNext(recovery, input.requests, input.now, input.offerTtlMinutes ?? 15);
+  return offerNext(
+    recovery,
+    input.requests,
+    input.now,
+    input.offerTtlMinutes ?? 15
+  );
 }
 
 export function offerNext(
@@ -59,17 +74,24 @@ export function offerNext(
   offerTtlMinutes = 15
 ): RecoveryDecision {
   if (recovery.status === "FILLED") return { recovery };
-  const alreadyOffered = new Set(recovery.offers.map((offer) => offer.requestId));
-  const nextId = recovery.candidateRequestIds.find((id) => !alreadyOffered.has(id));
+  const alreadyOffered = new Set(
+    recovery.offers.map((offer) => offer.requestId)
+  );
+  const nextId = recovery.candidateRequestIds.find(
+    (id) => !alreadyOffered.has(id)
+  );
   if (!nextId) return { recovery: { ...recovery, status: "EXHAUSTED" } };
   const request = requests.find(
-    (candidate) => candidate.id === nextId && candidate.tenantId === recovery.tenantId
+    (candidate) =>
+      candidate.id === nextId && candidate.tenantId === recovery.tenantId
   );
   if (!request) {
     return offerNext(
       {
         ...recovery,
-        candidateRequestIds: recovery.candidateRequestIds.filter((id) => id !== nextId)
+        candidateRequestIds: recovery.candidateRequestIds.filter(
+          (id) => id !== nextId
+        )
       },
       requests,
       now,
@@ -110,7 +132,8 @@ export function resolveCurrentOffer(input: {
   }
   if (index < 0) return { recovery: input.recovery };
   const current = offers[index];
-  const expired = input.response === "TIMEOUT" || current.expiresAt <= input.now;
+  const expired =
+    input.response === "TIMEOUT" || current.expiresAt <= input.now;
   if (input.response === "ACCEPT" && !expired) {
     offers[index] = { ...current, status: "ACCEPTED" };
     return {

@@ -99,11 +99,19 @@ export function advanceWaitlistGoal(
     | "EXPIRED",
   now: string
 ): SchedulingGoal {
-  if (goal.kind !== "WAITLIST_SLOT" || goal.status === "COMPLETED" || goal.status === "CANCELLED") return goal;
+  if (
+    goal.kind !== "WAITLIST_SLOT" ||
+    goal.status === "COMPLETED" ||
+    goal.status === "CANCELLED"
+  )
+    return goal;
   const transitions = {
     SLOT_MATCHED: ["ACTIVE", "OFFER_COMPATIBLE_SLOT"],
     OFFER_SENT: ["WAITING_FOR_CONTACT", "WAIT_FOR_CONTACT_RESPONSE"],
-    OFFER_ACCEPTED: ["WAITING_FOR_EXECUTION", "CONFIRM_APPOINTMENT_AND_CLOSE_WAITLIST"],
+    OFFER_ACCEPTED: [
+      "WAITING_FOR_EXECUTION",
+      "CONFIRM_APPOINTMENT_AND_CLOSE_WAITLIST"
+    ],
     EXECUTION_VERIFIED: ["COMPLETED", "NONE"],
     EXECUTION_FAILED: ["ACTIVE", "RETRY_OR_ESCALATE_CONFIRMATION"],
     OFFER_DECLINED: ["WAITING_FOR_TRIGGER", "WAIT_FOR_COMPATIBLE_SLOT"],

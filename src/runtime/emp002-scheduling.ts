@@ -74,9 +74,11 @@ function instant(value: string): number | undefined {
 }
 
 function validWindow(window: TimeWindow): boolean {
-  return /^([01]\d|2[0-3]):[0-5]\d$/.test(window.from) &&
+  return (
+    /^([01]\d|2[0-3]):[0-5]\d$/.test(window.from) &&
     /^([01]\d|2[0-3]):[0-5]\d$/.test(window.to) &&
-    window.from <= window.to;
+    window.from <= window.to
+  );
 }
 
 function overlapsRequestedDate(
@@ -86,7 +88,13 @@ function overlapsRequestedDate(
   const start = instant(slot.startsAt);
   const from = instant(request.dateFrom);
   const to = instant(request.dateTo);
-  return start !== undefined && from !== undefined && to !== undefined && start >= from && start <= to;
+  return (
+    start !== undefined &&
+    from !== undefined &&
+    to !== undefined &&
+    start >= from &&
+    start <= to
+  );
 }
 
 function hasRequiredDuration(

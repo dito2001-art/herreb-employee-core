@@ -33,7 +33,10 @@ const slot: AvailableSlot = {
 };
 
 test("EMP-002 matches a requested Tuesday slot after 16:00", () => {
-  assert.equal(isWaitlistRequestEligible(base, slot, "2026-09-20T12:00:00-03:00"), true);
+  assert.equal(
+    isWaitlistRequestEligible(base, slot, "2026-09-20T12:00:00-03:00"),
+    true
+  );
 });
 
 test("EMP-002 rejects an incompatible resource", () => {
@@ -63,7 +66,10 @@ test("EMP-002 rejects a slot outside the requested time window", () => {
 });
 
 test("EMP-002 rejects expired requests", () => {
-  assert.equal(isWaitlistRequestEligible(base, slot, "2026-09-23T01:00:00-03:00"), false);
+  assert.equal(
+    isWaitlistRequestEligible(base, slot, "2026-09-23T01:00:00-03:00"),
+    false
+  );
 });
 
 test("EMP-002 orders eligible requests by priority then age", () => {
@@ -90,14 +96,22 @@ test("EMP-002 orders eligible requests by priority then age", () => {
 
 test("EMP-002 fails closed when slot tenant differs", () => {
   assert.equal(
-    isWaitlistRequestEligible(base, { ...slot, tenantId: "other-tenant" }, "2026-09-20T12:00:00-03:00"),
+    isWaitlistRequestEligible(
+      base,
+      { ...slot, tenantId: "other-tenant" },
+      "2026-09-20T12:00:00-03:00"
+    ),
     false
   );
 });
 
 test("EMP-002 rejects invalid timestamps", () => {
   assert.equal(
-    isWaitlistRequestEligible(base, { ...slot, startsAt: "not-a-date" }, "2026-09-20T12:00:00-03:00"),
+    isWaitlistRequestEligible(
+      base,
+      { ...slot, startsAt: "not-a-date" },
+      "2026-09-20T12:00:00-03:00"
+    ),
     false
   );
 });

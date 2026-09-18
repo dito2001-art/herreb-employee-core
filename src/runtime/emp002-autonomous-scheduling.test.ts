@@ -21,7 +21,11 @@ function goal() {
   });
 }
 
-function request(id: string, contactId: string, priority: number): WaitlistRequest {
+function request(
+  id: string,
+  contactId: string,
+  priority: number
+): WaitlistRequest {
   return {
     id,
     tenantId: "herreb-client-0",
@@ -62,7 +66,10 @@ test("EMP-002 turns a released slot into the next autonomous offer command", () 
 });
 
 test("EMP-002 continues autonomously with the next candidate after decline", () => {
-  const requests = [request("first", "patient-1", 10), request("second", "patient-2", 5)];
+  const requests = [
+    request("first", "patient-1", 10),
+    request("second", "patient-2", 5)
+  ];
   const released = reduceAutonomousScheduling(
     { tenantId: "herreb-client-0", correlationId: "corr-1", goal: goal() },
     { type: "SLOT_RELEASED", slot, requests, now: "2026-09-20T12:00:00-03:00" }
@@ -78,7 +85,9 @@ test("EMP-002 continues autonomously with the next candidate after decline", () 
   });
   assert.equal(declined.commands[0]?.type, "SEND_SLOT_OFFER");
   assert.equal(
-    declined.commands[0]?.type === "SEND_SLOT_OFFER" ? declined.commands[0].contactId : undefined,
+    declined.commands[0]?.type === "SEND_SLOT_OFFER"
+      ? declined.commands[0].contactId
+      : undefined,
     "patient-2"
   );
   assert.equal(declined.state.goal.status, "WAITING_FOR_TRIGGER");
@@ -117,7 +126,12 @@ test("EMP-002 fails closed on tenant mismatch", () => {
     () =>
       reduceAutonomousScheduling(
         { tenantId: "other-tenant", correlationId: "corr-1", goal: goal() },
-        { type: "SLOT_RELEASED", slot, requests: [], now: "2026-09-20T12:00:00-03:00" }
+        {
+          type: "SLOT_RELEASED",
+          slot,
+          requests: [],
+          now: "2026-09-20T12:00:00-03:00"
+        }
       ),
     /EMP002_SCHEDULING_TENANT_MISMATCH/
   );
