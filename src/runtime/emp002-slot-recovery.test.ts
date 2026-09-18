@@ -4,6 +4,7 @@ import { resolveCurrentOffer, startSlotRecovery } from "./emp002-slot-recovery";
 import type { AvailableSlot, WaitlistRequest } from "./emp002-scheduling";
 
 const slot: AvailableSlot = {
+  tenantId: "herreb-client-0",
   resourceId: "doctor-1",
   serviceId: "consultation",
   startsAt: "2026-09-22T17:00:00-03:00",
