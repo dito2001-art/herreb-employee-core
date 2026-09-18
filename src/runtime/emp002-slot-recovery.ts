@@ -19,6 +19,8 @@ export interface SlotOffer {
 }
 
 export interface SlotRecovery {
+  id: string;
+  version: number;
   tenantId: string;
   correlationId: string;
   slot: AvailableSlot;
@@ -33,8 +35,20 @@ export interface RecoveryDecision {
   nextOffer?: SlotOffer;
 }
 
+function instant(value: string): number | undefined {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function addMinutes(iso: string, minutes: number): string {
-  return new Date(Date.parse(iso) + minutes * 60_000).toISOString();
+  const base = instant(iso);
+  if (base === undefined || !Number.isFinite(minutes) || minutes <= 0)
+    throw new Error("EMP002_INVALID_RECOVERY_TIME");
+  return new Date(base + minutes * 60_000).toISOString();
+}
+
+function recoveryId(tenantId: string, slot: AvailableSlot): string {
+  return `${tenantId}:${slot.resourceId}:${slot.startsAt}:${slot.endsAt}`;
 }
 
 export function startSlotRecovery(input: {
@@ -45,12 +59,18 @@ export function startSlotRecovery(input: {
   now: string;
   offerTtlMinutes?: number;
 }): RecoveryDecision {
+  if (input.slot.tenantId !== input.tenantId)
+    throw new Error("EMP002_SLOT_RECOVERY_TENANT_MISMATCH");
+  if (instant(input.now) === undefined)
+    throw new Error("EMP002_INVALID_RECOVERY_TIME");
   const candidates = matchWaitlist(
     input.requests,
     input.slot,
     input.now
   ).filter((match) => match.request.tenantId === input.tenantId);
   const recovery: SlotRecovery = {
+    id: recoveryId(input.tenantId, input.slot),
+    version: 1,
     tenantId: input.tenantId,
     correlationId: input.correlationId,
     slot: input.slot,
@@ -116,12 +136,17 @@ export function offerNext(
 }
 
 export function resolveCurrentOffer(input: {
+  tenantId: string;
   recovery: SlotRecovery;
   requests: WaitlistRequest[];
   now: string;
   response: "ACCEPT" | "DECLINE" | "TIMEOUT";
   offerTtlMinutes?: number;
 }): RecoveryDecision {
+  if (input.tenantId !== input.recovery.tenantId)
+    throw new Error("EMP002_SLOT_RECOVERY_TENANT_MISMATCH");
+  const nowAt = instant(input.now);
+  if (nowAt === undefined) throw new Error("EMP002_INVALID_RECOVERY_TIME");
   const offers = [...input.recovery.offers];
   let index = -1;
   for (let candidate = offers.length - 1; candidate >= 0; candidate -= 1) {
@@ -132,8 +157,11 @@ export function resolveCurrentOffer(input: {
   }
   if (index < 0) return { recovery: input.recovery };
   const current = offers[index];
+  const expiresAt = instant(current.expiresAt);
   const expired =
-    input.response === "TIMEOUT" || current.expiresAt <= input.now;
+    input.response === "TIMEOUT" ||
+    expiresAt === undefined ||
+    expiresAt <= nowAt;
   if (input.response === "ACCEPT" && !expired) {
     offers[index] = { ...current, status: "ACCEPTED" };
     return {
@@ -141,13 +169,14 @@ export function resolveCurrentOffer(input: {
         ...input.recovery,
         offers,
         status: "FILLED",
-        filledByRequestId: current.requestId
+        filledByRequestId: current.requestId,
+        version: input.recovery.version + 1
       }
     };
   }
   offers[index] = { ...current, status: expired ? "EXPIRED" : "DECLINED" };
   return offerNext(
-    { ...input.recovery, offers, status: "OPEN" },
+    { ...input.recovery, offers, status: "OPEN", version: input.recovery.version + 1 },
     input.requests,
     input.now,
     input.offerTtlMinutes ?? 15
