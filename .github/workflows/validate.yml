@@ -9,6 +9,7 @@ on:
   pull_request:
     branches:
       - main
+      - feature/employee-core-v0.1
 
 permissions:
   contents: read
