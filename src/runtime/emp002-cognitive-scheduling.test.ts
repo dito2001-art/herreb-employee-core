@@ -38,7 +38,13 @@ test("EMP-002 preserves confirmed facts while next-best-action advances", () => 
   );
   assert.equal(matched.nextBestAction, "OFFER_COMPATIBLE_SLOT");
   assert.equal(offered.status, "WAITING_FOR_CONTACT");
-  assert.equal(accepted.status, "COMPLETED");
+  assert.equal(accepted.status, "WAITING_FOR_EXECUTION");
+  const verified = advanceWaitlistGoal(
+    accepted,
+    "EXECUTION_VERIFIED",
+    "2026-09-20T12:06:00-03:00"
+  );
+  assert.equal(verified.status, "COMPLETED");
   assert.deepEqual(accepted.confirmedFacts, initial.confirmedFacts);
   assert.equal(accepted.objective, initial.objective);
   assert.equal(accepted.correlationId, "corr-goal-1");
@@ -66,4 +72,18 @@ test("EMP-002 returns to waiting after decline without losing the objective", ()
   assert.equal(declined.status, "WAITING_FOR_TRIGGER");
   assert.equal(declined.objective, initial.objective);
   assert.equal(declined.nextBestAction, "WAIT_FOR_COMPATIBLE_SLOT");
+});
+
+test("EMP-002 fails closed when slot tenant differs", () => {
+  assert.equal(
+    isWaitlistRequestEligible(base, { ...slot, tenantId: "other-tenant" }, "2026-09-20T12:00:00-03:00"),
+    false
+  );
+});
+
+test("EMP-002 rejects invalid timestamps", () => {
+  assert.equal(
+    isWaitlistRequestEligible(base, { ...slot, startsAt: "not-a-date" }, "2026-09-20T12:00:00-03:00"),
+    false
+  );
 });
