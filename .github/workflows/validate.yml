@@ -42,9 +42,16 @@ jobs:
         continue-on-error: true
         run: |
           npx oxfmt --write .
-          git diff --binary > /tmp/oxfmt.patch
-          cat /tmp/oxfmt.patch
+          git diff --binary > oxfmt.patch
+          cat oxfmt.patch
           git diff --quiet
+
+      - name: Upload formatter patch
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oxfmt-patch
+          path: oxfmt.patch
 
       - name: Lint
         id: lint
