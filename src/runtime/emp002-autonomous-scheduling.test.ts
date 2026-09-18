@@ -40,6 +40,7 @@ function request(id: string, contactId: string, priority: number): WaitlistReque
 }
 
 const slot = {
+  tenantId: "herreb-client-0",
   resourceId: "doctor-1",
   startsAt: "2026-09-22T17:00:00-03:00",
   endsAt: "2026-09-22T18:00:00-03:00"
@@ -98,12 +99,17 @@ test("EMP-002 produces confirmation after acceptance and completes the goal", ()
     requests,
     now: "2026-09-20T12:05:00-03:00"
   });
-  assert.equal(accepted.state.goal.status, "COMPLETED");
+  assert.equal(accepted.state.goal.status, "WAITING_FOR_EXECUTION");
   assert.deepEqual(accepted.commands[0], {
     type: "CONFIRM_SLOT",
     requestId: "winner",
     slot
   });
+  const verified = reduceAutonomousScheduling(accepted.state, {
+    type: "CONFIRMATION_VERIFIED",
+    now: "2026-09-20T12:06:00-03:00"
+  });
+  assert.equal(verified.state.goal.status, "COMPLETED");
 });
 
 test("EMP-002 fails closed on tenant mismatch", () => {
@@ -114,5 +120,19 @@ test("EMP-002 fails closed on tenant mismatch", () => {
         { type: "SLOT_RELEASED", slot, requests: [], now: "2026-09-20T12:00:00-03:00" }
       ),
     /EMP002_SCHEDULING_TENANT_MISMATCH/
+  );
+});
+
+test("EMP-002 fails closed when slot tenant differs", () => {
+  assert.equal(
+    isWaitlistRequestEligible(base, { ...slot, tenantId: "other-tenant" }, "2026-09-20T12:00:00-03:00"),
+    false
+  );
+});
+
+test("EMP-002 rejects invalid timestamps", () => {
+  assert.equal(
+    isWaitlistRequestEligible(base, { ...slot, startsAt: "not-a-date" }, "2026-09-20T12:00:00-03:00"),
+    false
   );
 });
