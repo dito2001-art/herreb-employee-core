@@ -14,7 +14,9 @@ export type AutonomousSchedulingAction =
   | { type: "OFFER_SENT"; now: string }
   | { type: "CONTACT_ACCEPTED"; requests: WaitlistRequest[]; now: string }
   | { type: "CONTACT_DECLINED"; requests: WaitlistRequest[]; now: string }
-  | { type: "OFFER_TIMEOUT"; requests: WaitlistRequest[]; now: string };
+  | { type: "OFFER_TIMEOUT"; requests: WaitlistRequest[]; now: string }
+  | { type: "CONFIRMATION_VERIFIED"; now: string }
+  | { type: "CONFIRMATION_FAILED"; now: string };
 
 export interface AutonomousSchedulingResult {
   state: AutonomousSchedulingState;
@@ -43,6 +45,20 @@ export function reduceAutonomousScheduling(
     return {
       state: { ...state, goal, recovery: recovery.recovery },
       commands: [{ type: "SEND_SLOT_OFFER", contactId: recovery.nextOffer.contactId, requestId: recovery.nextOffer.requestId, expiresAt: recovery.nextOffer.expiresAt }]
+    };
+  }
+
+  if (action.type === "CONFIRMATION_VERIFIED") {
+    return {
+      state: { ...state, goal: advanceWaitlistGoal(state.goal, "EXECUTION_VERIFIED", action.now) },
+      commands: []
+    };
+  }
+
+  if (action.type === "CONFIRMATION_FAILED") {
+    return {
+      state: { ...state, goal: advanceWaitlistGoal(state.goal, "EXECUTION_FAILED", action.now) },
+      commands: []
     };
   }
 
