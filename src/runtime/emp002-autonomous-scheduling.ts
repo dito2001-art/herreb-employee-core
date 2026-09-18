@@ -112,6 +112,7 @@ export function reduceAutonomousScheduling(
         ? "DECLINE"
         : "TIMEOUT";
   const resolved = resolveCurrentOffer({
+    tenantId: state.tenantId,
     recovery: state.recovery,
     requests: action.requests,
     now: action.now,
