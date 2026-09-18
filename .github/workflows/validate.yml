@@ -40,10 +40,7 @@ jobs:
       - name: Formatting
         id: formatting
         continue-on-error: true
-        run: |
-          npx oxfmt --write .
-          git diff -- src/runtime/emp002-autonomous-scheduling.test.ts src/runtime/emp002-autonomous-scheduling.ts src/runtime/emp002-cognitive-scheduling.test.ts src/runtime/emp002-cognitive-scheduling.ts src/runtime/emp002-scheduling.test.ts src/runtime/emp002-scheduling.ts src/runtime/emp002-slot-recovery.test.ts src/runtime/emp002-slot-recovery.ts
-          git diff --quiet
+        run: npx oxfmt --check .
 
       - name: Lint
         id: lint
