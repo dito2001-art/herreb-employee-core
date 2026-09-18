@@ -1,10 +1,6 @@
 import { matchWaitlist, type AvailableSlot, type WaitlistRequest } from "./emp002-scheduling";
 
-export type SlotRecoveryStatus =
-  | "OPEN"
-  | "OFFER_PENDING"
-  | "FILLED"
-  | "EXHAUSTED";
+export type SlotRecoveryStatus = "OPEN" | "OFFER_PENDING" | "FILLED" | "EXHAUSTED";
 
 export interface SlotOffer {
   requestId: string;
@@ -69,12 +65,17 @@ export function offerNext(
   const request = requests.find(
     (candidate) => candidate.id === nextId && candidate.tenantId === recovery.tenantId
   );
-  if (!request) return offerNext(
-    { ...recovery, candidateRequestIds: recovery.candidateRequestIds.filter((id) => id !== nextId) },
-    requests,
-    now,
-    offerTtlMinutes
-  );
+  if (!request) {
+    return offerNext(
+      {
+        ...recovery,
+        candidateRequestIds: recovery.candidateRequestIds.filter((id) => id !== nextId)
+      },
+      requests,
+      now,
+      offerTtlMinutes
+    );
+  }
   const nextOffer: SlotOffer = {
     requestId: request.id,
     contactId: request.contactId,
@@ -83,7 +84,11 @@ export function offerNext(
     status: "PENDING"
   };
   return {
-    recovery: { ...recovery, status: "OFFER_PENDING", offers: [...recovery.offers, nextOffer] },
+    recovery: {
+      ...recovery,
+      status: "OFFER_PENDING",
+      offers: [...recovery.offers, nextOffer]
+    },
     nextOffer
   };
 }
@@ -96,7 +101,13 @@ export function resolveCurrentOffer(input: {
   offerTtlMinutes?: number;
 }): RecoveryDecision {
   const offers = [...input.recovery.offers];
-  const index = offers.findLastIndex((offer) => offer.status === "PENDING");
+  let index = -1;
+  for (let candidate = offers.length - 1; candidate >= 0; candidate -= 1) {
+    if (offers[candidate].status === "PENDING") {
+      index = candidate;
+      break;
+    }
+  }
   if (index < 0) return { recovery: input.recovery };
   const current = offers[index];
   const expired = input.response === "TIMEOUT" || current.expiresAt <= input.now;
@@ -111,10 +122,7 @@ export function resolveCurrentOffer(input: {
       }
     };
   }
-  offers[index] = {
-    ...current,
-    status: expired ? "EXPIRED" : "DECLINED"
-  };
+  offers[index] = { ...current, status: expired ? "EXPIRED" : "DECLINED" };
   return offerNext(
     { ...input.recovery, offers, status: "OPEN" },
     input.requests,
