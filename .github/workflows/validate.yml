@@ -42,7 +42,6 @@ jobs:
         continue-on-error: true
         run: npx oxfmt --check .
 
-
       - name: Lint
         id: lint
         continue-on-error: true
