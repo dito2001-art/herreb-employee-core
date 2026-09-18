@@ -40,7 +40,11 @@ jobs:
       - name: Formatting
         id: formatting
         continue-on-error: true
-        run: npx oxfmt --check .
+        run: |
+          npx oxfmt --write .
+          git diff --binary > /tmp/oxfmt.patch
+          cat /tmp/oxfmt.patch
+          git diff --quiet
 
       - name: Lint
         id: lint
