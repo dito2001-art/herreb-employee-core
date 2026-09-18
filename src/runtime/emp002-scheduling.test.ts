@@ -25,6 +25,7 @@ const base: WaitlistRequest = {
 };
 
 const slot: AvailableSlot = {
+  tenantId: "herreb-client-0",
   resourceId: "doctor-1",
   serviceId: "consultation",
   startsAt: "2026-09-22T17:00:00-03:00",
@@ -84,5 +85,19 @@ test("EMP-002 orders eligible requests by priority then age", () => {
       "2026-09-20T12:00:00-03:00"
     ).map((match) => match.request.id),
     ["wait-3", "wait-1", "wait-2"]
+  );
+});
+
+test("EMP-002 fails closed when slot tenant differs", () => {
+  assert.equal(
+    isWaitlistRequestEligible(base, { ...slot, tenantId: "other-tenant" }, "2026-09-20T12:00:00-03:00"),
+    false
+  );
+});
+
+test("EMP-002 rejects invalid timestamps", () => {
+  assert.equal(
+    isWaitlistRequestEligible(base, { ...slot, startsAt: "not-a-date" }, "2026-09-20T12:00:00-03:00"),
+    false
   );
 });
