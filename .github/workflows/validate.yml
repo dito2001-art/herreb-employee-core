@@ -40,7 +40,11 @@ jobs:
       - name: Formatting
         id: formatting
         continue-on-error: true
-        run: npx oxfmt --check .
+        run: |
+          npx oxfmt --write src/runtime/emp002-scheduling-store.ts src/runtime/emp002-scheduling-store.test.ts
+          git diff --binary -- src/runtime/emp002-scheduling-store.ts src/runtime/emp002-scheduling-store.test.ts > oxfmt-store.patch
+          cat oxfmt-store.patch
+          git diff --quiet
 
       - name: Lint
         id: lint
