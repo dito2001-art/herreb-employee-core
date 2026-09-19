@@ -40,11 +40,7 @@ jobs:
       - name: Formatting
         id: formatting
         continue-on-error: true
-        run: |
-          npx oxfmt --write src/runtime/emp002-slot-recovery.ts src/runtime/emp002-slot-recovery.test.ts
-          git diff --binary -- src/runtime/emp002-slot-recovery.ts src/runtime/emp002-slot-recovery.test.ts > oxfmt-slot.patch
-          cat oxfmt-slot.patch
-          git diff --quiet
+        run: npx oxfmt --check .
 
       - name: Lint
         id: lint
