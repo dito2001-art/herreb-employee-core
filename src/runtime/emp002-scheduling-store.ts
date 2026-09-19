@@ -25,7 +25,10 @@ export class SqliteSchedulingStateStore {
     `);
   }
 
-  load(tenantId: string, goalId: string): AutonomousSchedulingState | undefined {
+  load(
+    tenantId: string,
+    goalId: string
+  ): AutonomousSchedulingState | undefined {
     if (!tenantId.trim() || !goalId.trim()) return undefined;
     const rows = Array.from(
       this.sql.exec<StateRow>(
