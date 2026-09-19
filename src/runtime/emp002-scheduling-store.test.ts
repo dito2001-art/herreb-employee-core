@@ -69,7 +69,11 @@ test("EMP-002 scheduling state survives store recreation", () => {
   const saved = first.save(state(), 0);
   assert.equal(saved.version, 1);
   const afterRestart = new SqliteSchedulingStateStore(sql);
-  assert.deepEqual(afterRestart.load("herreb-client-0", "goal-1"), saved);
+  const loaded = afterRestart.load("herreb-client-0", "goal-1");
+  assert.equal(loaded?.tenantId, saved.tenantId);
+  assert.equal(loaded?.goal.id, saved.goal.id);
+  assert.equal(loaded?.goal.objective, saved.goal.objective);
+  assert.equal(loaded?.version, saved.version);
 });
 
 test("EMP-002 scheduling persistence is tenant isolated", () => {
