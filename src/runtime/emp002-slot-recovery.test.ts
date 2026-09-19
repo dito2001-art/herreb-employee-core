@@ -132,22 +132,65 @@ test("EMP-002 fills the slot when the active offer is accepted before expiry", (
   assert.equal(resolved.recovery.offers[0].status, "ACCEPTED");
 });
 
-
 test("EMP-002 rejects cross-tenant recovery resolution", () => {
   const requests = [request("winner", "contact-1", 10)];
-  const started = startSlotRecovery({ tenantId: "herreb-client-0", correlationId: "corr-recovery", slot, requests, now: "2026-09-20T12:00:00-03:00" });
-  assert.throws(() => resolveCurrentOffer({ tenantId: "other-tenant", recovery: started.recovery, requests, now: "2026-09-20T12:05:00-03:00", response: "ACCEPT" }), /EMP002_SLOT_RECOVERY_TENANT_MISMATCH/);
+  const started = startSlotRecovery({
+    tenantId: "herreb-client-0",
+    correlationId: "corr-recovery",
+    slot,
+    requests,
+    now: "2026-09-20T12:00:00-03:00"
+  });
+  assert.throws(
+    () =>
+      resolveCurrentOffer({
+        tenantId: "other-tenant",
+        recovery: started.recovery,
+        requests,
+        now: "2026-09-20T12:05:00-03:00",
+        response: "ACCEPT"
+      }),
+    /EMP002_SLOT_RECOVERY_TENANT_MISMATCH/
+  );
 });
 
 test("EMP-002 rejects invalid recovery clocks", () => {
-  assert.throws(() => startSlotRecovery({ tenantId: "herreb-client-0", correlationId: "corr-recovery", slot, requests: [request("winner", "contact-1", 10)], now: "not-a-date" }), /EMP002_INVALID_RECOVERY_TIME/);
+  assert.throws(
+    () =>
+      startSlotRecovery({
+        tenantId: "herreb-client-0",
+        correlationId: "corr-recovery",
+        slot,
+        requests: [request("winner", "contact-1", 10)],
+        now: "not-a-date"
+      }),
+    /EMP002_INVALID_RECOVERY_TIME/
+  );
 });
 
 test("EMP-002 uses a stable tenant-scoped recovery id and advances version on resolution", () => {
   const requests = [request("winner", "contact-1", 10)];
-  const first = startSlotRecovery({ tenantId: "herreb-client-0", correlationId: "corr-1", slot, requests, now: "2026-09-20T12:00:00-03:00" });
-  const second = startSlotRecovery({ tenantId: "herreb-client-0", correlationId: "corr-2", slot, requests, now: "2026-09-20T12:01:00-03:00" });
+  const first = startSlotRecovery({
+    tenantId: "herreb-client-0",
+    correlationId: "corr-1",
+    slot,
+    requests,
+    now: "2026-09-20T12:00:00-03:00"
+  });
+  const second = startSlotRecovery({
+    tenantId: "herreb-client-0",
+    correlationId: "corr-2",
+    slot,
+    requests,
+    now: "2026-09-20T12:01:00-03:00"
+  });
   assert.equal(first.recovery.id, second.recovery.id);
-  const resolved = resolveCurrentOffer({ tenantId: "herreb-client-0", recovery: first.recovery, requests, now: "2026-09-20T12:05:00-03:00", response: "ACCEPT" });
+  const resolved = resolveCurrentOffer({
+    tenantId: "herreb-client-0",
+    recovery: first.recovery,
+    requests,
+    now: "2026-09-20T12:05:00-03:00",
+    response: "ACCEPT"
+  });
   assert.equal(resolved.recovery.version, first.recovery.version + 1);
 });
