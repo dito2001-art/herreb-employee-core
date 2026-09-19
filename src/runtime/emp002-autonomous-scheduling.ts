@@ -14,6 +14,7 @@ export interface AutonomousSchedulingState {
   correlationId: string;
   goal: SchedulingGoal;
   recovery?: SlotRecovery;
+  version?: number;
 }
 
 export type AutonomousSchedulingAction =
@@ -35,11 +36,17 @@ export interface AutonomousSchedulingResult {
   commands: Array<
     | {
         type: "SEND_SLOT_OFFER";
+        idempotencyKey: string;
         contactId: string;
         requestId: string;
         expiresAt: string;
       }
-    | { type: "CONFIRM_SLOT"; requestId: string; slot: AvailableSlot }
+    | {
+        type: "CONFIRM_SLOT";
+        idempotencyKey: string;
+        requestId: string;
+        slot: AvailableSlot;
+      }
   >;
 }
 
@@ -66,6 +73,7 @@ export function reduceAutonomousScheduling(
       commands: [
         {
           type: "SEND_SLOT_OFFER",
+          idempotencyKey: `${recovery.recovery.id}:offer:${recovery.nextOffer.requestId}`,
           contactId: recovery.nextOffer.contactId,
           requestId: recovery.nextOffer.requestId,
           expiresAt: recovery.nextOffer.expiresAt
@@ -133,6 +141,7 @@ export function reduceAutonomousScheduling(
       commands: [
         {
           type: "CONFIRM_SLOT",
+          idempotencyKey: `${resolved.recovery.id}:confirm:${resolved.recovery.filledByRequestId}`,
           requestId: resolved.recovery.filledByRequestId,
           slot: resolved.recovery.slot
         }
@@ -147,6 +156,7 @@ export function reduceAutonomousScheduling(
       ? [
           {
             type: "SEND_SLOT_OFFER",
+            idempotencyKey: `${resolved.recovery.id}:offer:${resolved.nextOffer.requestId}`,
             contactId: resolved.nextOffer.contactId,
             requestId: resolved.nextOffer.requestId,
             expiresAt: resolved.nextOffer.expiresAt
