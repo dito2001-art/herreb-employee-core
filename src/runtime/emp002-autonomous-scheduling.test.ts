@@ -59,6 +59,8 @@ test("EMP-002 turns a released slot into the next autonomous offer command", () 
   assert.equal(result.state.goal.nextBestAction, "OFFER_COMPATIBLE_SLOT");
   assert.deepEqual(result.commands[0], {
     type: "SEND_SLOT_OFFER",
+    idempotencyKey:
+      "herreb-client-0:doctor-1:2026-09-22T17:00:00-03:00:2026-09-22T18:00:00-03:00:offer:wait-1",
     contactId: "patient-1",
     requestId: "wait-1",
     expiresAt: "2026-09-20T15:15:00.000Z"
@@ -111,6 +113,8 @@ test("EMP-002 produces confirmation after acceptance and completes the goal", ()
   assert.equal(accepted.state.goal.status, "WAITING_FOR_EXECUTION");
   assert.deepEqual(accepted.commands[0], {
     type: "CONFIRM_SLOT",
+    idempotencyKey:
+      "herreb-client-0:doctor-1:2026-09-22T17:00:00-03:00:2026-09-22T18:00:00-03:00:confirm:winner",
     requestId: "winner",
     slot
   });
