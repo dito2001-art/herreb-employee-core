@@ -176,7 +176,12 @@ export function resolveCurrentOffer(input: {
   }
   offers[index] = { ...current, status: expired ? "EXPIRED" : "DECLINED" };
   return offerNext(
-    { ...input.recovery, offers, status: "OPEN", version: input.recovery.version + 1 },
+    {
+      ...input.recovery,
+      offers,
+      status: "OPEN",
+      version: input.recovery.version + 1
+    },
     input.requests,
     input.now,
     input.offerTtlMinutes ?? 15
