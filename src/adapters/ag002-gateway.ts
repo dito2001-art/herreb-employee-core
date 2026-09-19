@@ -34,6 +34,13 @@ export function createAg002GatewayReadOnlyTransport(
 
   return {
     async execute(input): Promise<CapabilityResult> {
+      const baseEvidence = {
+        tenantId: input.tenantId,
+        correlationId: input.correlationId,
+        operation: input.operation,
+        entity: input.entity,
+        transport: "AG002_GATEWAY"
+      };
       if (!scopedTenantId || input.tenantId !== scopedTenantId) {
         return {
           ok: false,
@@ -41,7 +48,7 @@ export function createAg002GatewayReadOnlyTransport(
             code: "AG002_TENANT_SCOPE_MISMATCH",
             message: "AG-002 binding is not authorized for this tenant"
           },
-          evidence: { executed: false }
+          evidence: { ...baseEvidence, executed: false }
         };
       }
 
@@ -52,7 +59,7 @@ export function createAg002GatewayReadOnlyTransport(
             code: "AG002_READ_ONLY",
             message: "AG-002 transport is READ_ONLY in Employee Core"
           },
-          evidence: { executed: false }
+          evidence: { ...baseEvidence, executed: false }
         };
       }
 
@@ -78,7 +85,7 @@ export function createAg002GatewayReadOnlyTransport(
         try {
           body = text ? JSON.parse(text) : null;
         } catch {
-          // Preserve non-JSON upstream evidence without inventing a shape.
+          // Return the exact non-JSON upstream response to the caller only.
         }
 
         if (!response.ok) {
@@ -90,9 +97,9 @@ export function createAg002GatewayReadOnlyTransport(
               retryable: response.status >= 500
             },
             evidence: {
+              ...baseEvidence,
               executed: true,
-              upstreamStatus: response.status,
-              upstream: body
+              upstreamStatus: response.status
             }
           };
         }
@@ -101,9 +108,9 @@ export function createAg002GatewayReadOnlyTransport(
           ok: true,
           output: body,
           evidence: {
+            ...baseEvidence,
             executed: true,
-            upstreamStatus: response.status,
-            transport: "AG002_GATEWAY"
+            upstreamStatus: response.status
           }
         };
       } catch (error) {
@@ -117,7 +124,7 @@ export function createAg002GatewayReadOnlyTransport(
                 : "AG-002 transport failed",
             retryable: true
           },
-          evidence: { executed: false }
+          evidence: { ...baseEvidence, executed: false }
         };
       }
     }

@@ -488,11 +488,11 @@ function Chat() {
         <div className="max-w-3xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold text-kumo-default">
-              <span className="mr-2">⛅</span>Agent Starter
+              <span className="mr-2">HB</span>EMP-002 Test Console
             </h1>
             <Badge variant="secondary">
               <ChatCircleDotsIcon size={12} weight="bold" className="mr-1" />
-              AI Chat
+              Client 0 · AI Assistant
             </Badge>
           </div>
           <div className="flex items-center gap-3">
@@ -700,14 +700,14 @@ function Chat() {
           {messages.length === 0 && (
             <Empty
               icon={<ChatCircleDotsIcon size={32} />}
-              title="Start a conversation"
+              title="Probá a EMP-002 con un caso real"
               contents={
                 <div className="flex flex-wrap justify-center gap-2">
                   {[
-                    "What's the weather in Paris?",
-                    "What timezone am I in?",
-                    "Calculate 5000 * 3",
-                    "Remind me in 5 minutes to take a break"
+                    "¿Qué tengo para hoy?",
+                    "Revisá mis pendientes y decime qué debería priorizar.",
+                    "Buscá un espacio mañana después de las 15.",
+                    "Avisame si se libera un turno esta semana."
                   ].map((prompt) => (
                     <Button
                       key={prompt}
@@ -923,7 +923,7 @@ function Chat() {
               placeholder={
                 attachments.length > 0
                   ? "Add a message or send images..."
-                  : "Send a message..."
+                  : "Dale una tarea real a EMP-002..."
               }
               disabled={!connected || isStreaming}
               rows={1}
