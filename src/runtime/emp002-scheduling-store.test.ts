@@ -81,7 +81,10 @@ test("EMP-002 scheduling persistence is tenant isolated", () => {
   const store = new SqliteSchedulingStateStore(sql);
   store.save(state("herreb-client-0"), 0);
   store.save(state("client-b"), 0);
-  assert.equal(store.load("herreb-client-0", "goal-1")?.tenantId, "herreb-client-0");
+  assert.equal(
+    store.load("herreb-client-0", "goal-1")?.tenantId,
+    "herreb-client-0"
+  );
   assert.equal(store.load("client-b", "goal-1")?.tenantId, "client-b");
 });
 
