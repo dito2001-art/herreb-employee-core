@@ -5,6 +5,10 @@
   "compatibility_date": "2026-06-11",
   "compatibility_flags": ["nodejs_compat"],
   "ai": { "binding": "AI", "remote": true },
+  "vars": {
+    "EMP002_TEST_CONSOLE": "client0",
+    "TENANT_MANIFESTS_JSON": "[{\"tenantId\":\"herreb-client-0\",\"name\":\"HerreB Client 0\",\"status\":\"ACTIVE\",\"enabledEmployees\":[\"EMP-002\"]}]"
+  },
   "services": [
     {
       "binding": "SALES_OPS",
