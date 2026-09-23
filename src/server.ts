@@ -47,6 +47,7 @@ type RuntimeEnv = Env & {
   EMAIL_READ?: ServiceFetcher;
   EMAIL_READ_TOKEN?: string;
   TENANT_MANIFESTS_JSON?: string;
+  EMP002_TEST_CONSOLE?: string;
 };
 
 function readStateString(state: unknown, key: string): string | undefined {
@@ -112,10 +113,20 @@ export class ChatAgent extends AIChatAgent<Env> {
   waitForMcpConnections = true;
 
   async onChatMessage(_onFinish: unknown, options?: OnChatMessageOptions) {
-    const tenantId = readStateString(this.state, "tenantId");
-    const employeeId = readStateString(this.state, "employeeId");
-    const workspaceId = readStateString(this.state, "workspaceId");
-    const actorId = readStateString(this.state, "actorId");
+    const runtimeEnv = this.env as RuntimeEnv;
+    const testConsole = runtimeEnv.EMP002_TEST_CONSOLE === "client0";
+    const tenantId =
+      readStateString(this.state, "tenantId") ??
+      (testConsole ? "herreb-client-0" : undefined);
+    const employeeId =
+      readStateString(this.state, "employeeId") ??
+      (testConsole ? "EMP-002" : undefined);
+    const workspaceId =
+      readStateString(this.state, "workspaceId") ??
+      (testConsole ? "emp002-test-console" : undefined);
+    const actorId =
+      readStateString(this.state, "actorId") ??
+      (testConsole ? "fernando" : undefined);
     const channel = readStateString(this.state, "channel") ?? "web";
 
     if (!tenantId || !employeeId || !workspaceId || !actorId) {
@@ -134,7 +145,6 @@ export class ChatAgent extends AIChatAgent<Env> {
       model: DEFAULT_MODEL,
       reason: "employee-runtime-v0.1 default route"
     });
-    const runtimeEnv = this.env as RuntimeEnv;
     const bootstrap = buildTenantReadOnlyRuntime(
       runtimeEnv,
       tenantId,
