@@ -7,7 +7,7 @@
   "ai": { "binding": "AI", "remote": true },
   "vars": {
     "EMP002_TEST_CONSOLE": "client0",
-    "TENANT_MANIFESTS_JSON": "[{\"tenantId\":\"herreb-client-0\",\"name\":\"HerreB Client 0\",\"status\":\"ACTIVE\",\"enabledEmployees\":[\"EMP-002\"]}]"
+    "TENANT_MANIFESTS_JSON": "[{\"tenantId\":\"herreb-client-0\",\"name\":\"HerreB Client 0\",\"enabledEmployees\":[\"EMP-002\"],\"knowledgeNamespace\":\"herreb-client-0:knowledge\",\"offeringNamespace\":\"herreb-client-0:offerings\"}]"
   },
   "services": [
     {
