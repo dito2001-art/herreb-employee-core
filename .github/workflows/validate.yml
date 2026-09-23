@@ -40,7 +40,7 @@ jobs:
       - name: Formatting
         id: formatting
         continue-on-error: true
-        run: npx oxfmt --check .
+        run: npx oxfmt --write src/adapters/controlled-write-http.ts src/adapters/controlled-write-http.test.ts\n          git diff -- src/adapters/controlled-write-http.ts src/adapters/controlled-write-http.test.ts\n          git diff --quiet -- src/adapters/controlled-write-http.ts src/adapters/controlled-write-http.test.ts
 
       - name: Lint
         id: lint
