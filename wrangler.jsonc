@@ -7,6 +7,7 @@
   "ai": { "binding": "AI", "remote": true },
   "vars": {
     "EMP002_TEST_CONSOLE": "client0",
+    "CALENDAR_TENANT_ID": "herreb-client-0",
     "TENANT_MANIFESTS_JSON": "[{\"tenantId\":\"herreb-client-0\",\"name\":\"HerreB Client 0\",\"enabledEmployees\":[\"EMP-002\"],\"knowledgeNamespace\":\"herreb-client-0:knowledge\",\"offeringNamespace\":\"herreb-client-0:offerings\"}]"
   },
   "services": [
@@ -17,6 +18,10 @@
     {
       "binding": "AG002_GATEWAY",
       "service": "herreb-agent-gateway-v3"
+    },
+    {
+      "binding": "CALENDAR_READ",
+      "service": "herreb-calendar-read"
     }
   ],
   "assets": {
@@ -41,5 +46,9 @@
       "new_sqlite_classes": ["ChatAgent"],
       "tag": "v1"
     }
-  ]
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "invocation_logs": true }
+  }
 }
