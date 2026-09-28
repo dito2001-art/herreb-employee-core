@@ -58,53 +58,25 @@ function readStateString(state: unknown, key: string): string | undefined {
 
 function tenantCapabilityBindings(env: RuntimeEnv): TenantCapabilityBinding[] {
   const candidates = [
-    [
-      env.CRM_CONNECTOR_1_ID,
-      env.CRM_CONNECTOR_1,
-      env.CRM_CONNECTOR_1_TOKEN,
-      env.CRM_CONNECTOR_1_CALENDAR,
-      env.CRM_CONNECTOR_1_CALENDAR_TOKEN
-    ],
-    [
-      env.CRM_CONNECTOR_2_ID,
-      env.CRM_CONNECTOR_2,
-      env.CRM_CONNECTOR_2_TOKEN,
-      env.CRM_CONNECTOR_2_CALENDAR,
-      env.CRM_CONNECTOR_2_CALENDAR_TOKEN
-    ],
-    [
-      env.CRM_CONNECTOR_3_ID,
-      env.CRM_CONNECTOR_3,
-      env.CRM_CONNECTOR_3_TOKEN,
-      env.CRM_CONNECTOR_3_CALENDAR,
-      env.CRM_CONNECTOR_3_CALENDAR_TOKEN
-    ]
+    [env.CRM_CONNECTOR_1_ID, env.CRM_CONNECTOR_1, env.CRM_CONNECTOR_1_TOKEN, env.CRM_CONNECTOR_1_CALENDAR, env.CRM_CONNECTOR_1_CALENDAR_TOKEN],
+    [env.CRM_CONNECTOR_2_ID, env.CRM_CONNECTOR_2, env.CRM_CONNECTOR_2_TOKEN, env.CRM_CONNECTOR_2_CALENDAR, env.CRM_CONNECTOR_2_CALENDAR_TOKEN],
+    [env.CRM_CONNECTOR_3_ID, env.CRM_CONNECTOR_3, env.CRM_CONNECTOR_3_TOKEN, env.CRM_CONNECTOR_3_CALENDAR, env.CRM_CONNECTOR_3_CALENDAR_TOKEN]
   ] as const;
 
-  return candidates.flatMap(
-    ([connectorId, service, runtimeToken, calendarService, calendarToken]) => {
-      const cleanId = connectorId?.trim();
-      const cleanToken = runtimeToken?.trim();
-      const cleanCalendarToken = calendarToken?.trim();
-      return cleanId && service && cleanToken
-        ? [
-            {
-              connectorId: cleanId,
-              service,
-              runtimeToken: cleanToken,
-              calendarService:
-                calendarService && cleanCalendarToken
-                  ? calendarService
-                  : undefined,
-              calendarToken:
-                calendarService && cleanCalendarToken
-                  ? cleanCalendarToken
-                  : undefined
-            }
-          ]
-        : [];
-    }
-  );
+  return candidates.flatMap(([connectorId, service, runtimeToken, calendarService, calendarToken]) => {
+    const cleanId = connectorId?.trim();
+    const cleanToken = runtimeToken?.trim();
+    const cleanCalendarToken = calendarToken?.trim();
+    return cleanId && service && cleanToken
+      ? [{
+          connectorId: cleanId,
+          service,
+          runtimeToken: cleanToken,
+          calendarService: calendarService && cleanCalendarToken ? calendarService : undefined,
+          calendarToken: calendarService && cleanCalendarToken ? cleanCalendarToken : undefined
+        }]
+      : [];
+  });
 }
 
 export class ChatAgent extends AIChatAgent<Env> {
@@ -115,29 +87,18 @@ export class ChatAgent extends AIChatAgent<Env> {
   async onChatMessage(_onFinish: unknown, options?: OnChatMessageOptions) {
     const runtimeEnv = this.env as RuntimeEnv;
     const testConsole = runtimeEnv.EMP002_TEST_CONSOLE === "client0";
-    const tenantId =
-      readStateString(this.state, "tenantId") ??
-      (testConsole ? "herreb-client-0" : undefined);
-    const employeeId =
-      readStateString(this.state, "employeeId") ??
-      (testConsole ? "EMP-002" : undefined);
-    const workspaceId =
-      readStateString(this.state, "workspaceId") ??
-      (testConsole ? "emp002-test-console" : undefined);
-    const actorId =
-      readStateString(this.state, "actorId") ??
-      (testConsole ? "fernando" : undefined);
+    const tenantId = readStateString(this.state, "tenantId") ?? (testConsole ? "herreb-client-0" : undefined);
+    const employeeId = readStateString(this.state, "employeeId") ?? (testConsole ? "EMP-002" : undefined);
+    const workspaceId = readStateString(this.state, "workspaceId") ?? (testConsole ? "emp002-test-console" : undefined);
+    const actorId = readStateString(this.state, "actorId") ?? (testConsole ? "fernando" : undefined);
     const channel = readStateString(this.state, "channel") ?? "web";
 
     if (!tenantId || !employeeId || !workspaceId || !actorId) {
-      return new Response(
-        JSON.stringify({
-          ok: false,
-          error: "EMPLOYEE_SESSION_IDENTITY_REQUIRED",
-          requiredState: ["tenantId", "employeeId", "workspaceId", "actorId"]
-        }),
-        { status: 400, headers: { "content-type": "application/json" } }
-      );
+      return new Response(JSON.stringify({
+        ok: false,
+        error: "EMPLOYEE_SESSION_IDENTITY_REQUIRED",
+        requiredState: ["tenantId", "employeeId", "workspaceId", "actorId"]
+      }), { status: 400, headers: { "content-type": "application/json" } });
     }
 
     const modelRouter = new StaticModelRouter({
@@ -145,41 +106,29 @@ export class ChatAgent extends AIChatAgent<Env> {
       model: DEFAULT_MODEL,
       reason: "employee-runtime-v0.1 default route"
     });
-    const bootstrap = buildTenantReadOnlyRuntime(
-      runtimeEnv,
-      tenantId,
-      tenantCapabilityBindings(runtimeEnv)
-    );
+    const bootstrap = buildTenantReadOnlyRuntime(runtimeEnv, tenantId, tenantCapabilityBindings(runtimeEnv));
     const runtime = new HerreBEmployeeRuntime({
       modelRouter,
       adapters: bootstrap.adapters,
-      resolveTenantManifest: createTenantManifestResolverFromJson(
-        runtimeEnv.TENANT_MANIFESTS_JSON
-      )
+      resolveTenantManifest: createTenantManifestResolverFromJson(runtimeEnv.TENANT_MANIFESTS_JSON)
     });
-    const session = await runtime.start({
-      tenantId,
-      employeeId,
-      workspaceId,
-      actorId,
-      channel
-    });
+    const session = await runtime.start({ tenantId, employeeId, workspaceId, actorId, channel });
 
     const workersai = createWorkersAI({ binding: this.env.AI });
-    const model = workersai(session.modelRoute.model, {
-      sessionAffinity: this.sessionAffinity
-    });
+    const model = workersai(session.modelRoute.model, { sessionAffinity: this.sessionAffinity });
+
+    const systemPrompt = `${buildEmployeeSystemPrompt(session.context, session.manifest)}\n\nTOOL EXECUTION POLICY:\n- Never call the same tool more than once in a single user turn.\n- If a tool returns ok=false or an error, stop using tools immediately and answer the user with a concise explanation of what failed.\n- Never retry a failed calendar, CRM, or email call in the same turn.\n- Do not invent idempotencyKey values for read-only operations.\n- For calendar questions, make at most one calendar_read call. If Calendar is unavailable, say so instead of retrying.`;
 
     const result = streamText({
       model,
-      system: buildEmployeeSystemPrompt(session.context, session.manifest),
+      system: systemPrompt,
       messages: pruneMessages({
         messages: await convertToModelMessages(this.messages),
         toolCalls: "before-last-2-messages",
         reasoning: "before-last-message"
       }),
       tools: buildEmployeeTools(session, bootstrap.connectedCapabilities),
-      stopWhen: stepCountIs(12),
+      stopWhen: stepCountIs(3),
       abortSignal: options?.abortSignal
     });
 
@@ -189,9 +138,6 @@ export class ChatAgent extends AIChatAgent<Env> {
 
 export default {
   async fetch(request: Request, env: Env) {
-    return (
-      (await routeAgentRequest(request, env)) ||
-      new Response("Not found", { status: 404 })
-    );
+    return (await routeAgentRequest(request, env)) || new Response("Not found", { status: 404 });
   }
 } satisfies ExportedHandler<Env>;
