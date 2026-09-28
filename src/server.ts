@@ -18,7 +18,7 @@ import {
   type TenantCapabilityBinding
 } from "./runtime";
 
-const DEFAULT_MODEL = "@cf/moonshotai/kimi-k2.7-code";
+const DEFAULT_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
 
 type RuntimeEnv = Env & {
   SALES_OPS?: ServiceFetcher;
