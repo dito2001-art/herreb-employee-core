@@ -1,0 +1,38 @@
+name: Deploy Calendar Read
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/emp002-scheduling-waitlist-v0.1
+    paths:
+      - "src/calendar-read-worker.ts"
+      - "wrangler.calendar-read.jsonc"
+      - ".github/workflows/deploy-calendar-read.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy herreb-calendar-read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Deploy calendar read worker
+        run: npx wrangler deploy --config wrangler.calendar-read.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
