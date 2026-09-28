@@ -10,6 +10,10 @@ const genericInputSchema = z.object({
 
 const TOOL_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/;
 
+function logCapability(event: string, data: Record<string, unknown>) {
+  console.log(JSON.stringify({ event, ...data }));
+}
+
 export function capabilityIdToToolName(capabilityId: string): string {
   const normalized = capabilityId.replace(/[^A-Za-z0-9_-]/g, "_");
   const prefixed = /^[A-Za-z_]/.test(normalized)
@@ -50,23 +54,35 @@ export function buildEmployeeTools(
       description: `${definition.description}. Capability: ${capabilityId}. Risk: ${definition.risk}. IMPORTANT: if this tool returns ok=false, do not retry it in the same turn. Explain the failure to the user instead.`,
       inputSchema: genericInputSchema,
       execute: async ({ input, idempotencyKey }) => {
+        const startedAt = Date.now();
+        const baseDiagnostic = {
+          tenantId: session.context.tenantId,
+          employeeId: session.manifest.id,
+          capabilityId,
+          toolName,
+          correlationId: session.context.correlationId
+        };
+
+        logCapability("CAPABILITY_START", baseDiagnostic);
+
         if (failedCapabilities.has(capabilityId)) {
-          return {
+          const cause = failedCapabilities.get(capabilityId);
+          const response = {
             ok: false,
             error: {
               code: "CAPABILITY_CIRCUIT_OPEN",
               message: `${capabilityId} already failed in this turn. Do not retry it; explain that the connected service is temporarily unavailable.`,
-              cause: failedCapabilities.get(capabilityId)
+              cause
             },
             evidence: {
-              tenantId: session.context.tenantId,
-              employeeId: session.manifest.id,
-              capabilityId,
-              toolName,
+              ...baseDiagnostic,
               executed: false,
-              circuitOpen: true
+              circuitOpen: true,
+              durationMs: Date.now() - startedAt
             }
           };
+          logCapability("CAPABILITY_ERROR", { ...response.evidence, error: response.error });
+          return response;
         }
 
         if (!executableCapabilities.has(capabilityId)) {
@@ -75,17 +91,13 @@ export function buildEmployeeTools(
             message: `${capabilityId} is declared for ${session.manifest.id} but is not connected in this runtime.`
           };
           failedCapabilities.set(capabilityId, error);
-          return {
-            ok: false,
-            error,
-            evidence: {
-              tenantId: session.context.tenantId,
-              employeeId: session.manifest.id,
-              capabilityId,
-              toolName,
-              executed: false
-            }
+          const evidence = {
+            ...baseDiagnostic,
+            executed: false,
+            durationMs: Date.now() - startedAt
           };
+          logCapability("CAPABILITY_ERROR", { ...evidence, error });
+          return { ok: false, error, evidence };
         }
 
         try {
@@ -93,16 +105,23 @@ export function buildEmployeeTools(
             idempotencyKey
           });
           if (!result.ok) failedCapabilities.set(capabilityId, result.error);
+          const evidence = {
+            ...baseDiagnostic,
+            ...(result.evidence ?? {}),
+            durationMs: Date.now() - startedAt
+          };
+          logCapability(result.ok ? "CAPABILITY_SUCCESS" : "CAPABILITY_ERROR", {
+            ...evidence,
+            ok: result.ok,
+            error: result.error,
+            audit: result.audit
+          });
           return {
             ok: result.ok,
             output: result.output,
             error: result.error,
             audit: result.audit,
-            evidence: {
-              capabilityId,
-              toolName,
-              correlationId: session.context.correlationId
-            }
+            evidence
           };
         } catch (error) {
           const normalized = {
@@ -110,15 +129,20 @@ export function buildEmployeeTools(
             message: error instanceof Error ? error.message : "Capability execution failed"
           };
           failedCapabilities.set(capabilityId, normalized);
+          const evidence = {
+            ...baseDiagnostic,
+            executed: true,
+            durationMs: Date.now() - startedAt
+          };
+          logCapability("CAPABILITY_EXCEPTION", {
+            ...evidence,
+            error: normalized,
+            stack: error instanceof Error ? error.stack : undefined
+          });
           return {
             ok: false,
             error: normalized,
-            evidence: {
-              capabilityId,
-              toolName,
-              correlationId: session.context.correlationId,
-              executed: true
-            }
+            evidence
           };
         }
       }
