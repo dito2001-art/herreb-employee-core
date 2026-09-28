@@ -67,28 +67,21 @@ async function callReadOnlyService(
     try {
       body = text ? JSON.parse(text) : null;
     } catch {
-      // Keep exact non-JSON upstream body for diagnostics.
+      // Successful non-JSON responses are preserved as output.
     }
 
     if (!response.ok) {
-      const upstreamMessage =
-        body && typeof body === "object"
-          ? JSON.stringify(body)
-          : String(body || "").trim();
       return {
         ok: false,
         error: {
           code: "READ_ONLY_SERVICE_UPSTREAM_ERROR",
-          message: upstreamMessage
-            ? `Read-only service returned HTTP ${response.status}: ${upstreamMessage}`
-            : `Read-only service returned HTTP ${response.status}`,
+          message: `Read-only service returned HTTP ${response.status}`,
           retryable: response.status >= 500
         },
         evidence: {
           ...baseEvidence,
           executed: true,
-          upstreamStatus: response.status,
-          upstreamBody: body
+          upstreamStatus: response.status
         }
       };
     }
