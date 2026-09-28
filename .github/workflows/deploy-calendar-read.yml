@@ -31,6 +31,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Deployment is intentionally isolated from the core Worker.
       - name: Deploy calendar read worker
         run: npx wrangler deploy --config wrangler.calendar-read.jsonc
         env:
