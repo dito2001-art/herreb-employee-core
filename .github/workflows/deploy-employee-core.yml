@@ -5,11 +5,11 @@ on:
     branches:
       - feature/emp002-scheduling-waitlist-v0.1
     paths:
-      - 'src/**'
-      - 'wrangler.jsonc'
-      - 'package.json'
-      - 'package-lock.json'
-      - '.github/workflows/deploy-employee-core.yml'
+      - "src/**"
+      - "wrangler.jsonc"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/deploy-employee-core.yml"
   workflow_dispatch:
 
 permissions:
@@ -26,11 +26,14 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Format
+        run: npx oxfmt --write .
 
       - name: Validate
         run: npm run check
