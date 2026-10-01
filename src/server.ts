@@ -18,7 +18,7 @@ import {
   type TenantCapabilityBinding
 } from "./runtime";
 
-const DEFAULT_MODEL = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+const DEFAULT_MODEL = "@cf/zai-org/glm-4.7-flash";
 
 type RuntimeEnv = Env & {
   SALES_OPS?: ServiceFetcher;
@@ -105,7 +105,7 @@ export class ChatAgent extends AIChatAgent<Env> {
     const modelRouter = new StaticModelRouter({
       provider: "workers-ai",
       model: DEFAULT_MODEL,
-      reason: "employee-runtime-v0.1 default route"
+      reason: "employee-runtime-v0.1 tool-calling route"
     });
     const bootstrap = buildTenantReadOnlyRuntime(runtimeEnv, tenantId, tenantCapabilityBindings(runtimeEnv));
     console.log(JSON.stringify({
@@ -150,4 +150,4 @@ export default {
   async fetch(request: Request, env: Env) {
     return (await routeAgentRequest(request, env)) || new Response("Not found", { status: 404 });
   }
-} satisfies ExportedHandler<Env>;
+}
