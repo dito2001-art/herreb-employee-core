@@ -2,6 +2,7 @@ import type { CapabilityAdapter } from "../core";
 import {
   createAg002GatewayReadOnlyTransport,
   createCalendarAdapter,
+  createCalendarReadOnlyTransport,
   createCrmAdapter,
   createCrmCalendarReadTransport,
   createEmailAdapter,
@@ -19,9 +20,10 @@ export interface ReadOnlyRuntimeEnv {
   SALES_OPS_TOKEN?: string;
   AG002_GATEWAY?: ServiceFetcher;
   RUNTIME_GATEWAY_TOKEN?: string;
-  /** @deprecated Use RUNTIME_GATEWAY_TOKEN. Kept temporarily for test/deployment compatibility. */
+  /** @deprecated Use RUNTIME_GATEWAY_TOKEN. Kept temporarily for deployment compatibility. */
   HERREB_RUNTIME_TOKEN?: string;
   AG002_TENANT_ID?: string;
+  /** @deprecated Calendar is CRM-backed; retained for scoped migration compatibility. */
   CALENDAR_READ?: ServiceFetcher;
   CALENDAR_READ_TOKEN?: string;
   CALENDAR_TENANT_ID?: string;
@@ -31,47 +33,34 @@ export interface ReadOnlyRuntimeEnv {
 }
 
 type ConnectionState = "CONNECTED" | "MISSING_BINDING" | "MISSING_TOKEN" | "MISSING_TENANT_SCOPE";
-
 export interface ReadOnlyRuntimeBootstrap {
   adapters: CapabilityAdapter[];
   connectedCapabilities: ReadonlySet<string>;
   diagnostics: { salesOps: ConnectionState; crm: ConnectionState; calendar: ConnectionState; email: ConnectionState };
 }
 
-function nonBlank(value: string | undefined): string | undefined {
-  const clean = value?.trim();
-  return clean ? clean : undefined;
-}
-
-function connectionState(binding: ServiceFetcher | undefined, token: string | undefined): ConnectionState {
-  if (!binding) return "MISSING_BINDING";
-  if (!token) return "MISSING_TOKEN";
-  return "CONNECTED";
-}
-
-function scopedConnectionState(binding: ServiceFetcher | undefined, token: string | undefined, tenantId: string | undefined): ConnectionState {
-  const state = connectionState(binding, token);
-  if (state !== "CONNECTED") return state;
-  return tenantId ? "CONNECTED" : "MISSING_TENANT_SCOPE";
-}
-
-function readOnlyService(service: ServiceFetcher, token: string, tenantId: string): ReadOnlyServiceOptions {
-  return { service, token, tenantId };
-}
+function nonBlank(value: string | undefined): string | undefined { const clean = value?.trim(); return clean ? clean : undefined; }
+function connectionState(binding: ServiceFetcher | undefined, token: string | undefined): ConnectionState { if (!binding) return "MISSING_BINDING"; if (!token) return "MISSING_TOKEN"; return "CONNECTED"; }
+function scopedConnectionState(binding: ServiceFetcher | undefined, token: string | undefined, tenantId: string | undefined): ConnectionState { const state = connectionState(binding, token); if (state !== "CONNECTED") return state; return tenantId ? "CONNECTED" : "MISSING_TENANT_SCOPE"; }
+function readOnlyService(service: ServiceFetcher, token: string, tenantId: string): ReadOnlyServiceOptions { return { service, token, tenantId }; }
 
 export function buildReadOnlyRuntime(env: ReadOnlyRuntimeEnv): ReadOnlyRuntimeBootstrap {
   const adapters: CapabilityAdapter[] = [];
   const salesToken = nonBlank(env.SALES_OPS_TOKEN);
   const runtimeToken = nonBlank(env.RUNTIME_GATEWAY_TOKEN) ?? nonBlank(env.HERREB_RUNTIME_TOKEN);
   const ag002TenantId = nonBlank(env.AG002_TENANT_ID);
+  const calendarToken = nonBlank(env.CALENDAR_READ_TOKEN);
+  const calendarTenantId = nonBlank(env.CALENDAR_TENANT_ID);
   const emailToken = nonBlank(env.EMAIL_READ_TOKEN);
   const emailTenantId = nonBlank(env.EMAIL_TENANT_ID);
   const crmState = scopedConnectionState(env.AG002_GATEWAY, runtimeToken, ag002TenantId);
+  const legacyCalendarConfigured = Boolean(env.CALENDAR_READ);
+  const calendarState = legacyCalendarConfigured ? scopedConnectionState(env.CALENDAR_READ, calendarToken, calendarTenantId) : crmState;
 
   const diagnostics: ReadOnlyRuntimeBootstrap["diagnostics"] = {
     salesOps: connectionState(env.SALES_OPS, salesToken),
     crm: crmState,
-    calendar: crmState,
+    calendar: calendarState,
     email: scopedConnectionState(env.EMAIL_READ, emailToken, emailTenantId)
   };
 
@@ -80,9 +69,15 @@ export function buildReadOnlyRuntime(env: ReadOnlyRuntimeEnv): ReadOnlyRuntimeBo
     adapters.push(projectReadOnlyAdapter(createSalesOpsAdapter({ service: env.SALES_OPS, token: salesToken }), ["offering.recommend"]));
   }
 
+  let crmTransport: ReturnType<typeof createAg002GatewayReadOnlyTransport> | undefined;
   if (env.AG002_GATEWAY && runtimeToken && ag002TenantId) {
-    const crmTransport = createAg002GatewayReadOnlyTransport({ service: env.AG002_GATEWAY, runtimeToken, tenantId: ag002TenantId });
+    crmTransport = createAg002GatewayReadOnlyTransport({ service: env.AG002_GATEWAY, runtimeToken, tenantId: ag002TenantId });
     adapters.push(projectReadOnlyAdapter(createCrmAdapter(crmTransport), ["crm.read"]));
+  }
+
+  if (env.CALENDAR_READ && calendarToken && calendarTenantId) {
+    adapters.push(projectReadOnlyAdapter(createCalendarAdapter(createCalendarReadOnlyTransport(readOnlyService(env.CALENDAR_READ, calendarToken, calendarTenantId))), ["calendar.read"]));
+  } else if (!legacyCalendarConfigured && crmTransport) {
     adapters.push(projectReadOnlyAdapter(createCalendarAdapter(createCrmCalendarReadTransport(crmTransport)), ["calendar.read"]));
   }
 
