@@ -20,7 +20,7 @@ export interface TenantCapabilityEnv {
   SALES_OPS?: ServiceFetcher;
   SALES_OPS_TOKEN?: string;
   AG002_GATEWAY?: ServiceFetcher;
-  HERREB_RUNTIME_TOKEN?: string;
+  RUNTIME_GATEWAY_TOKEN?: string;
   AG002_TENANT_ID?: string;
   TENANT_CRM_CONNECTORS_JSON?: string;
   CALENDAR_READ?: ServiceFetcher;
@@ -57,7 +57,7 @@ export function buildTenantReadOnlyRuntime(
     env.AG002_TENANT_ID,
     tenantId
   );
-  const sharedCrmToken = sharedCrm ? env.HERREB_RUNTIME_TOKEN : undefined;
+  const sharedCrmToken = sharedCrm ? env.RUNTIME_GATEWAY_TOKEN : undefined;
   const sharedCalendar = scopedFallback(
     env.CALENDAR_READ,
     env.CALENDAR_TENANT_ID,
@@ -92,7 +92,7 @@ export function buildTenantReadOnlyRuntime(
     SALES_OPS: env.SALES_OPS,
     SALES_OPS_TOKEN: env.SALES_OPS_TOKEN,
     AG002_GATEWAY: resolved?.binding.service ?? sharedCrm,
-    HERREB_RUNTIME_TOKEN: resolved?.binding.runtimeToken ?? sharedCrmToken,
+    RUNTIME_GATEWAY_TOKEN: resolved?.binding.runtimeToken ?? sharedCrmToken,
     AG002_TENANT_ID: resolved || sharedCrm ? tenantId : undefined,
     CALENDAR_READ: calendarService,
     CALENDAR_READ_TOKEN: calendarToken,
