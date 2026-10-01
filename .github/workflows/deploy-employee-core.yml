@@ -3,7 +3,7 @@ name: Deploy Employee Core
 on:
   push:
     branches:
-      - feature/emp002-scheduling-waitlist-v0.1
+      - feature/employee-core-v0.1
     paths:
       - "src/**"
       - "wrangler.jsonc"
