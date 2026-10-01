@@ -6,8 +6,10 @@ export const EMP002_REQUIRED_READ_CAPABILITIES = [
   "email.read"
 ] as const;
 
+// crm.write is intentionally connected for EMP-002 through the tenant-scoped,
+// idempotent controlled-write path. Calendar remains CRM-first, so direct
+// calendar.write and email.send stay forbidden until separately connected.
 export const EMP002_FORBIDDEN_WRITE_CAPABILITIES = [
-  "crm.write",
   "calendar.write",
   "email.send",
   "task.schedule"
