@@ -52,6 +52,26 @@ function normalizeCapabilityInput(capabilityId: string, args: Record<string, unk
     normalizeCrmEntity(normalized);
   }
 
+  if (capabilityId === "crm.read") {
+    // crm.read has exactly one legal adapter operation. Do not let model wording
+    // (search/list/filter/get/etc.) leak into the stable CRM adapter contract.
+    normalized.operation = "read";
+
+    // The CRM adapter expects filters/query controls in payload. Models may emit
+    // them beside operation/entity, so canonicalize them here before execution.
+    const reserved = new Set(["operation", "entity", "payload"]);
+    const payload = normalized.payload && typeof normalized.payload === "object" && !Array.isArray(normalized.payload)
+      ? { ...(normalized.payload as Record<string, unknown>) }
+      : {};
+    for (const [key, value] of Object.entries(normalized)) {
+      if (!reserved.has(key)) {
+        payload[key] = value;
+        delete normalized[key];
+      }
+    }
+    normalized.payload = payload;
+  }
+
   if (capabilityId === "crm.write") {
     // Models sometimes put business fields beside operation/entity. Move those
     // fields into payload, which is the stable CrmCapabilityInput contract.
@@ -103,7 +123,7 @@ export function buildEmployeeTools(session: EmployeeRuntimeSession, executableCa
     const guidance = capabilityId === "calendar.read"
       ? " For calendar.read use operation=search with timeMin and timeMax. Never use startsAfter/startsBefore or a mutation operation."
       : capabilityId === "crm.read"
-        ? " For crm.read ALWAYS provide entity. Entity must be one of tasks, companies, contacts, opportunities, projects, clientInteractions, marketingCampaigns, invoices, billingMilestones. For task requests use entity=tasks. For pending-task requests use entity=tasks and pass the pending/completed=false criterion supported by the CRM input. Never call crm.write to compensate for a failed crm.read."
+        ? " For crm.read ALWAYS provide entity. The runtime canonicalizes the adapter operation to read. Entity must be one of tasks, companies, contacts, opportunities, projects, clientInteractions, marketingCampaigns, invoices, billingMilestones. For task requests use entity=tasks. For pending-task requests use entity=tasks with completed=false; filters and pagination are canonicalized into the CRM payload. Never call crm.write to compensate for a failed crm.read."
         : capabilityId === "crm.write"
           ? " For crm.write use operation=create|update|delete, entity must be one of tasks, companies, contacts, opportunities, projects, clientInteractions, marketingCampaigns, invoices, billingMilestones, and put ALL business fields inside payload. For a CRM task use entity=tasks (never task/tarea), e.g. {operation:'create',entity:'tasks',payload:{title:'Prueba',dueDate:'2026-10-02'}}. Resolve relative dates such as hoy/manana to an absolute YYYY-MM-DD date in the tenant timezone before calling the tool. Do not use calendar.write to create a CRM task."
           : "";
