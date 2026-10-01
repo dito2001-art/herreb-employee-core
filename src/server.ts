@@ -23,6 +23,7 @@ import {
 } from "./runtime";
 
 const DEFAULT_MODEL = "@cf/zai-org/glm-4.7-flash";
+const EMPLOYEE_HOST = "employee.herreb.com";
 
 type RuntimeEnv = Env & {
   SALES_OPS?: ServiceFetcher;
@@ -169,11 +170,27 @@ export class ChatAgent extends AIChatAgent<Env, Record<string, unknown>, AgentPr
 async function authenticatedAgentRequest(request: Request, env: RuntimeEnv, ctx: ExecutionContext): Promise<Response | undefined> {
   const url = new URL(request.url);
   if (!url.pathname.startsWith("/agents/")) return undefined;
-  if (!ctx.access) return new Response("Google sign-in required", { status: 401 });
 
-  const accessIdentity = await ctx.access.getIdentity();
-  const email = accessIdentity?.email;
-  if (!email) return new Response("Authenticated Google identity has no email", { status: 403 });
+  // Workers Static Assets run behind an internal router. Cloudflare documents
+  // that this router does not propagate ctx.access to the user Worker, even
+  // though Access still authenticates the request. In that topology Access
+  // forwards the authenticated email header to the origin Worker.
+  let email: string | undefined;
+  if (ctx.access) {
+    const accessIdentity = await ctx.access.getIdentity();
+    email = accessIdentity?.email?.trim().toLowerCase();
+  }
+
+  if (!email && url.hostname === EMPLOYEE_HOST) {
+    email = request.headers
+      .get("cf-access-authenticated-user-email")
+      ?.trim()
+      .toLowerCase();
+  }
+
+  if (!email) {
+    return new Response("Google sign-in required", { status: 401 });
+  }
 
   const identity = resolveAccessIdentity(email, env.ACCESS_IDENTITY_MAP_JSON);
   if (!identity) return new Response("Authenticated user is not assigned to a HerreB tenant", { status: 403 });
