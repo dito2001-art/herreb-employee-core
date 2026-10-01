@@ -17,3 +17,4 @@ export * from "./emp002-whatsapp-scheduling";
 export * from "./emp002-whatsapp-inbound";
 export * from "./emp002-confirm-slot-executor";
 export * from "./emp002-confirmation-finalizer";
+export * from "./emp002-scheduling-orchestrator";
