@@ -1,214 +1,242 @@
-import { createWorkersAI } from "workers-ai-provider";
-import { callable, routeAgentRequest, type Schedule } from "agents";
-import { getSchedulePrompt, scheduleSchema } from "agents/schedule";
 import { AIChatAgent, type OnChatMessageOptions } from "@cloudflare/ai-chat";
+import { routeAgentRequest } from "agents";
 import {
   convertToModelMessages,
   pruneMessages,
   stepCountIs,
-  streamText,
-  tool
+  streamText
 } from "ai";
-import { z } from "zod";
+import { createWorkersAI } from "workers-ai-provider";
+import type { ServiceFetcher } from "./adapters";
+import { buildEmployeeTools } from "./agent/tools";
+import { StaticModelRouter } from "./core";
+import {
+  accessAgentInstanceSuffix,
+  accessIdentityProvenance,
+  buildEmployeeSystemPrompt,
+  buildTenantReadOnlyRuntime,
+  createTenantManifestResolverFromJson,
+  HerreBEmployeeRuntime,
+  resolveAccessIdentity,
+  type TenantCapabilityBinding,
+  type VerifiedAccessIdentity
+} from "./runtime";
 
-export class ChatAgent extends AIChatAgent<Env> {
+const DEFAULT_MODEL = "@cf/zai-org/glm-4.7-flash";
+const EMPLOYEE_HOST = "employee.herreb.com";
+
+type RuntimeEnv = Env & {
+  SALES_OPS?: ServiceFetcher;
+  SALES_OPS_TOKEN?: string;
+  AG002_GATEWAY?: ServiceFetcher;
+  RUNTIME_GATEWAY_TOKEN?: string;
+  AG002_TENANT_ID?: string;
+  CRM_CONNECTOR_1?: ServiceFetcher;
+  CRM_CONNECTOR_1_ID?: string;
+  CRM_CONNECTOR_1_TOKEN?: string;
+  CRM_CONNECTOR_1_CALENDAR?: ServiceFetcher;
+  CRM_CONNECTOR_1_CALENDAR_TOKEN?: string;
+  CRM_CONNECTOR_2?: ServiceFetcher;
+  CRM_CONNECTOR_2_ID?: string;
+  CRM_CONNECTOR_2_TOKEN?: string;
+  CRM_CONNECTOR_2_CALENDAR?: ServiceFetcher;
+  CRM_CONNECTOR_2_CALENDAR_TOKEN?: string;
+  CRM_CONNECTOR_3?: ServiceFetcher;
+  CRM_CONNECTOR_3_ID?: string;
+  CRM_CONNECTOR_3_TOKEN?: string;
+  CRM_CONNECTOR_3_CALENDAR?: ServiceFetcher;
+  CRM_CONNECTOR_3_CALENDAR_TOKEN?: string;
+  TENANT_CRM_CONNECTORS_JSON?: string;
+  CALENDAR_READ?: ServiceFetcher;
+  CALENDAR_READ_TOKEN?: string;
+  CALENDAR_TENANT_ID?: string;
+  EMAIL_READ?: ServiceFetcher;
+  EMAIL_READ_TOKEN?: string;
+  TENANT_MANIFESTS_JSON?: string;
+  EMP002_TEST_CONSOLE?: string;
+  ACCESS_IDENTITY_MAP_JSON?: string;
+};
+
+type AgentProps = VerifiedAccessIdentity & Record<string, unknown>;
+
+function readStateString(state: unknown, key: string): string | undefined {
+  if (!state || typeof state !== "object") return undefined;
+  const value = (state as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function identityFromState(state: unknown): VerifiedAccessIdentity | undefined {
+  const email = readStateString(state, "accessEmail")?.toLowerCase();
+  const tenantId = readStateString(state, "tenantId");
+  const actorId = readStateString(state, "actorId");
+  const role = readStateString(state, "accessRole");
+  if (!email || !tenantId || !actorId || (role !== "owner" && role !== "user")) return undefined;
+  return { email, tenantId, actorId, role };
+}
+
+function tenantCapabilityBindings(env: RuntimeEnv): TenantCapabilityBinding[] {
+  const candidates = [
+    [env.CRM_CONNECTOR_1_ID, env.CRM_CONNECTOR_1, env.CRM_CONNECTOR_1_TOKEN, env.CRM_CONNECTOR_1_CALENDAR, env.CRM_CONNECTOR_1_CALENDAR_TOKEN],
+    [env.CRM_CONNECTOR_2_ID, env.CRM_CONNECTOR_2, env.CRM_CONNECTOR_2_TOKEN, env.CRM_CONNECTOR_2_CALENDAR, env.CRM_CONNECTOR_2_CALENDAR_TOKEN],
+    [env.CRM_CONNECTOR_3_ID, env.CRM_CONNECTOR_3, env.CRM_CONNECTOR_3_TOKEN, env.CRM_CONNECTOR_3_CALENDAR, env.CRM_CONNECTOR_3_CALENDAR_TOKEN]
+  ] as const;
+
+  return candidates.flatMap(([connectorId, service, runtimeToken, calendarService, calendarToken]) => {
+    const cleanId = connectorId?.trim();
+    const cleanToken = runtimeToken?.trim();
+    const cleanCalendarToken = calendarToken?.trim();
+    return cleanId && service && cleanToken
+      ? [{
+          connectorId: cleanId,
+          service,
+          runtimeToken: cleanToken,
+          calendarService: calendarService && cleanCalendarToken ? calendarService : undefined,
+          calendarToken: calendarService && cleanCalendarToken ? cleanCalendarToken : undefined
+        }]
+      : [];
+  });
+}
+
+export class ChatAgent extends AIChatAgent<Env, Record<string, unknown>, AgentProps> {
   maxPersistedMessages = 100;
   chatRecovery = true;
-  // Wait for MCP connections to be re-established after hibernation before
-  // processing a message, so MCP tools aren't intermittently missing.
   waitForMcpConnections = true;
+  private verifiedIdentity?: VerifiedAccessIdentity;
 
-  onStart() {
-    // Configure OAuth popup behavior for MCP servers that require authentication
-    this.mcp.configureOAuthCallback({
-      customHandler: (result) => {
-        if (result.authSuccess) {
-          return new Response("<script>window.close();</script>", {
-            headers: { "content-type": "text/html" },
-            status: 200
-          });
-        }
-        return new Response(
-          `Authentication Failed: ${result.authError || "Unknown error"}`,
-          { headers: { "content-type": "text/plain" }, status: 400 }
-        );
-      }
+  async onStart(props?: AgentProps) {
+    if (!props?.email || !props?.tenantId || !props?.actorId || (props.role !== "owner" && props.role !== "user")) return;
+    this.verifiedIdentity = {
+      email: props.email.trim().toLowerCase(),
+      tenantId: props.tenantId.trim(),
+      actorId: props.actorId.trim(),
+      role: props.role
+    };
+
+    // Persist only the verified identity attributes required to rebuild
+    // provenance after Durable Object/WebSocket hibernation.
+    this.setState({
+      ...this.state,
+      accessEmail: this.verifiedIdentity.email,
+      accessRole: this.verifiedIdentity.role,
+      tenantId: this.verifiedIdentity.tenantId,
+      actorId: this.verifiedIdentity.actorId
     });
   }
 
-  @callable()
-  async addServer(name: string, url: string) {
-    return await this.addMcpServer(name, url);
-  }
-
-  @callable()
-  async removeServer(serverId: string) {
-    await this.removeMcpServer(serverId);
-  }
-
   async onChatMessage(_onFinish: unknown, options?: OnChatMessageOptions) {
-    const mcpTools = this.mcp.getAITools();
+    const runtimeEnv = this.env as RuntimeEnv;
+    const testConsole = runtimeEnv.EMP002_TEST_CONSOLE === "client0";
+
+    // In-memory class fields are not durable across WebSocket hibernation.
+    // Rehydrate the already-verified Access identity from persisted DO state.
+    const verifiedIdentity = this.verifiedIdentity ?? identityFromState(this.state);
+    if (verifiedIdentity) this.verifiedIdentity = verifiedIdentity;
+
+    const tenantId = verifiedIdentity?.tenantId ?? readStateString(this.state, "tenantId") ?? (testConsole ? "herreb-client-0" : undefined);
+    const employeeId = readStateString(this.state, "employeeId") ?? (testConsole ? "EMP-002" : undefined);
+    const workspaceId = readStateString(this.state, "workspaceId") ?? (testConsole ? "emp002-test-console" : undefined);
+    const actorId = verifiedIdentity?.actorId ?? readStateString(this.state, "actorId") ?? (testConsole ? "fernando" : undefined);
+    const channel = readStateString(this.state, "channel") ?? "web";
+
+    if (!tenantId || !employeeId || !workspaceId || !actorId) {
+      return new Response(JSON.stringify({
+        ok: false,
+        error: "EMPLOYEE_SESSION_IDENTITY_REQUIRED",
+        requiredState: ["tenantId", "employeeId", "workspaceId", "actorId"]
+      }), { status: 400, headers: { "content-type": "application/json" } });
+    }
+
+    if (verifiedIdentity && (verifiedIdentity.tenantId !== tenantId || verifiedIdentity.actorId !== actorId)) {
+      return new Response(JSON.stringify({ ok: false, error: "ACCESS_IDENTITY_CONTEXT_MISMATCH" }), { status: 403, headers: { "content-type": "application/json" } });
+    }
+
+    const modelRouter = new StaticModelRouter({
+      provider: "workers-ai",
+      model: DEFAULT_MODEL,
+      reason: "employee-runtime-v0.1 tool-calling route"
+    });
+    const bootstrap = buildTenantReadOnlyRuntime(runtimeEnv, tenantId, tenantCapabilityBindings(runtimeEnv));
+    console.log(JSON.stringify({
+      event: "EMP002_RUNTIME_DIAGNOSTIC",
+      tenantId,
+      calendarDiagnostic: bootstrap.diagnostics.calendar,
+      calendarCapabilityConnected: bootstrap.connectedCapabilities.has("calendar.read"),
+      crmWriteConnected: bootstrap.connectedCapabilities.has("crm.write"),
+      accessIdentityVerified: Boolean(verifiedIdentity)
+    }));
+    const runtime = new HerreBEmployeeRuntime({
+      modelRouter,
+      adapters: bootstrap.adapters,
+      resolveTenantManifest: createTenantManifestResolverFromJson(runtimeEnv.TENANT_MANIFESTS_JSON),
+      resolveProvenance: () => verifiedIdentity
+        ? accessIdentityProvenance(verifiedIdentity)
+        : { assurance: "UNVERIFIED", source: "missing-cloudflare-access-identity" }
+    });
+    const session = await runtime.start({ tenantId, employeeId, workspaceId, actorId, channel });
+
     const workersai = createWorkersAI({ binding: this.env.AI });
+    const model = workersai(session.modelRoute.model, { sessionAffinity: this.sessionAffinity });
+    const nowIso = new Date().toISOString();
+    const tenantTimezone = tenantId === "herreb-client-0" ? "America/Asuncion" : "tenant-configured timezone";
+
+    const systemPrompt = `${buildEmployeeSystemPrompt(session.context, session.manifest)}\n\nCURRENT TIME AND TENANT DATE POLICY:\n- Current UTC timestamp: ${nowIso}\n- Tenant timezone for this session: ${tenantTimezone}.\n- Interpret relative dates such as hoy, mañana, ayer, esta semana and business dates in the tenant timezone unless the user explicitly specifies another timezone.\n- Never ask the user to confirm UTC versus the tenant timezone when the tenant timezone is known.\n- For "hoy", calculate the complete local calendar day from 00:00:00 through the start of the next local day; do NOT use a rolling 24-hour interval from the current time.\n- For "mañana", calculate the complete next local calendar day.\n- Never infer today's date from training data or prior conversation dates; derive it from the current timestamp above.\n\nTOOL EXECUTION POLICY:\n- Read-only GREEN capabilities such as calendar.read and crm.read are pre-authorized. Execute them immediately when needed; do not ask the user for permission or confirmation.\n- A direct request from an OWNER_VERIFIED session authorizes the specifically requested YELLOW controlled write. Do not ask the owner for a second confirmation.\n- When the user's request is sufficiently specified (for example "¿Qué tengo hoy?"), call the required tool instead of asking follow-up questions.\n- Never call the same tool more than once in a single user turn.\n- If a tool returns ok=false or an error, stop using tools immediately and answer with the concrete failure.\n- Never retry a failed calendar, CRM, or email call in the same turn.\n- Do not invent idempotencyKey values for read-only operations.\n- For calendar_read, use operation=search to list or find agenda items and operation=availability only for free/busy checks. Never use operation=read/create/update/delete with calendar_read.\n- For calendar questions, make at most one calendar_read call.\n- Do not promise future execution (for example "lo investigaré en unos segundos"). Either execute the tool now or report the current blocking error.\n- Keep operational answers concise. Do not expose internal capability names, policy jargon, UTC conversion details, or implementation details unless the user asks for diagnostics.`;
 
     const result = streamText({
-      model: workersai("@cf/moonshotai/kimi-k2.7-code", {
-        sessionAffinity: this.sessionAffinity
-      }),
-      system: `You are a helpful assistant that can understand images. You can check the weather, get the user's timezone, run calculations, and schedule tasks. When users share images, describe what you see and answer questions about them.
-
-${getSchedulePrompt({ date: new Date() })}
-
-If the user asks to schedule a task, use the schedule tool to schedule the task.`,
-      // Prune old tool calls and reasoning to save tokens on long conversations
+      model,
+      system: systemPrompt,
       messages: pruneMessages({
         messages: await convertToModelMessages(this.messages),
         toolCalls: "before-last-2-messages",
         reasoning: "before-last-message"
       }),
-      tools: {
-        // MCP tools from connected servers
-        ...mcpTools,
-
-        // Server-side tool: runs automatically on the server
-        getWeather: tool({
-          description: "Get the current weather for a city",
-          inputSchema: z.object({
-            city: z.string().describe("City name")
-          }),
-          execute: async ({ city }) => {
-            // Replace with a real weather API in production
-            const conditions = ["sunny", "cloudy", "rainy", "snowy"];
-            const temp = Math.floor(Math.random() * 30) + 5;
-            return {
-              city,
-              temperature: temp,
-              condition:
-                conditions[Math.floor(Math.random() * conditions.length)],
-              unit: "celsius"
-            };
-          }
-        }),
-
-        // Client-side tool: no execute function — the browser handles it
-        getUserTimezone: tool({
-          description:
-            "Get the user's timezone from their browser. Use this when you need to know the user's local time.",
-          inputSchema: z.object({})
-        }),
-
-        // Approval tool: requires user confirmation before executing
-        calculate: tool({
-          description:
-            "Perform a math calculation with two numbers. Requires user approval for large numbers.",
-          inputSchema: z.object({
-            a: z.number().describe("First number"),
-            b: z.number().describe("Second number"),
-            operator: z
-              .enum(["+", "-", "*", "/", "%"])
-              .describe("Arithmetic operator")
-          }),
-          needsApproval: async ({ a, b }) =>
-            Math.abs(a) > 1000 || Math.abs(b) > 1000,
-          execute: async ({ a, b, operator }) => {
-            const ops: Record<string, (x: number, y: number) => number> = {
-              "+": (x, y) => x + y,
-              "-": (x, y) => x - y,
-              "*": (x, y) => x * y,
-              "/": (x, y) => x / y,
-              "%": (x, y) => x % y
-            };
-            if (operator === "/" && b === 0) {
-              return { error: "Division by zero" };
-            }
-            return {
-              expression: `${a} ${operator} ${b}`,
-              result: ops[operator](a, b)
-            };
-          }
-        }),
-
-        scheduleTask: tool({
-          description:
-            "Schedule a task to be executed at a later time. Use this when the user asks to be reminded or wants something done later.",
-          inputSchema: scheduleSchema,
-          execute: async ({ when, description }) => {
-            if (when.type === "no-schedule") {
-              return "Not a valid schedule input";
-            }
-            const input =
-              when.type === "scheduled"
-                ? when.date
-                : when.type === "delayed"
-                  ? when.delayInSeconds
-                  : when.type === "cron"
-                    ? when.cron
-                    : null;
-            if (!input) return "Invalid schedule type";
-            try {
-              this.schedule(input, "executeTask", description, {
-                idempotent: true
-              });
-              return `Task scheduled: "${description}" (${when.type}: ${input})`;
-            } catch (error) {
-              return `Error scheduling task: ${error}`;
-            }
-          }
-        }),
-
-        getScheduledTasks: tool({
-          description: "List all tasks that have been scheduled",
-          inputSchema: z.object({}),
-          execute: async () => {
-            const tasks = this.getSchedules();
-            return tasks.length > 0 ? tasks : "No scheduled tasks found.";
-          }
-        }),
-
-        cancelScheduledTask: tool({
-          description: "Cancel a scheduled task by its ID",
-          inputSchema: z.object({
-            taskId: z.string().describe("The ID of the task to cancel")
-          }),
-          execute: async ({ taskId }) => {
-            try {
-              this.cancelSchedule(taskId);
-              return `Task ${taskId} cancelled.`;
-            } catch (error) {
-              return `Error cancelling task: ${error}`;
-            }
-          }
-        })
-      },
-      stopWhen: stepCountIs(20),
+      tools: buildEmployeeTools(session, bootstrap.connectedCapabilities),
+      stopWhen: stepCountIs(3),
       abortSignal: options?.abortSignal
     });
 
     return result.toUIMessageStreamResponse();
   }
+}
 
-  async executeTask(description: string, _task: Schedule<string>) {
-    // Do the actual work here (send email, call API, etc.)
-    console.log(`Executing scheduled task: ${description}`);
+async function authenticatedAgentRequest(request: Request, env: RuntimeEnv, ctx: ExecutionContext): Promise<Response | undefined> {
+  const url = new URL(request.url);
+  if (!url.pathname.startsWith("/agents/")) return undefined;
 
-    // Notify connected clients via a broadcast event.
-    // We use broadcast() instead of saveMessages() to avoid injecting
-    // into chat history — that would cause the AI to see the notification
-    // as new context and potentially loop.
-    this.broadcast(
-      JSON.stringify({
-        type: "scheduled-task",
-        description,
-        timestamp: new Date().toISOString()
-      })
-    );
+  let email: string | undefined;
+  if (ctx.access) {
+    const accessIdentity = await ctx.access.getIdentity();
+    email = accessIdentity?.email?.trim().toLowerCase();
   }
+
+  if (!email && url.hostname === EMPLOYEE_HOST) {
+    email = request.headers
+      .get("cf-access-authenticated-user-email")
+      ?.trim()
+      .toLowerCase();
+  }
+
+  if (!email) {
+    return new Response("Google sign-in required", { status: 401 });
+  }
+
+  const identity = resolveAccessIdentity(email, env.ACCESS_IDENTITY_MAP_JSON);
+  if (!identity) return new Response("Authenticated user is not assigned to a HerreB tenant", { status: 403 });
+
+  const parts = url.pathname.split("/");
+  if (parts.length >= 4) {
+    const suffix = await accessAgentInstanceSuffix(identity);
+    parts[3] = `user-${suffix}`;
+    url.pathname = parts.join("/");
+  }
+
+  const routedRequest = new Request(url.toString(), request);
+  return (await routeAgentRequest(routedRequest, env, { props: identity as AgentProps })) ?? undefined;
 }
 
 export default {
-  async fetch(request: Request, env: Env) {
-    return (
-      (await routeAgentRequest(request, env)) ||
-      new Response("Not found", { status: 404 })
-    );
+  async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    const agentResponse = await authenticatedAgentRequest(request, env as RuntimeEnv, ctx);
+    if (agentResponse) return agentResponse;
+    return (await routeAgentRequest(request, env)) || new Response("Not found", { status: 404 });
   }
-} satisfies ExportedHandler<Env>;
+};
