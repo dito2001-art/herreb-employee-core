@@ -29,12 +29,22 @@ function normalizeCapabilityInput(
       ? { ...(input as Record<string, unknown>) }
       : { ...directInput };
 
-  // `calendar.read` is the capability name, while the calendar adapter's
-  // canonical read operation is `search`. LLMs naturally emit operation=read;
-  // accept that semantic alias at the tool boundary instead of rejecting a
-  // harmless read as if it were a mutation.
-  if (capabilityId === "calendar.read" && normalized.operation === "read") {
-    normalized.operation = "search";
+  if (capabilityId === "calendar.read") {
+    // Canonical calendar read operation is search. Accept the semantic alias
+    // emitted by some models without letting it reach the adapter as a mutation.
+    if (normalized.operation === "read") normalized.operation = "search";
+
+    // CalendarInput's stable contract is timeMin/timeMax. Workers AI models can
+    // naturally emit startsAfter/startsBefore for the same interval; normalize
+    // those aliases here so the adapter/CRM facade always receives one schema.
+    if (typeof normalized.timeMin !== "string" && typeof normalized.startsAfter === "string") {
+      normalized.timeMin = normalized.startsAfter;
+    }
+    if (typeof normalized.timeMax !== "string" && typeof normalized.startsBefore === "string") {
+      normalized.timeMax = normalized.startsBefore;
+    }
+    delete normalized.startsAfter;
+    delete normalized.startsBefore;
   }
 
   return normalized;
@@ -77,7 +87,7 @@ export function buildEmployeeTools(
     names.add(toolName);
 
     const calendarReadGuidance = capabilityId === "calendar.read"
-      ? " For calendar.read use operation=search to list/find events in a time range, or operation=availability for free/busy checks. Never use operation=read, create, update, or delete."
+      ? " For calendar.read use operation=search with timeMin and timeMax to list/find events in a time range, or operation=availability for free/busy checks. The canonical range fields are timeMin/timeMax; do not use startsAfter/startsBefore. Never use operation=read, create, update, or delete."
       : "";
 
     tools[toolName] = tool({
