@@ -4,6 +4,7 @@ export * from "./capabilities";
 export * from "./policy";
 export * from "./model-router";
 export * from "./audit";
+export * from "./sqlite-audit";
 export * from "./tenant";
 export * from "./tenant-manifest";
 export * from "./knowledge";

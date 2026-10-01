@@ -4,6 +4,7 @@ import {
   executeCapability,
   getEmployeeManifest,
   type AdapterRegistry,
+  type AuditSink,
   type CapabilityAdapter,
   type CapabilityRequest,
   type CapabilityResult,
@@ -24,6 +25,7 @@ import {
 export interface EmployeeRuntimeDependencies {
   modelRouter: ModelRouter;
   adapters?: readonly CapabilityAdapter[];
+  auditSink?: AuditSink;
   resolveTenantManifest?: (
     tenantId: string
   ) => TenantManifest | Promise<TenantManifest>;
@@ -110,16 +112,24 @@ export class HerreBEmployeeRuntime {
           context.tenantId,
           context.actorId
         );
-        return executeCapability<TInput, TOutput>(this.registry, request, {
-          approvalGranted: options.approvalGranted,
-          controlledWriteAuthorization: {
-            authorized: ownerAuthorized,
-            assurance: provenance.assurance,
-            subjectId: provenance.subjectId,
-            tenantId: provenance.tenantId,
-            source: provenance.source
+        const result = await executeCapability<TInput, TOutput>(
+          this.registry,
+          request,
+          {
+            approvalGranted: options.approvalGranted,
+            controlledWriteAuthorization: {
+              authorized: ownerAuthorized,
+              assurance: provenance.assurance,
+              subjectId: provenance.subjectId,
+              tenantId: provenance.tenantId,
+              source: provenance.source
+            }
           }
-        });
+        );
+        if (this.dependencies.auditSink) {
+          await this.dependencies.auditSink.record(result.audit);
+        }
+        return result;
       }
     };
   }

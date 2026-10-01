@@ -39,6 +39,11 @@ test("AG-002 transport sends GET read with tenant and runtime auth", async () =>
   assert.equal(headers.get("X-HerreB-Runtime-Token"), "secret");
   assert.equal(headers.get("X-Tenant-ID"), "herreb");
   assert.equal(headers.get("X-Correlation-ID"), "corr-1");
+  assert.equal(result.evidence?.tenantId, "herreb");
+  assert.equal(result.evidence?.correlationId, "corr-1");
+  assert.equal(result.evidence?.operation, "read");
+  assert.equal(result.evidence?.upstreamStatus, 200);
+  assert.equal(JSON.stringify(result.evidence).includes("secret"), false);
 });
 
 test("AG-002 transport refuses cross-tenant reads before calling service", async () => {
@@ -64,6 +69,7 @@ test("AG-002 transport refuses cross-tenant reads before calling service", async
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "AG002_TENANT_SCOPE_MISMATCH");
   assert.equal(result.evidence?.executed, false);
+  assert.equal(result.evidence?.operation, "read");
   assert.equal(calls, 0);
 });
 
@@ -89,5 +95,42 @@ test("AG-002 transport refuses writes before calling service", async () => {
   });
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "AG002_READ_ONLY");
+  assert.equal(result.evidence?.operation, "update");
   assert.equal(calls, 0);
+});
+
+test("AG-002 upstream failures never copy response payload or runtime token into audit evidence", async () => {
+  const service: ServiceFetcher = {
+    async fetch() {
+      return Response.json(
+        {
+          access_token: "upstream-access-token",
+          refresh_token: "upstream-refresh-token",
+          privateData: "must-not-enter-audit"
+        },
+        { status: 502 }
+      );
+    }
+  };
+  const transport = createAg002GatewayReadOnlyTransport({
+    service,
+    runtimeToken: "runtime-secret",
+    tenantId: "herreb-client-0"
+  });
+  const result = await transport.execute({
+    tenantId: "herreb-client-0",
+    operation: "read",
+    entity: "companies",
+    correlationId: "corr-redaction"
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "AG002_UPSTREAM_ERROR");
+  assert.equal(result.evidence?.upstreamStatus, 502);
+  assert.equal(result.evidence?.operation, "read");
+  const evidence = JSON.stringify(result.evidence);
+  assert.equal(evidence.includes("runtime-secret"), false);
+  assert.equal(evidence.includes("upstream-access-token"), false);
+  assert.equal(evidence.includes("upstream-refresh-token"), false);
+  assert.equal(evidence.includes("must-not-enter-audit"), false);
 });

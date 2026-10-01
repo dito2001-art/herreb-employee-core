@@ -5,6 +5,11 @@
   "compatibility_date": "2026-06-11",
   "compatibility_flags": ["nodejs_compat"],
   "ai": { "binding": "AI", "remote": true },
+  "vars": {
+    "EMP002_TEST_CONSOLE": "client0",
+    "CALENDAR_TENANT_ID": "herreb-client-0",
+    "TENANT_MANIFESTS_JSON": "[{\"tenantId\":\"herreb-client-0\",\"name\":\"HerreB Client 0\",\"enabledEmployees\":[\"EMP-002\"],\"knowledgeNamespace\":\"herreb-client-0:knowledge\",\"offeringNamespace\":\"herreb-client-0:offerings\"}]"
+  },
   "services": [
     {
       "binding": "SALES_OPS",
@@ -13,12 +18,20 @@
     {
       "binding": "AG002_GATEWAY",
       "service": "herreb-agent-gateway-v3"
+    },
+    {
+      "binding": "CALENDAR_READ",
+      "service": "herreb-calendar-read"
     }
   ],
   "assets": {
-    "directory": "./public",
+    "directory": "./dist/client",
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/agents/*", "/oauth/*"]
+  },
+  "build": {
+    "command": "npm run build:console"
   },
   "durable_objects": {
     "bindings": [
@@ -33,5 +46,9 @@
       "new_sqlite_classes": ["ChatAgent"],
       "tag": "v1"
     }
-  ]
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "invocation_logs": true }
+  }
 }

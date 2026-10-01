@@ -6,16 +6,56 @@ import type { ServiceFetcher } from "./sales-ops";
 export interface ReadOnlyServiceOptions {
   service: ServiceFetcher;
   token: string;
+  tenantId: string;
   baseUrl?: string;
+}
+
+function safeUpstreamError(body: unknown): { upstreamErrorCode?: string; upstreamErrorMessage?: string } {
+  if (!body || typeof body !== "object") return {};
+  const record = body as Record<string, unknown>;
+  const nested = record.error && typeof record.error === "object"
+    ? record.error as Record<string, unknown>
+    : undefined;
+  const code = nested?.code ?? record.code;
+  const message = nested?.message ?? record.message;
+  return {
+    upstreamErrorCode: typeof code === "string" ? code.slice(0, 120) : undefined,
+    upstreamErrorMessage: typeof message === "string" ? message.slice(0, 500) : undefined
+  };
 }
 
 async function callReadOnlyService(
   options: ReadOnlyServiceOptions,
   path: string,
+  operation: string,
   tenantId: string,
   correlationId: string,
   params: Record<string, string | number | boolean | string[] | undefined>
 ): Promise<CapabilityResult> {
+  const baseEvidence = { tenantId, correlationId, path, operation };
+  if (!tenantId || tenantId !== options.tenantId) {
+    return {
+      ok: false,
+      error: {
+        code: "READ_ONLY_TENANT_SCOPE_MISMATCH",
+        message: "Read-only service tenant does not match authorized tenant scope",
+        retryable: false
+      },
+      evidence: { ...baseEvidence, executed: false }
+    };
+  }
+  if (!correlationId.trim()) {
+    return {
+      ok: false,
+      error: {
+        code: "READ_ONLY_CORRELATION_ID_REQUIRED",
+        message: "Read-only service requires correlation provenance",
+        retryable: false
+      },
+      evidence: { ...baseEvidence, executed: false }
+    };
+  }
+
   const url = new URL(path, options.baseUrl ?? "https://internal");
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined) continue;
@@ -41,21 +81,28 @@ async function callReadOnlyService(
     try {
       body = text ? JSON.parse(text) : null;
     } catch {
-      // Preserve exact upstream response when it is not JSON.
+      // Successful non-JSON responses are preserved as output.
     }
 
     if (!response.ok) {
+      const safeError = safeUpstreamError(body);
+      console.error("READ_ONLY_SERVICE_UPSTREAM_ERROR", {
+        ...baseEvidence,
+        upstreamStatus: response.status,
+        ...safeError
+      });
       return {
         ok: false,
         error: {
-          code: "READ_ONLY_SERVICE_UPSTREAM_ERROR",
-          message: `Read-only service returned HTTP ${response.status}`,
+          code: safeError.upstreamErrorCode || "READ_ONLY_SERVICE_UPSTREAM_ERROR",
+          message: safeError.upstreamErrorMessage || `Read-only service returned HTTP ${response.status}`,
           retryable: response.status >= 500
         },
         evidence: {
+          ...baseEvidence,
           executed: true,
           upstreamStatus: response.status,
-          upstream: body
+          ...safeError
         }
       };
     }
@@ -63,18 +110,26 @@ async function callReadOnlyService(
     return {
       ok: true,
       output: body,
-      evidence: { executed: true, upstreamStatus: response.status }
+      evidence: {
+        ...baseEvidence,
+        executed: true,
+        upstreamStatus: response.status
+      }
     };
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Read-only service failed";
+    console.error("READ_ONLY_SERVICE_TRANSPORT_ERROR", {
+      ...baseEvidence,
+      message
+    });
     return {
       ok: false,
       error: {
         code: "READ_ONLY_SERVICE_TRANSPORT_ERROR",
-        message:
-          error instanceof Error ? error.message : "Read-only service failed",
+        message,
         retryable: true
       },
-      evidence: { executed: false }
+      evidence: { ...baseEvidence, executed: false }
     };
   }
 }
@@ -85,22 +140,22 @@ export function createCalendarReadOnlyTransport(
   return {
     async execute(input) {
       const request: CalendarInput = input.request;
-      if (
-        request.operation !== "search" &&
-        request.operation !== "availability"
-      ) {
+      if (request.operation !== "search" && request.operation !== "availability") {
         return {
           ok: false,
-          error: {
-            code: "CALENDAR_READ_ONLY",
-            message: "Calendar transport is READ_ONLY"
-          },
-          evidence: { executed: false }
+          error: { code: "CALENDAR_READ_ONLY", message: "Calendar transport is READ_ONLY" },
+          evidence: {
+            executed: false,
+            tenantId: input.tenantId,
+            correlationId: input.correlationId,
+            operation: request.operation
+          }
         };
       }
       return callReadOnlyService(
         options,
         "/calendar/read",
+        request.operation,
         input.tenantId,
         input.correlationId,
         {
@@ -108,14 +163,9 @@ export function createCalendarReadOnlyTransport(
           timeMin: request.timeMin,
           timeMax: request.timeMax,
           query: request.operation === "search" ? request.query : undefined,
-          calendarId:
-            request.operation === "search" ? request.calendarId : undefined,
-          calendarIds:
-            request.operation === "availability"
-              ? request.calendarIds
-              : undefined,
-          timezone:
-            request.operation === "availability" ? request.timezone : undefined
+          calendarId: request.operation === "search" ? request.calendarId : undefined,
+          calendarIds: request.operation === "availability" ? request.calendarIds : undefined,
+          timezone: request.operation === "availability" ? request.timezone : undefined
         }
       );
     }
@@ -131,24 +181,23 @@ export function createEmailReadOnlyTransport(
       if (request.operation === "send") {
         return {
           ok: false,
-          error: {
-            code: "EMAIL_READ_ONLY",
-            message: "Email transport is READ_ONLY"
-          },
-          evidence: { executed: false }
+          error: { code: "EMAIL_READ_ONLY", message: "Email transport is READ_ONLY" },
+          evidence: {
+            executed: false,
+            tenantId: input.tenantId,
+            correlationId: input.correlationId,
+            operation: request.operation
+          }
         };
       }
       return callReadOnlyService(
         options,
         "/email/read",
+        request.operation,
         input.tenantId,
         input.correlationId,
         request.operation === "search"
-          ? {
-              operation: "search",
-              query: request.query,
-              maxResults: request.maxResults
-            }
+          ? { operation: "search", query: request.query, maxResults: request.maxResults }
           : { operation: "read", messageId: request.messageId }
       );
     }
