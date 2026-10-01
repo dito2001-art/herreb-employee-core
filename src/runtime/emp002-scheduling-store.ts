@@ -1,13 +1,13 @@
 import type { AutonomousSchedulingState } from "./emp002-autonomous-scheduling";
 
 export interface SchedulingSqlStorage {
-  exec<T = Record<string, unknown>>(
+  exec<T extends Record<string, unknown> = Record<string, unknown>>(
     query: string,
     ...bindings: unknown[]
   ): Iterable<T>;
 }
 
-interface StateRow {
+interface StateRow extends Record<string, unknown> {
   payload: string;
 }
 
@@ -25,10 +25,7 @@ export class SqliteSchedulingStateStore {
     `);
   }
 
-  load(
-    tenantId: string,
-    goalId: string
-  ): AutonomousSchedulingState | undefined {
+  load(tenantId: string, goalId: string): AutonomousSchedulingState | undefined {
     if (!tenantId.trim() || !goalId.trim()) return undefined;
     const rows = Array.from(
       this.sql.exec<StateRow>(
@@ -45,10 +42,7 @@ export class SqliteSchedulingStateStore {
     return state;
   }
 
-  save(
-    state: AutonomousSchedulingState,
-    expectedVersion?: number
-  ): AutonomousSchedulingState {
+  save(state: AutonomousSchedulingState, expectedVersion?: number): AutonomousSchedulingState {
     if (state.goal.tenantId !== state.tenantId)
       throw new Error("EMP002_SCHEDULING_PERSISTENCE_TENANT_MISMATCH");
     const current = this.load(state.tenantId, state.goal.id);
