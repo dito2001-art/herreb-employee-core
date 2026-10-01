@@ -65,6 +65,15 @@ function readStateString(state: unknown, key: string): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function identityFromState(state: unknown): VerifiedAccessIdentity | undefined {
+  const email = readStateString(state, "accessEmail")?.toLowerCase();
+  const tenantId = readStateString(state, "tenantId");
+  const actorId = readStateString(state, "actorId");
+  const role = readStateString(state, "accessRole");
+  if (!email || !tenantId || !actorId || (role !== "owner" && role !== "user")) return undefined;
+  return { email, tenantId, actorId, role };
+}
+
 function tenantCapabilityBindings(env: RuntimeEnv): TenantCapabilityBinding[] {
   const candidates = [
     [env.CRM_CONNECTOR_1_ID, env.CRM_CONNECTOR_1, env.CRM_CONNECTOR_1_TOKEN, env.CRM_CONNECTOR_1_CALENDAR, env.CRM_CONNECTOR_1_CALENDAR_TOKEN],
@@ -95,16 +104,38 @@ export class ChatAgent extends AIChatAgent<Env, Record<string, unknown>, AgentPr
   private verifiedIdentity?: VerifiedAccessIdentity;
 
   async onStart(props?: AgentProps) {
-    this.verifiedIdentity = props;
+    if (!props?.email || !props?.tenantId || !props?.actorId || (props.role !== "owner" && props.role !== "user")) return;
+    this.verifiedIdentity = {
+      email: props.email.trim().toLowerCase(),
+      tenantId: props.tenantId.trim(),
+      actorId: props.actorId.trim(),
+      role: props.role
+    };
+
+    // Persist only the verified identity attributes required to rebuild
+    // provenance after Durable Object/WebSocket hibernation.
+    this.setState({
+      ...this.state,
+      accessEmail: this.verifiedIdentity.email,
+      accessRole: this.verifiedIdentity.role,
+      tenantId: this.verifiedIdentity.tenantId,
+      actorId: this.verifiedIdentity.actorId
+    });
   }
 
   async onChatMessage(_onFinish: unknown, options?: OnChatMessageOptions) {
     const runtimeEnv = this.env as RuntimeEnv;
     const testConsole = runtimeEnv.EMP002_TEST_CONSOLE === "client0";
-    const tenantId = this.verifiedIdentity?.tenantId ?? readStateString(this.state, "tenantId") ?? (testConsole ? "herreb-client-0" : undefined);
+
+    // In-memory class fields are not durable across WebSocket hibernation.
+    // Rehydrate the already-verified Access identity from persisted DO state.
+    const verifiedIdentity = this.verifiedIdentity ?? identityFromState(this.state);
+    if (verifiedIdentity) this.verifiedIdentity = verifiedIdentity;
+
+    const tenantId = verifiedIdentity?.tenantId ?? readStateString(this.state, "tenantId") ?? (testConsole ? "herreb-client-0" : undefined);
     const employeeId = readStateString(this.state, "employeeId") ?? (testConsole ? "EMP-002" : undefined);
     const workspaceId = readStateString(this.state, "workspaceId") ?? (testConsole ? "emp002-test-console" : undefined);
-    const actorId = this.verifiedIdentity?.actorId ?? readStateString(this.state, "actorId") ?? (testConsole ? "fernando" : undefined);
+    const actorId = verifiedIdentity?.actorId ?? readStateString(this.state, "actorId") ?? (testConsole ? "fernando" : undefined);
     const channel = readStateString(this.state, "channel") ?? "web";
 
     if (!tenantId || !employeeId || !workspaceId || !actorId) {
@@ -115,7 +146,7 @@ export class ChatAgent extends AIChatAgent<Env, Record<string, unknown>, AgentPr
       }), { status: 400, headers: { "content-type": "application/json" } });
     }
 
-    if (this.verifiedIdentity && (this.verifiedIdentity.tenantId !== tenantId || this.verifiedIdentity.actorId !== actorId)) {
+    if (verifiedIdentity && (verifiedIdentity.tenantId !== tenantId || verifiedIdentity.actorId !== actorId)) {
       return new Response(JSON.stringify({ ok: false, error: "ACCESS_IDENTITY_CONTEXT_MISMATCH" }), { status: 403, headers: { "content-type": "application/json" } });
     }
 
@@ -131,14 +162,14 @@ export class ChatAgent extends AIChatAgent<Env, Record<string, unknown>, AgentPr
       calendarDiagnostic: bootstrap.diagnostics.calendar,
       calendarCapabilityConnected: bootstrap.connectedCapabilities.has("calendar.read"),
       crmWriteConnected: bootstrap.connectedCapabilities.has("crm.write"),
-      accessIdentityVerified: Boolean(this.verifiedIdentity)
+      accessIdentityVerified: Boolean(verifiedIdentity)
     }));
     const runtime = new HerreBEmployeeRuntime({
       modelRouter,
       adapters: bootstrap.adapters,
       resolveTenantManifest: createTenantManifestResolverFromJson(runtimeEnv.TENANT_MANIFESTS_JSON),
-      resolveProvenance: () => this.verifiedIdentity
-        ? accessIdentityProvenance(this.verifiedIdentity)
+      resolveProvenance: () => verifiedIdentity
+        ? accessIdentityProvenance(verifiedIdentity)
         : { assurance: "UNVERIFIED", source: "missing-cloudflare-access-identity" }
     });
     const session = await runtime.start({ tenantId, employeeId, workspaceId, actorId, channel });
@@ -171,10 +202,6 @@ async function authenticatedAgentRequest(request: Request, env: RuntimeEnv, ctx:
   const url = new URL(request.url);
   if (!url.pathname.startsWith("/agents/")) return undefined;
 
-  // Workers Static Assets run behind an internal router. Cloudflare documents
-  // that this router does not propagate ctx.access to the user Worker, even
-  // though Access still authenticates the request. In that topology Access
-  // forwards the authenticated email header to the origin Worker.
   let email: string | undefined;
   if (ctx.access) {
     const accessIdentity = await ctx.access.getIdentity();
