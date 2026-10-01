@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "herreb-employee-core",
-  "main": "src/server.ts",
+  "main": "src/worker.ts",
   "compatibility_date": "2026-06-11",
   "compatibility_flags": ["nodejs_compat"],
   "ai": { "binding": "AI", "remote": true },
@@ -14,18 +14,9 @@
     "WHATSAPP_TENANT_ROUTES_JSON": "[]"
   },
   "services": [
-    {
-      "binding": "SALES_OPS",
-      "service": "herreb-emp001-sales-ops-sandbox"
-    },
-    {
-      "binding": "AG002_GATEWAY",
-      "service": "herreb-agent-gateway-v3"
-    },
-    {
-      "binding": "CALENDAR_READ",
-      "service": "herreb-calendar-read"
-    }
+    { "binding": "SALES_OPS", "service": "herreb-emp001-sales-ops-sandbox" },
+    { "binding": "AG002_GATEWAY", "service": "herreb-agent-gateway-v3" },
+    { "binding": "CALENDAR_READ", "service": "herreb-calendar-read" }
   ],
   "assets": {
     "directory": "./dist/client",
@@ -33,25 +24,8 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/agents/*", "/oauth/*", "/webhooks/*"]
   },
-  "build": {
-    "command": "npm run build:console"
-  },
-  "durable_objects": {
-    "bindings": [
-      {
-        "class_name": "ChatAgent",
-        "name": "ChatAgent"
-      }
-    ]
-  },
-  "migrations": [
-    {
-      "new_sqlite_classes": ["ChatAgent"],
-      "tag": "v1"
-    }
-  ],
-  "observability": {
-    "enabled": true,
-    "logs": { "enabled": true, "invocation_logs": true }
-  }
+  "build": { "command": "npm run build:console" },
+  "durable_objects": { "bindings": [{ "class_name": "ChatAgent", "name": "ChatAgent" }] },
+  "migrations": [{ "new_sqlite_classes": ["ChatAgent"], "tag": "v1" }],
+  "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": true } }
 }
