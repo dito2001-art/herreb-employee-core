@@ -3,9 +3,6 @@ import { z } from "zod";
 import { getCapability, type EmployeeManifest } from "../core";
 import type { EmployeeRuntimeSession } from "../runtime";
 
-// Workers AI models may emit capability arguments either inside the historical
-// { input: {...} } envelope or directly at the top level. Accept both forms so
-// validation cannot fail before our execute handler and diagnostics run.
 const genericInputSchema = z
   .object({
     input: z.record(z.string(), z.unknown()).optional(),
@@ -19,61 +16,69 @@ function logCapability(event: string, data: Record<string, unknown>) {
   console.log(JSON.stringify({ event, ...data }));
 }
 
-function normalizeCapabilityInput(
-  capabilityId: string,
-  args: Record<string, unknown>
-) {
+function normalizeCapabilityInput(capabilityId: string, args: Record<string, unknown>) {
   const { input, idempotencyKey: _idempotencyKey, ...directInput } = args;
-  const normalized =
-    input && typeof input === "object" && !Array.isArray(input)
-      ? { ...(input as Record<string, unknown>) }
-      : { ...directInput };
+  const normalized = input && typeof input === "object" && !Array.isArray(input)
+    ? { ...(input as Record<string, unknown>) }
+    : { ...directInput };
 
   if (capabilityId === "calendar.read") {
-    // Canonical calendar read operation is search. Accept the semantic alias
-    // emitted by some models without letting it reach the adapter as a mutation.
     if (normalized.operation === "read") normalized.operation = "search";
-
-    // CalendarInput's stable contract is timeMin/timeMax. Workers AI models can
-    // naturally emit startsAfter/startsBefore for the same interval; normalize
-    // those aliases here so the adapter/CRM facade always receives one schema.
-    if (typeof normalized.timeMin !== "string" && typeof normalized.startsAfter === "string") {
-      normalized.timeMin = normalized.startsAfter;
-    }
-    if (typeof normalized.timeMax !== "string" && typeof normalized.startsBefore === "string") {
-      normalized.timeMax = normalized.startsBefore;
-    }
+    if (typeof normalized.timeMin !== "string" && typeof normalized.startsAfter === "string") normalized.timeMin = normalized.startsAfter;
+    if (typeof normalized.timeMax !== "string" && typeof normalized.startsBefore === "string") normalized.timeMax = normalized.startsBefore;
     delete normalized.startsAfter;
     delete normalized.startsBefore;
+  }
+
+  if (capabilityId === "crm.write") {
+    // Canonical CRM entity names are plural English API identifiers.
+    const aliases: Record<string, string> = {
+      task: "tasks", tarea: "tasks", tareas: "tasks",
+      company: "companies", empresa: "companies", empresas: "companies",
+      contact: "contacts", contacto: "contacts", contactos: "contacts",
+      project: "projects", proyecto: "projects", proyectos: "projects"
+    };
+    if (typeof normalized.entity === "string") {
+      const key = normalized.entity.trim().toLowerCase();
+      normalized.entity = aliases[key] ?? normalized.entity;
+    }
+
+    // Models sometimes put business fields beside operation/entity. Move those
+    // fields into payload, which is the stable CrmCapabilityInput contract.
+    const reserved = new Set(["operation", "entity", "payload"]);
+    const payload = normalized.payload && typeof normalized.payload === "object" && !Array.isArray(normalized.payload)
+      ? { ...(normalized.payload as Record<string, unknown>) }
+      : {};
+    for (const [key, value] of Object.entries(normalized)) {
+      if (!reserved.has(key)) {
+        payload[key] = value;
+        delete normalized[key];
+      }
+    }
+    normalized.payload = payload;
   }
 
   return normalized;
 }
 
+function generatedIdempotencyKey(capabilityId: string, correlationId: string): string | undefined {
+  if (!capabilityId.endsWith(".write") && capabilityId !== "email.send") return undefined;
+  return `${capabilityId}:${correlationId}`;
+}
+
 export function capabilityIdToToolName(capabilityId: string): string {
   const normalized = capabilityId.replace(/[^A-Za-z0-9_-]/g, "_");
-  const prefixed = /^[A-Za-z_]/.test(normalized)
-    ? normalized
-    : `cap_${normalized}`;
+  const prefixed = /^[A-Za-z_]/.test(normalized) ? normalized : `cap_${normalized}`;
   const name = prefixed.slice(0, 64);
-  if (!TOOL_NAME_PATTERN.test(name))
-    throw new Error(`INVALID_TOOL_NAME:${capabilityId}`);
+  if (!TOOL_NAME_PATTERN.test(name)) throw new Error(`INVALID_TOOL_NAME:${capabilityId}`);
   return name;
 }
 
-export function toolNameToCapabilityId(
-  manifest: EmployeeManifest,
-  toolName: string
-): string | undefined {
-  return manifest.capabilities.find(
-    (capabilityId) => capabilityIdToToolName(capabilityId) === toolName
-  );
+export function toolNameToCapabilityId(manifest: EmployeeManifest, toolName: string): string | undefined {
+  return manifest.capabilities.find((capabilityId) => capabilityIdToToolName(capabilityId) === toolName);
 }
 
-export function buildEmployeeTools(
-  session: EmployeeRuntimeSession,
-  executableCapabilities: ReadonlySet<string> = new Set()
-): ToolSet {
+export function buildEmployeeTools(session: EmployeeRuntimeSession, executableCapabilities: ReadonlySet<string> = new Set()): ToolSet {
   const tools: ToolSet = {};
   const names = new Set<string>();
   const failedCapabilities = new Map<string, unknown>();
@@ -81,127 +86,52 @@ export function buildEmployeeTools(
   for (const capabilityId of session.manifest.capabilities) {
     const definition = getCapability(capabilityId);
     if (!definition) continue;
-
     const toolName = capabilityIdToToolName(capabilityId);
     if (names.has(toolName)) throw new Error(`TOOL_NAME_COLLISION:${toolName}`);
     names.add(toolName);
 
-    const calendarReadGuidance = capabilityId === "calendar.read"
-      ? " For calendar.read use operation=search with timeMin and timeMax to list/find events in a time range, or operation=availability for free/busy checks. The canonical range fields are timeMin/timeMax; do not use startsAfter/startsBefore. Never use operation=read, create, update, or delete."
-      : "";
+    const guidance = capabilityId === "calendar.read"
+      ? " For calendar.read use operation=search with timeMin and timeMax. Never use startsAfter/startsBefore or a mutation operation."
+      : capabilityId === "crm.write"
+        ? " For crm.write use operation=create|update|delete, entity must be one of tasks, companies, contacts, opportunities, projects, clientInteractions, marketingCampaigns, invoices, billingMilestones, and put ALL business fields inside payload. For a CRM task use entity=tasks (never task/tarea), e.g. {operation:'create',entity:'tasks',payload:{title:'Prueba',dueDate:'2026-10-02'}}. Resolve relative dates such as hoy/manana to an absolute YYYY-MM-DD date in the tenant timezone before calling the tool. Do not use calendar.write to create a CRM task."
+        : "";
 
     tools[toolName] = tool({
-      description: `${definition.description}. Capability: ${capabilityId}. Risk: ${definition.risk}. Pass capability fields directly (for example operation, timeMin and timeMax); the legacy {input:{...}} envelope is also accepted.${calendarReadGuidance} IMPORTANT: if this tool returns ok=false, do not retry it in the same turn. Explain the failure to the user instead.`,
+      description: `${definition.description}. Capability: ${capabilityId}. Risk: ${definition.risk}. Pass capability fields directly; the legacy {input:{...}} envelope is also accepted.${guidance} IMPORTANT: if this tool returns ok=false, do not retry it in the same turn.`,
       inputSchema: genericInputSchema,
       execute: async (args) => {
         const startedAt = Date.now();
         const rawArgs = args as Record<string, unknown>;
         const input = normalizeCapabilityInput(capabilityId, rawArgs);
-        const idempotencyKey =
-          typeof rawArgs.idempotencyKey === "string"
-            ? rawArgs.idempotencyKey
-            : undefined;
-        const baseDiagnostic = {
-          tenantId: session.context.tenantId,
-          employeeId: session.manifest.id,
-          capabilityId,
-          toolName,
-          correlationId: session.context.correlationId,
-          inputKeys: Object.keys(input)
-        };
-
+        const idempotencyKey = typeof rawArgs.idempotencyKey === "string"
+          ? rawArgs.idempotencyKey
+          : generatedIdempotencyKey(capabilityId, session.context.correlationId);
+        const baseDiagnostic = { tenantId: session.context.tenantId, employeeId: session.manifest.id, capabilityId, toolName, correlationId: session.context.correlationId, inputKeys: Object.keys(input) };
         logCapability("CAPABILITY_START", baseDiagnostic);
 
         if (failedCapabilities.has(capabilityId)) {
           const cause = failedCapabilities.get(capabilityId);
-          const response = {
-            ok: false,
-            error: {
-              code: "CAPABILITY_CIRCUIT_OPEN",
-              message: `${capabilityId} already failed in this turn. Do not retry it; explain that the connected service is temporarily unavailable.`,
-              cause
-            },
-            evidence: {
-              ...baseDiagnostic,
-              executed: false,
-              circuitOpen: true,
-              durationMs: Date.now() - startedAt
-            }
-          };
-          logCapability("CAPABILITY_ERROR", {
-            ...response.evidence,
-            error: response.error
-          });
-          return response;
+          return { ok: false, error: { code: "CAPABILITY_CIRCUIT_OPEN", message: `${capabilityId} already failed in this turn. Do not retry it.`, cause }, evidence: { ...baseDiagnostic, executed: false, circuitOpen: true, durationMs: Date.now() - startedAt } };
         }
-
         if (!executableCapabilities.has(capabilityId)) {
-          const error = {
-            code: "CAPABILITY_NOT_CONNECTED",
-            message: `${capabilityId} is declared for ${session.manifest.id} but is not connected in this runtime.`
-          };
+          const error = { code: "CAPABILITY_NOT_CONNECTED", message: `${capabilityId} is declared for ${session.manifest.id} but is not connected in this runtime.` };
           failedCapabilities.set(capabilityId, error);
-          const evidence = {
-            ...baseDiagnostic,
-            executed: false,
-            durationMs: Date.now() - startedAt
-          };
-          logCapability("CAPABILITY_ERROR", { ...evidence, error });
-          return { ok: false, error, evidence };
+          return { ok: false, error, evidence: { ...baseDiagnostic, executed: false, durationMs: Date.now() - startedAt } };
         }
-
         try {
-          const result = await session.execute(capabilityId, input, {
-            idempotencyKey
-          });
+          const result = await session.execute(capabilityId, input, { idempotencyKey });
           if (!result.ok) failedCapabilities.set(capabilityId, result.error);
-          const evidence = {
-            ...baseDiagnostic,
-            ...(result.evidence ?? {}),
-            durationMs: Date.now() - startedAt
-          };
-          logCapability(result.ok ? "CAPABILITY_SUCCESS" : "CAPABILITY_ERROR", {
-            ...evidence,
-            ok: result.ok,
-            error: result.error,
-            audit: result.audit
-          });
-          return {
-            ok: result.ok,
-            output: result.output,
-            error: result.error,
-            audit: result.audit,
-            evidence
-          };
+          const evidence = { ...baseDiagnostic, ...(result.evidence ?? {}), durationMs: Date.now() - startedAt };
+          logCapability(result.ok ? "CAPABILITY_SUCCESS" : "CAPABILITY_ERROR", { ...evidence, ok: result.ok, error: result.error, audit: result.audit });
+          return { ok: result.ok, output: result.output, error: result.error, audit: result.audit, evidence };
         } catch (error) {
-          const normalized = {
-            code: "CAPABILITY_EXECUTION_FAILED",
-            message:
-              error instanceof Error
-                ? error.message
-                : "Capability execution failed"
-          };
+          const normalized = { code: "CAPABILITY_EXECUTION_FAILED", message: error instanceof Error ? error.message : "Capability execution failed" };
           failedCapabilities.set(capabilityId, normalized);
-          const evidence = {
-            ...baseDiagnostic,
-            executed: true,
-            durationMs: Date.now() - startedAt
-          };
-          logCapability("CAPABILITY_EXCEPTION", {
-            ...evidence,
-            error: normalized,
-            stack: error instanceof Error ? error.stack : undefined
-          });
-          return {
-            ok: false,
-            error: normalized,
-            evidence
-          };
+          return { ok: false, error: normalized, evidence: { ...baseDiagnostic, executed: true, durationMs: Date.now() - startedAt } };
         }
       }
     });
   }
-
   return tools;
 }
 
