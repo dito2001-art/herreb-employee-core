@@ -5,10 +5,6 @@ import type {
 } from "./emp002-whatsapp-dispatch-store";
 import { normalizeDispatchWhatsapp } from "./emp002-whatsapp-dispatch-store";
 
-interface DispatchRow extends Record<string, unknown> {
-  payload: string;
-}
-
 export class SqliteWhatsAppSchedulingDispatchStore implements WhatsAppSchedulingDispatchStore {
   constructor(private readonly sql: SchedulingSqlStorage) {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS emp002_whatsapp_dispatch (
@@ -26,14 +22,17 @@ export class SqliteWhatsAppSchedulingDispatchStore implements WhatsAppScheduling
   ): Promise<WhatsAppSchedulingDispatchRecord | undefined> {
     const normalized = normalizeDispatchWhatsapp(whatsapp);
     const rows = Array.from(
-      this.sql.exec<DispatchRow>(
+      this.sql.exec(
         `SELECT payload FROM emp002_whatsapp_dispatch WHERE tenant_id = ? AND whatsapp = ?`,
         tenantId,
         normalized
       )
     );
     if (!rows.length) return undefined;
-    const record = JSON.parse(rows[0].payload) as WhatsAppSchedulingDispatchRecord;
+    const payload = rows[0].payload;
+    if (typeof payload !== "string")
+      throw new Error("EMP002_WHATSAPP_DISPATCH_INVALID_STATE");
+    const record = JSON.parse(payload) as WhatsAppSchedulingDispatchRecord;
     if (record.tenantId !== tenantId || normalizeDispatchWhatsapp(record.whatsapp) !== normalized)
       throw new Error("EMP002_WHATSAPP_DISPATCH_TENANT_MISMATCH");
     return record.state.recovery?.status === "OFFER_PENDING" ? record : undefined;
