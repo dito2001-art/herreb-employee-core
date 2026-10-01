@@ -1,5 +1,6 @@
 import { SqliteWhatsAppSchedulingDispatchStore } from './emp002-whatsapp-sqlite-dispatch-store';
 import type { WhatsAppSchedulingDispatchRecord } from './emp002-whatsapp-dispatch-store';
+import type { RoutedWhatsAppInbound } from './emp002-whatsapp-endpoint';
 
 interface OperationsEnv {}
 
@@ -28,6 +29,28 @@ export class EMP002Operations implements DurableObject {
       if (!body?.tenantId || !body?.whatsapp) return Response.json({ ok: false, error: 'TENANT_AND_WHATSAPP_REQUIRED' }, { status: 400 });
       const record = await this.dispatchStore.findActiveByWhatsapp(body.tenantId, body.whatsapp);
       return Response.json({ ok: true, record: record ?? null });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/inbound/whatsapp') {
+      const message = await request.json<RoutedWhatsAppInbound>();
+      if (!message?.tenantId || !message?.from || !message?.messageId || typeof message.body !== 'string') {
+        return Response.json({ ok: false, error: 'INVALID_WHATSAPP_INBOUND' }, { status: 400 });
+      }
+      const record = await this.dispatchStore.findActiveByWhatsapp(message.tenantId, message.from);
+      if (!record) {
+        return Response.json({ ok: true, handled: false, reason: 'NO_ACTIVE_SCHEDULING_CONVERSATION' });
+      }
+      // The durable boundary has now resolved the tenant-scoped active state.
+      // Execution adapters are injected in the next layer; never borrow an
+      // owner ChatAgent identity or session for an external contact.
+      return Response.json({
+        ok: true,
+        handled: true,
+        stage: 'ACTIVE_SCHEDULING_RESOLVED',
+        contactId: record.contactId,
+        goalId: record.state.goal.id,
+        correlationId: record.state.correlationId,
+      });
     }
 
     return new Response('Not found', { status: 404 });
