@@ -24,7 +24,7 @@ type RuntimeEnv = Env & {
   SALES_OPS?: ServiceFetcher;
   SALES_OPS_TOKEN?: string;
   AG002_GATEWAY?: ServiceFetcher;
-  HERREB_RUNTIME_TOKEN?: string;
+  RUNTIME_GATEWAY_TOKEN?: string;
   AG002_TENANT_ID?: string;
   CRM_CONNECTOR_1?: ServiceFetcher;
   CRM_CONNECTOR_1_ID?: string;
@@ -111,9 +111,6 @@ export class ChatAgent extends AIChatAgent<Env> {
     console.log(JSON.stringify({
       event: "EMP002_RUNTIME_DIAGNOSTIC",
       tenantId,
-      calendarBindingPresent: Boolean(runtimeEnv.CALENDAR_READ),
-      calendarTokenPresent: Boolean(runtimeEnv.CALENDAR_READ_TOKEN?.trim()),
-      calendarTenantId: runtimeEnv.CALENDAR_TENANT_ID?.trim() || null,
       calendarDiagnostic: bootstrap.diagnostics.calendar,
       calendarCapabilityConnected: bootstrap.connectedCapabilities.has("calendar.read")
     }));
@@ -127,8 +124,9 @@ export class ChatAgent extends AIChatAgent<Env> {
     const workersai = createWorkersAI({ binding: this.env.AI });
     const model = workersai(session.modelRoute.model, { sessionAffinity: this.sessionAffinity });
     const nowIso = new Date().toISOString();
+    const tenantTimezone = tenantId === "herreb-client-0" ? "America/Asuncion" : "tenant-configured timezone";
 
-    const systemPrompt = `${buildEmployeeSystemPrompt(session.context, session.manifest)}\n\nCURRENT TIME:\n- Current UTC timestamp: ${nowIso}\n- For tenant herreb-client-0, interpret today/tomorrow and business dates in America/Asuncion unless the user specifies another timezone.\n- Never infer today's date from training data or prior conversation dates; derive relative dates from the current timestamp above.\n\nTOOL EXECUTION POLICY:\n- Never call the same tool more than once in a single user turn.\n- If a tool returns ok=false or an error, stop using tools immediately and answer the user with a concise explanation of what failed.\n- Never retry a failed calendar, CRM, or email call in the same turn.\n- Do not invent idempotencyKey values for read-only operations.\n- For calendar_read, use operation=search to list or find calendar events and operation=availability only for free/busy checks. Never use operation=read/create/update/delete with calendar_read.\n- For calendar questions, make at most one calendar_read call. If Calendar is unavailable, say so instead of retrying.`;
+    const systemPrompt = `${buildEmployeeSystemPrompt(session.context, session.manifest)}\n\nCURRENT TIME AND TENANT DATE POLICY:\n- Current UTC timestamp: ${nowIso}\n- Tenant timezone for this session: ${tenantTimezone}.\n- Interpret relative dates such as hoy, mañana, ayer, esta semana and business dates in the tenant timezone unless the user explicitly specifies another timezone.\n- Never ask the user to confirm UTC versus the tenant timezone when the tenant timezone is known.\n- For \"hoy\", calculate the complete local calendar day from 00:00:00 through the start of the next local day; do NOT use a rolling 24-hour interval from the current time.\n- For \"mañana\", calculate the complete next local calendar day.\n- Never infer today's date from training data or prior conversation dates; derive it from the current timestamp above.\n\nTOOL EXECUTION POLICY:\n- Read-only GREEN capabilities such as calendar.read and crm.read are pre-authorized. Execute them immediately when needed; do not ask the user for permission or confirmation.\n- When the user's request is sufficiently specified (for example \"¿Qué tengo hoy?\"), call the required tool instead of asking follow-up questions.\n- Never call the same tool more than once in a single user turn.\n- If a tool returns ok=false or an error, stop using tools immediately and answer with the concrete failure.\n- Never retry a failed calendar, CRM, or email call in the same turn.\n- Do not invent idempotencyKey values for read-only operations.\n- For calendar_read, use operation=search to list or find agenda items and operation=availability only for free/busy checks. Never use operation=read/create/update/delete with calendar_read.\n- For calendar questions, make at most one calendar_read call.\n- Do not promise future execution (for example \"lo investigaré en unos segundos\"). Either execute the tool now or report the current blocking error.\n- Keep operational answers concise. Do not expose internal capability names, policy jargon, UTC conversion details, or implementation details unless the user asks for diagnostics.`;
 
     const result = streamText({
       model,
@@ -151,4 +149,4 @@ export default {
   async fetch(request: Request, env: Env) {
     return (await routeAgentRequest(request, env)) || new Response("Not found", { status: 404 });
   }
-}
+};
