@@ -19,12 +19,25 @@ function logCapability(event: string, data: Record<string, unknown>) {
   console.log(JSON.stringify({ event, ...data }));
 }
 
-function normalizeCapabilityInput(args: Record<string, unknown>) {
+function normalizeCapabilityInput(
+  capabilityId: string,
+  args: Record<string, unknown>
+) {
   const { input, idempotencyKey: _idempotencyKey, ...directInput } = args;
-  if (input && typeof input === "object" && !Array.isArray(input)) {
-    return input as Record<string, unknown>;
+  const normalized =
+    input && typeof input === "object" && !Array.isArray(input)
+      ? { ...(input as Record<string, unknown>) }
+      : { ...directInput };
+
+  // `calendar.read` is the capability name, while the calendar adapter's
+  // canonical read operation is `search`. LLMs naturally emit operation=read;
+  // accept that semantic alias at the tool boundary instead of rejecting a
+  // harmless read as if it were a mutation.
+  if (capabilityId === "calendar.read" && normalized.operation === "read") {
+    normalized.operation = "search";
   }
-  return directInput;
+
+  return normalized;
 }
 
 export function capabilityIdToToolName(capabilityId: string): string {
@@ -63,13 +76,17 @@ export function buildEmployeeTools(
     if (names.has(toolName)) throw new Error(`TOOL_NAME_COLLISION:${toolName}`);
     names.add(toolName);
 
+    const calendarReadGuidance = capabilityId === "calendar.read"
+      ? " For calendar.read use operation=search to list/find events in a time range, or operation=availability for free/busy checks. Never use operation=read, create, update, or delete."
+      : "";
+
     tools[toolName] = tool({
-      description: `${definition.description}. Capability: ${capabilityId}. Risk: ${definition.risk}. Pass capability fields directly (for example operation, timeMin and timeMax); the legacy {input:{...}} envelope is also accepted. IMPORTANT: if this tool returns ok=false, do not retry it in the same turn. Explain the failure to the user instead.`,
+      description: `${definition.description}. Capability: ${capabilityId}. Risk: ${definition.risk}. Pass capability fields directly (for example operation, timeMin and timeMax); the legacy {input:{...}} envelope is also accepted.${calendarReadGuidance} IMPORTANT: if this tool returns ok=false, do not retry it in the same turn. Explain the failure to the user instead.`,
       inputSchema: genericInputSchema,
       execute: async (args) => {
         const startedAt = Date.now();
         const rawArgs = args as Record<string, unknown>;
-        const input = normalizeCapabilityInput(rawArgs);
+        const input = normalizeCapabilityInput(capabilityId, rawArgs);
         const idempotencyKey =
           typeof rawArgs.idempotencyKey === "string"
             ? rawArgs.idempotencyKey
