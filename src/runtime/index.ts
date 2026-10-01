@@ -18,3 +18,4 @@ export * from "./emp002-whatsapp-inbound";
 export * from "./emp002-confirm-slot-executor";
 export * from "./emp002-confirmation-finalizer";
 export * from "./emp002-scheduling-orchestrator";
+export * from "./emp002-whatsapp-webhook";
