@@ -18,7 +18,7 @@ export interface ReadOnlyRuntimeEnv {
   SALES_OPS?: ServiceFetcher;
   SALES_OPS_TOKEN?: string;
   AG002_GATEWAY?: ServiceFetcher;
-  HERREB_RUNTIME_TOKEN?: string;
+  RUNTIME_GATEWAY_TOKEN?: string;
   AG002_TENANT_ID?: string;
   // Legacy calendar binding retained in the env contract for deployment compatibility.
   // EMP-002 no longer uses it: agenda reads come exclusively from HerreB CRM.
@@ -84,7 +84,7 @@ export function buildReadOnlyRuntime(
 ): ReadOnlyRuntimeBootstrap {
   const adapters: CapabilityAdapter[] = [];
   const salesToken = nonBlank(env.SALES_OPS_TOKEN);
-  const runtimeToken = nonBlank(env.HERREB_RUNTIME_TOKEN);
+  const runtimeToken = nonBlank(env.RUNTIME_GATEWAY_TOKEN);
   const ag002TenantId = nonBlank(env.AG002_TENANT_ID);
   const emailToken = nonBlank(env.EMAIL_READ_TOKEN);
   const emailTenantId = nonBlank(env.EMAIL_TENANT_ID);
