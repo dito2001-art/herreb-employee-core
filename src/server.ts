@@ -126,8 +126,9 @@ export class ChatAgent extends AIChatAgent<Env> {
 
     const workersai = createWorkersAI({ binding: this.env.AI });
     const model = workersai(session.modelRoute.model, { sessionAffinity: this.sessionAffinity });
+    const nowIso = new Date().toISOString();
 
-    const systemPrompt = `${buildEmployeeSystemPrompt(session.context, session.manifest)}\n\nTOOL EXECUTION POLICY:\n- Never call the same tool more than once in a single user turn.\n- If a tool returns ok=false or an error, stop using tools immediately and answer the user with a concise explanation of what failed.\n- Never retry a failed calendar, CRM, or email call in the same turn.\n- Do not invent idempotencyKey values for read-only operations.\n- For calendar questions, make at most one calendar_read call. If Calendar is unavailable, say so instead of retrying.`;
+    const systemPrompt = `${buildEmployeeSystemPrompt(session.context, session.manifest)}\n\nCURRENT TIME:\n- Current UTC timestamp: ${nowIso}\n- For tenant herreb-client-0, interpret today/tomorrow and business dates in America/Asuncion unless the user specifies another timezone.\n- Never infer today's date from training data or prior conversation dates; derive relative dates from the current timestamp above.\n\nTOOL EXECUTION POLICY:\n- Never call the same tool more than once in a single user turn.\n- If a tool returns ok=false or an error, stop using tools immediately and answer the user with a concise explanation of what failed.\n- Never retry a failed calendar, CRM, or email call in the same turn.\n- Do not invent idempotencyKey values for read-only operations.\n- For calendar_read, use operation=search to list or find calendar events and operation=availability only for free/busy checks. Never use operation=read/create/update/delete with calendar_read.\n- For calendar questions, make at most one calendar_read call. If Calendar is unavailable, say so instead of retrying.`;
 
     const result = streamText({
       model,
