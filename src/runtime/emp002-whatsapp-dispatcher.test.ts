@@ -3,8 +3,10 @@ import { describe, it } from "node:test";
 import { InMemoryWhatsAppSchedulingDispatchStore } from "./emp002-whatsapp-dispatch-store";
 import type { WhatsAppSchedulingDispatchRecord } from "./emp002-whatsapp-dispatch-store";
 import type { AutonomousSchedulingState } from "./emp002-autonomous-scheduling";
+import type { SlotRecoveryStatus } from "./emp002-slot-recovery";
 
 function schedulingState(status: "OFFER_PENDING" | "COMPLETED"): AutonomousSchedulingState {
+  const recoveryStatus: SlotRecoveryStatus = status === "OFFER_PENDING" ? "OFFER_PENDING" : "EXHAUSTED";
   return {
     tenantId: "tenant-a",
     correlationId: "corr-1",
@@ -32,7 +34,7 @@ function schedulingState(status: "OFFER_PENDING" | "COMPLETED"): AutonomousSched
         startsAt: "2026-10-02T10:00:00-03:00",
         endsAt: "2026-10-02T10:30:00-03:00"
       },
-      status,
+      status: recoveryStatus,
       candidateRequestIds: [],
       offers: []
     }
