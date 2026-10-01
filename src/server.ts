@@ -44,6 +44,7 @@ type RuntimeEnv = Env & {
   TENANT_CRM_CONNECTORS_JSON?: string;
   CALENDAR_READ?: ServiceFetcher;
   CALENDAR_READ_TOKEN?: string;
+  CALENDAR_TENANT_ID?: string;
   EMAIL_READ?: ServiceFetcher;
   EMAIL_READ_TOKEN?: string;
   TENANT_MANIFESTS_JSON?: string;
@@ -107,6 +108,15 @@ export class ChatAgent extends AIChatAgent<Env> {
       reason: "employee-runtime-v0.1 default route"
     });
     const bootstrap = buildTenantReadOnlyRuntime(runtimeEnv, tenantId, tenantCapabilityBindings(runtimeEnv));
+    console.log(JSON.stringify({
+      event: "EMP002_RUNTIME_DIAGNOSTIC",
+      tenantId,
+      calendarBindingPresent: Boolean(runtimeEnv.CALENDAR_READ),
+      calendarTokenPresent: Boolean(runtimeEnv.CALENDAR_READ_TOKEN?.trim()),
+      calendarTenantId: runtimeEnv.CALENDAR_TENANT_ID?.trim() || null,
+      calendarDiagnostic: bootstrap.diagnostics.calendar,
+      calendarCapabilityConnected: bootstrap.connectedCapabilities.has("calendar.read")
+    }));
     const runtime = new HerreBEmployeeRuntime({
       modelRouter,
       adapters: bootstrap.adapters,
