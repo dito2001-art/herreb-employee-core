@@ -16,6 +16,24 @@ function logCapability(event: string, data: Record<string, unknown>) {
   console.log(JSON.stringify({ event, ...data }));
 }
 
+const CRM_ENTITY_ALIASES: Record<string, string> = {
+  task: "tasks", tarea: "tasks", tareas: "tasks",
+  company: "companies", empresa: "companies", empresas: "companies",
+  contact: "contacts", contacto: "contacts", contactos: "contacts",
+  opportunity: "opportunities", oportunidad: "opportunities", oportunidades: "opportunities",
+  project: "projects", proyecto: "projects", proyectos: "projects",
+  clientinteraction: "clientInteractions", clientinteractions: "clientInteractions",
+  marketingcampaign: "marketingCampaigns", marketingcampaigns: "marketingCampaigns",
+  invoice: "invoices", invoices: "invoices", factura: "invoices", facturas: "invoices",
+  billingmilestone: "billingMilestones", billingmilestones: "billingMilestones"
+};
+
+function normalizeCrmEntity(normalized: Record<string, unknown>) {
+  if (typeof normalized.entity !== "string") return;
+  const key = normalized.entity.trim().toLowerCase().replace(/[\s_-]/g, "");
+  normalized.entity = CRM_ENTITY_ALIASES[key] ?? normalized.entity.trim();
+}
+
 function normalizeCapabilityInput(capabilityId: string, args: Record<string, unknown>) {
   const { input, idempotencyKey: _idempotencyKey, ...directInput } = args;
   const normalized = input && typeof input === "object" && !Array.isArray(input)
@@ -30,19 +48,11 @@ function normalizeCapabilityInput(capabilityId: string, args: Record<string, unk
     delete normalized.startsBefore;
   }
 
-  if (capabilityId === "crm.write") {
-    // Canonical CRM entity names are plural English API identifiers.
-    const aliases: Record<string, string> = {
-      task: "tasks", tarea: "tasks", tareas: "tasks",
-      company: "companies", empresa: "companies", empresas: "companies",
-      contact: "contacts", contacto: "contacts", contactos: "contacts",
-      project: "projects", proyecto: "projects", proyectos: "projects"
-    };
-    if (typeof normalized.entity === "string") {
-      const key = normalized.entity.trim().toLowerCase();
-      normalized.entity = aliases[key] ?? normalized.entity;
-    }
+  if (capabilityId === "crm.read" || capabilityId === "crm.write") {
+    normalizeCrmEntity(normalized);
+  }
 
+  if (capabilityId === "crm.write") {
     // Models sometimes put business fields beside operation/entity. Move those
     // fields into payload, which is the stable CrmCapabilityInput contract.
     const reserved = new Set(["operation", "entity", "payload"]);
@@ -92,12 +102,14 @@ export function buildEmployeeTools(session: EmployeeRuntimeSession, executableCa
 
     const guidance = capabilityId === "calendar.read"
       ? " For calendar.read use operation=search with timeMin and timeMax. Never use startsAfter/startsBefore or a mutation operation."
-      : capabilityId === "crm.write"
-        ? " For crm.write use operation=create|update|delete, entity must be one of tasks, companies, contacts, opportunities, projects, clientInteractions, marketingCampaigns, invoices, billingMilestones, and put ALL business fields inside payload. For a CRM task use entity=tasks (never task/tarea), e.g. {operation:'create',entity:'tasks',payload:{title:'Prueba',dueDate:'2026-10-02'}}. Resolve relative dates such as hoy/manana to an absolute YYYY-MM-DD date in the tenant timezone before calling the tool. Do not use calendar.write to create a CRM task."
-        : "";
+      : capabilityId === "crm.read"
+        ? " For crm.read ALWAYS provide entity. Entity must be one of tasks, companies, contacts, opportunities, projects, clientInteractions, marketingCampaigns, invoices, billingMilestones. For task requests use entity=tasks. For pending-task requests use entity=tasks and pass the pending/completed=false criterion supported by the CRM input. Never call crm.write to compensate for a failed crm.read."
+        : capabilityId === "crm.write"
+          ? " For crm.write use operation=create|update|delete, entity must be one of tasks, companies, contacts, opportunities, projects, clientInteractions, marketingCampaigns, invoices, billingMilestones, and put ALL business fields inside payload. For a CRM task use entity=tasks (never task/tarea), e.g. {operation:'create',entity:'tasks',payload:{title:'Prueba',dueDate:'2026-10-02'}}. Resolve relative dates such as hoy/manana to an absolute YYYY-MM-DD date in the tenant timezone before calling the tool. Do not use calendar.write to create a CRM task."
+          : "";
 
     tools[toolName] = tool({
-      description: `${definition.description}. Capability: ${capabilityId}. Risk: ${definition.risk}. Pass capability fields directly; the legacy {input:{...}} envelope is also accepted.${guidance} IMPORTANT: if this tool returns ok=false, do not retry it in the same turn.`,
+      description: `${definition.description}. Capability: ${capabilityId}. Risk: ${definition.risk}. Pass capability fields directly; the legacy {input:{...}} envelope is also accepted.${guidance} IMPORTANT: if this tool returns ok=false, do not retry it in the same turn and do not switch to a write capability as a workaround.`,
       inputSchema: genericInputSchema,
       execute: async (args) => {
         const startedAt = Date.now();
