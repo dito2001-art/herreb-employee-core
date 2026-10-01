@@ -37,12 +37,7 @@ export async function executeCapability<TInput = unknown, TOutput = unknown>(
     };
     return {
       ...result,
-      audit: createAuditEvent(
-        request.context,
-        request.capabilityId,
-        policy,
-        result
-      )
+      audit: createAuditEvent(request.context, request.capabilityId, policy, result)
     };
   }
 
@@ -56,28 +51,29 @@ export async function executeCapability<TInput = unknown, TOutput = unknown>(
     };
     return {
       ...result,
-      audit: createAuditEvent(
-        request.context,
-        request.capabilityId,
-        policy,
-        result
-      )
+      audit: createAuditEvent(request.context, request.capabilityId, policy, result)
     };
   }
 
-  if (policy.decision === "REQUIRE_APPROVAL" && !options.approvalGranted) {
+  const verifiedControlledWrite =
+    policy.risk === "YELLOW" &&
+    options.controlledWriteAuthorization?.authorized === true;
+
+  // A verified owner instruction is itself approval for the requested
+  // controlled write. Unverified callers still require the explicit approval
+  // flow, so YELLOW never becomes globally auto-approved.
+  if (
+    policy.decision === "REQUIRE_APPROVAL" &&
+    !options.approvalGranted &&
+    !verifiedControlledWrite
+  ) {
     const result: CapabilityResult<TOutput> = {
       ok: false,
       error: { code: "APPROVAL_REQUIRED", message: policy.reason }
     };
     return {
       ...result,
-      audit: createAuditEvent(
-        request.context,
-        request.capabilityId,
-        policy,
-        result
-      )
+      audit: createAuditEvent(request.context, request.capabilityId, policy, result)
     };
   }
 
@@ -94,52 +90,32 @@ export async function executeCapability<TInput = unknown, TOutput = unknown>(
     };
     return {
       ...result,
-      audit: createAuditEvent(
-        request.context,
-        request.capabilityId,
-        policy,
-        result
-      )
+      audit: createAuditEvent(request.context, request.capabilityId, policy, result)
     };
   }
 
-  const adapter = registry.resolve(
-    request.capabilityId,
-    request.context.employeeId
-  );
+  const adapter = registry.resolve(request.capabilityId, request.context.employeeId);
   if (!adapter) {
     const result: CapabilityResult<TOutput> = {
       ok: false,
-      error: {
-        code: "ADAPTER_NOT_FOUND",
-        message: "No compatible adapter registered"
-      }
+      error: { code: "ADAPTER_NOT_FOUND", message: "No compatible adapter registered" }
     };
     return {
       ...result,
-      audit: createAuditEvent(
-        request.context,
-        request.capabilityId,
-        policy,
-        result
-      )
+      audit: createAuditEvent(request.context, request.capabilityId, policy, result)
     };
   }
 
   try {
-    const adapterResult = (await adapter.execute(
-      request
-    )) as CapabilityResult<TOutput>;
+    const adapterResult = (await adapter.execute(request)) as CapabilityResult<TOutput>;
     const authorization = options.controlledWriteAuthorization;
     const result: CapabilityResult<TOutput> = {
       ...adapterResult,
       evidence: {
         ...(adapterResult.evidence ?? {}),
-        ...(request.idempotencyKey
-          ? { idempotencyKey: request.idempotencyKey }
-          : {}),
+        ...(request.idempotencyKey ? { idempotencyKey: request.idempotencyKey } : {}),
         ...(policy.decision === "REQUIRE_APPROVAL"
-          ? { approvalGranted: true }
+          ? { approvalGranted: Boolean(options.approvalGranted || verifiedControlledWrite) }
           : {}),
         ...(authorization?.authorized
           ? {
@@ -153,30 +129,19 @@ export async function executeCapability<TInput = unknown, TOutput = unknown>(
     };
     return {
       ...result,
-      audit: createAuditEvent(
-        request.context,
-        request.capabilityId,
-        policy,
-        result
-      )
+      audit: createAuditEvent(request.context, request.capabilityId, policy, result)
     };
   } catch (error) {
     const result: CapabilityResult<TOutput> = {
       ok: false,
       error: {
         code: "ADAPTER_EXECUTION_FAILED",
-        message:
-          error instanceof Error ? error.message : "Unknown adapter error"
+        message: error instanceof Error ? error.message : "Unknown adapter error"
       }
     };
     return {
       ...result,
-      audit: createAuditEvent(
-        request.context,
-        request.capabilityId,
-        policy,
-        result
-      )
+      audit: createAuditEvent(request.context, request.capabilityId, policy, result)
     };
   }
 }
