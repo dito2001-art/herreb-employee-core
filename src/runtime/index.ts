@@ -13,3 +13,7 @@ export * from "./emp002-scheduling";
 export * from "./emp002-slot-recovery";
 export * from "./emp002-cognitive-scheduling";
 export * from "./emp002-autonomous-scheduling";
+export * from "./emp002-whatsapp-scheduling";
+export * from "./emp002-whatsapp-inbound";
+export * from "./emp002-confirm-slot-executor";
+export * from "./emp002-confirmation-finalizer";
