@@ -2,8 +2,8 @@ import type { CapabilityAdapter } from "../core";
 import {
   createAg002GatewayReadOnlyTransport,
   createCalendarAdapter,
-  createCalendarReadOnlyTransport,
   createCrmAdapter,
+  createCrmCalendarReadTransport,
   createEmailAdapter,
   createEmailReadOnlyTransport,
   createSalesOpsAdapter,
@@ -20,6 +20,8 @@ export interface ReadOnlyRuntimeEnv {
   AG002_GATEWAY?: ServiceFetcher;
   HERREB_RUNTIME_TOKEN?: string;
   AG002_TENANT_ID?: string;
+  // Legacy calendar binding retained in the env contract for deployment compatibility.
+  // EMP-002 no longer uses it: agenda reads come exclusively from HerreB CRM.
   CALENDAR_READ?: ServiceFetcher;
   CALENDAR_READ_TOKEN?: string;
   CALENDAR_TENANT_ID?: string;
@@ -84,19 +86,20 @@ export function buildReadOnlyRuntime(
   const salesToken = nonBlank(env.SALES_OPS_TOKEN);
   const runtimeToken = nonBlank(env.HERREB_RUNTIME_TOKEN);
   const ag002TenantId = nonBlank(env.AG002_TENANT_ID);
-  const calendarToken = nonBlank(env.CALENDAR_READ_TOKEN);
-  const calendarTenantId = nonBlank(env.CALENDAR_TENANT_ID);
   const emailToken = nonBlank(env.EMAIL_READ_TOKEN);
   const emailTenantId = nonBlank(env.EMAIL_TENANT_ID);
 
+  const crmState = scopedConnectionState(
+    env.AG002_GATEWAY,
+    runtimeToken,
+    ag002TenantId
+  );
+
   const diagnostics: ReadOnlyRuntimeBootstrap["diagnostics"] = {
     salesOps: connectionState(env.SALES_OPS, salesToken),
-    crm: scopedConnectionState(env.AG002_GATEWAY, runtimeToken, ag002TenantId),
-    calendar: scopedConnectionState(
-      env.CALENDAR_READ,
-      calendarToken,
-      calendarTenantId
-    ),
+    crm: crmState,
+    // Calendar is a CRM-backed facade. Google connectivity is owned by CRM.
+    calendar: crmState,
     email: scopedConnectionState(env.EMAIL_READ, emailToken, emailTenantId)
   };
 
@@ -121,19 +124,14 @@ export function buildReadOnlyRuntime(
       runtimeToken,
       tenantId: ag002TenantId
     });
+
     adapters.push(
       projectReadOnlyAdapter(createCrmAdapter(crmTransport), ["crm.read"])
     );
-  }
 
-  if (env.CALENDAR_READ && calendarToken && calendarTenantId) {
     adapters.push(
       projectReadOnlyAdapter(
-        createCalendarAdapter(
-          createCalendarReadOnlyTransport(
-            readOnlyService(env.CALENDAR_READ, calendarToken, calendarTenantId)
-          )
-        ),
+        createCalendarAdapter(createCrmCalendarReadTransport(crmTransport)),
         ["calendar.read"]
       )
     );
