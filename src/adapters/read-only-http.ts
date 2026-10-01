@@ -10,6 +10,20 @@ export interface ReadOnlyServiceOptions {
   baseUrl?: string;
 }
 
+function safeUpstreamError(body: unknown): { upstreamErrorCode?: string; upstreamErrorMessage?: string } {
+  if (!body || typeof body !== "object") return {};
+  const record = body as Record<string, unknown>;
+  const nested = record.error && typeof record.error === "object"
+    ? record.error as Record<string, unknown>
+    : undefined;
+  const code = nested?.code ?? record.code;
+  const message = nested?.message ?? record.message;
+  return {
+    upstreamErrorCode: typeof code === "string" ? code.slice(0, 120) : undefined,
+    upstreamErrorMessage: typeof message === "string" ? message.slice(0, 500) : undefined
+  };
+}
+
 async function callReadOnlyService(
   options: ReadOnlyServiceOptions,
   path: string,
@@ -71,17 +85,24 @@ async function callReadOnlyService(
     }
 
     if (!response.ok) {
+      const safeError = safeUpstreamError(body);
+      console.error("READ_ONLY_SERVICE_UPSTREAM_ERROR", {
+        ...baseEvidence,
+        upstreamStatus: response.status,
+        ...safeError
+      });
       return {
         ok: false,
         error: {
-          code: "READ_ONLY_SERVICE_UPSTREAM_ERROR",
-          message: `Read-only service returned HTTP ${response.status}`,
+          code: safeError.upstreamErrorCode || "READ_ONLY_SERVICE_UPSTREAM_ERROR",
+          message: safeError.upstreamErrorMessage || `Read-only service returned HTTP ${response.status}`,
           retryable: response.status >= 500
         },
         evidence: {
           ...baseEvidence,
           executed: true,
-          upstreamStatus: response.status
+          upstreamStatus: response.status,
+          ...safeError
         }
       };
     }
@@ -96,11 +117,16 @@ async function callReadOnlyService(
       }
     };
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Read-only service failed";
+    console.error("READ_ONLY_SERVICE_TRANSPORT_ERROR", {
+      ...baseEvidence,
+      message
+    });
     return {
       ok: false,
       error: {
         code: "READ_ONLY_SERVICE_TRANSPORT_ERROR",
-        message: error instanceof Error ? error.message : "Read-only service failed",
+        message,
         retryable: true
       },
       evidence: { ...baseEvidence, executed: false }
