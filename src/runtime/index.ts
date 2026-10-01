@@ -20,3 +20,5 @@ export * from "./emp002-confirmation-finalizer";
 export * from "./emp002-scheduling-orchestrator";
 export * from "./emp002-whatsapp-webhook";
 export * from "./emp002-whatsapp-endpoint";
+export * from "./emp002-whatsapp-dispatch-store";
+export * from "./emp002-whatsapp-dispatcher";
