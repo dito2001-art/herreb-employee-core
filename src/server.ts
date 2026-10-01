@@ -56,6 +56,8 @@ type RuntimeEnv = Env & {
   ACCESS_IDENTITY_MAP_JSON?: string;
 };
 
+type AgentProps = VerifiedAccessIdentity & Record<string, unknown>;
+
 function readStateString(state: unknown, key: string): string | undefined {
   if (!state || typeof state !== "object") return undefined;
   const value = (state as Record<string, unknown>)[key];
@@ -85,13 +87,13 @@ function tenantCapabilityBindings(env: RuntimeEnv): TenantCapabilityBinding[] {
   });
 }
 
-export class ChatAgent extends AIChatAgent<Env, Record<string, unknown>, VerifiedAccessIdentity> {
+export class ChatAgent extends AIChatAgent<Env, Record<string, unknown>, AgentProps> {
   maxPersistedMessages = 100;
   chatRecovery = true;
   waitForMcpConnections = true;
   private verifiedIdentity?: VerifiedAccessIdentity;
 
-  async onStart(props?: VerifiedAccessIdentity) {
+  async onStart(props?: AgentProps) {
     this.verifiedIdentity = props;
   }
 
@@ -184,7 +186,7 @@ async function authenticatedAgentRequest(request: Request, env: RuntimeEnv, ctx:
   }
 
   const routedRequest = new Request(url.toString(), request);
-  return routeAgentRequest(routedRequest, env, { props: identity });
+  return (await routeAgentRequest(routedRequest, env, { props: identity as AgentProps })) ?? undefined;
 }
 
 export default {
