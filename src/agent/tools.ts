@@ -3,15 +3,28 @@ import { z } from "zod";
 import { getCapability, type EmployeeManifest } from "../core";
 import type { EmployeeRuntimeSession } from "../runtime";
 
-const genericInputSchema = z.object({
-  input: z.record(z.string(), z.unknown()).default({}),
-  idempotencyKey: z.string().min(1).optional()
-});
+// Workers AI models may emit capability arguments either inside the historical
+// { input: {...} } envelope or directly at the top level. Accept both forms so
+// validation cannot fail before our execute handler and diagnostics run.
+const genericInputSchema = z
+  .object({
+    input: z.record(z.string(), z.unknown()).optional(),
+    idempotencyKey: z.string().min(1).optional()
+  })
+  .catchall(z.unknown());
 
 const TOOL_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/;
 
 function logCapability(event: string, data: Record<string, unknown>) {
   console.log(JSON.stringify({ event, ...data }));
+}
+
+function normalizeCapabilityInput(args: Record<string, unknown>) {
+  const { input, idempotencyKey: _idempotencyKey, ...directInput } = args;
+  if (input && typeof input === "object" && !Array.isArray(input)) {
+    return input as Record<string, unknown>;
+  }
+  return directInput;
 }
 
 export function capabilityIdToToolName(capabilityId: string): string {
@@ -51,16 +64,23 @@ export function buildEmployeeTools(
     names.add(toolName);
 
     tools[toolName] = tool({
-      description: `${definition.description}. Capability: ${capabilityId}. Risk: ${definition.risk}. IMPORTANT: if this tool returns ok=false, do not retry it in the same turn. Explain the failure to the user instead.`,
+      description: `${definition.description}. Capability: ${capabilityId}. Risk: ${definition.risk}. Pass capability fields directly (for example operation, timeMin and timeMax); the legacy {input:{...}} envelope is also accepted. IMPORTANT: if this tool returns ok=false, do not retry it in the same turn. Explain the failure to the user instead.`,
       inputSchema: genericInputSchema,
-      execute: async ({ input, idempotencyKey }) => {
+      execute: async (args) => {
         const startedAt = Date.now();
+        const rawArgs = args as Record<string, unknown>;
+        const input = normalizeCapabilityInput(rawArgs);
+        const idempotencyKey =
+          typeof rawArgs.idempotencyKey === "string"
+            ? rawArgs.idempotencyKey
+            : undefined;
         const baseDiagnostic = {
           tenantId: session.context.tenantId,
           employeeId: session.manifest.id,
           capabilityId,
           toolName,
-          correlationId: session.context.correlationId
+          correlationId: session.context.correlationId,
+          inputKeys: Object.keys(input)
         };
 
         logCapability("CAPABILITY_START", baseDiagnostic);
@@ -81,7 +101,10 @@ export function buildEmployeeTools(
               durationMs: Date.now() - startedAt
             }
           };
-          logCapability("CAPABILITY_ERROR", { ...response.evidence, error: response.error });
+          logCapability("CAPABILITY_ERROR", {
+            ...response.evidence,
+            error: response.error
+          });
           return response;
         }
 
@@ -126,7 +149,10 @@ export function buildEmployeeTools(
         } catch (error) {
           const normalized = {
             code: "CAPABILITY_EXECUTION_FAILED",
-            message: error instanceof Error ? error.message : "Capability execution failed"
+            message:
+              error instanceof Error
+                ? error.message
+                : "Capability execution failed"
           };
           failedCapabilities.set(capabilityId, normalized);
           const evidence = {
