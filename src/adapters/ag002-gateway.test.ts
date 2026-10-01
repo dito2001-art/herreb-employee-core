@@ -14,16 +14,12 @@ test("AG-002 transport sends GET read with tenant and runtime auth", async () =>
       });
     }
   };
-  const transport = createAg002GatewayReadOnlyTransport({
-    service,
-    runtimeToken: "secret",
-    tenantId: "herreb"
-  });
+  const transport = createAg002GatewayReadOnlyTransport({ service, runtimeToken: "secret", tenantId: "herreb" });
   const result = await transport.execute({
     tenantId: "herreb",
     operation: "read",
     entity: "tasks",
-    payload: { completed: false, limit: 1, offset: 0 },
+    payload: { completed: true, limit: 1, offset: 0 },
     correlationId: "corr-1"
   });
 
@@ -32,7 +28,7 @@ test("AG-002 transport sends GET read with tenant and runtime auth", async () =>
   const url = new URL(captured!.url);
   assert.equal(url.pathname, "/api/agent");
   assert.equal(url.searchParams.get("entity"), "tasks");
-  assert.equal(url.searchParams.get("completed"), "false");
+  assert.equal(url.searchParams.get("completed"), "true");
   assert.equal(url.searchParams.get("limit"), "1");
   assert.equal(captured!.init?.method, "GET");
   const headers = new Headers(captured!.init?.headers);
@@ -43,29 +39,64 @@ test("AG-002 transport sends GET read with tenant and runtime auth", async () =>
   assert.equal(result.evidence?.correlationId, "corr-1");
   assert.equal(result.evidence?.operation, "read");
   assert.equal(result.evidence?.upstreamStatus, 200);
+  assert.equal(result.evidence?.autoPaginated, false);
   assert.equal(JSON.stringify(result.evidence).includes("secret"), false);
+});
+
+test("AG-002 pending task reads automatically consume all CRM pages", async () => {
+  const urls: URL[] = [];
+  const service: ServiceFetcher = {
+    async fetch(input) {
+      const url = new URL(String(input));
+      urls.push(url);
+      const offset = Number(url.searchParams.get("offset"));
+      if (offset === 0) {
+        return Response.json({
+          entity: "tasks",
+          data: Array.from({ length: 100 }, (_, index) => ({ id: index + 1, completed: false })),
+          pagination: { limit: 100, offset: 0, returned: 100, total: 103, hasMore: true, nextOffset: 100 }
+        });
+      }
+      return Response.json({
+        entity: "tasks",
+        data: [{ id: 101, completed: false }, { id: 102, completed: false }, { id: 103, completed: false }],
+        pagination: { limit: 100, offset: 100, returned: 3, total: 103, hasMore: false, nextOffset: null }
+      });
+    }
+  };
+  const transport = createAg002GatewayReadOnlyTransport({ service, runtimeToken: "secret", tenantId: "herreb-client-0" });
+  const result = await transport.execute({
+    tenantId: "herreb-client-0",
+    operation: "read",
+    entity: "tasks",
+    payload: { completed: false, limit: 50, offset: 0 },
+    correlationId: "corr-pages"
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(urls.length, 2);
+  assert.equal(urls[0].searchParams.get("completed"), "false");
+  assert.equal(urls[0].searchParams.get("limit"), "100");
+  assert.equal(urls[0].searchParams.get("offset"), "0");
+  assert.equal(urls[1].searchParams.get("completed"), "false");
+  assert.equal(urls[1].searchParams.get("limit"), "100");
+  assert.equal(urls[1].searchParams.get("offset"), "100");
+  const output = result.output as { data: unknown[]; pagination: Record<string, unknown>; aggregation: Record<string, unknown> };
+  assert.equal(output.data.length, 103);
+  assert.equal(output.pagination.returned, 103);
+  assert.equal(output.pagination.total, 103);
+  assert.equal(output.pagination.hasMore, false);
+  assert.equal(output.aggregation.autoPaginated, true);
+  assert.equal(output.aggregation.pageCount, 2);
+  assert.equal(result.evidence?.pageCount, 2);
+  assert.equal(result.evidence?.recordsRead, 103);
 });
 
 test("AG-002 transport refuses cross-tenant reads before calling service", async () => {
   let calls = 0;
-  const service: ServiceFetcher = {
-    async fetch() {
-      calls += 1;
-      return new Response("{}", { status: 200 });
-    }
-  };
-  const transport = createAg002GatewayReadOnlyTransport({
-    service,
-    runtimeToken: "secret",
-    tenantId: "herreb"
-  });
-  const result = await transport.execute({
-    tenantId: "another-tenant",
-    operation: "read",
-    entity: "tasks",
-    payload: { limit: 1 },
-    correlationId: "corr-tenant"
-  });
+  const service: ServiceFetcher = { async fetch() { calls += 1; return new Response("{}", { status: 200 }); } };
+  const transport = createAg002GatewayReadOnlyTransport({ service, runtimeToken: "secret", tenantId: "herreb" });
+  const result = await transport.execute({ tenantId: "another-tenant", operation: "read", entity: "tasks", payload: { limit: 1 }, correlationId: "corr-tenant" });
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "AG002_TENANT_SCOPE_MISMATCH");
   assert.equal(result.evidence?.executed, false);
@@ -75,24 +106,9 @@ test("AG-002 transport refuses cross-tenant reads before calling service", async
 
 test("AG-002 transport refuses writes before calling service", async () => {
   let calls = 0;
-  const service: ServiceFetcher = {
-    async fetch() {
-      calls += 1;
-      return new Response("{}", { status: 200 });
-    }
-  };
-  const transport = createAg002GatewayReadOnlyTransport({
-    service,
-    runtimeToken: "secret",
-    tenantId: "herreb"
-  });
-  const result = await transport.execute({
-    tenantId: "herreb",
-    operation: "update",
-    entity: "tasks",
-    payload: { id: 140 },
-    correlationId: "corr-2"
-  });
+  const service: ServiceFetcher = { async fetch() { calls += 1; return new Response("{}", { status: 200 }); } };
+  const transport = createAg002GatewayReadOnlyTransport({ service, runtimeToken: "secret", tenantId: "herreb" });
+  const result = await transport.execute({ tenantId: "herreb", operation: "update", entity: "tasks", payload: { id: 140 }, correlationId: "corr-2" });
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "AG002_READ_ONLY");
   assert.equal(result.evidence?.operation, "update");
@@ -102,27 +118,11 @@ test("AG-002 transport refuses writes before calling service", async () => {
 test("AG-002 upstream failures never copy response payload or runtime token into audit evidence", async () => {
   const service: ServiceFetcher = {
     async fetch() {
-      return Response.json(
-        {
-          access_token: "upstream-access-token",
-          refresh_token: "upstream-refresh-token",
-          privateData: "must-not-enter-audit"
-        },
-        { status: 502 }
-      );
+      return Response.json({ access_token: "upstream-access-token", refresh_token: "upstream-refresh-token", privateData: "must-not-enter-audit" }, { status: 502 });
     }
   };
-  const transport = createAg002GatewayReadOnlyTransport({
-    service,
-    runtimeToken: "runtime-secret",
-    tenantId: "herreb-client-0"
-  });
-  const result = await transport.execute({
-    tenantId: "herreb-client-0",
-    operation: "read",
-    entity: "companies",
-    correlationId: "corr-redaction"
-  });
+  const transport = createAg002GatewayReadOnlyTransport({ service, runtimeToken: "runtime-secret", tenantId: "herreb-client-0" });
+  const result = await transport.execute({ tenantId: "herreb-client-0", operation: "read", entity: "companies", correlationId: "corr-redaction" });
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "AG002_UPSTREAM_ERROR");
