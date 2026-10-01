@@ -1,8 +1,13 @@
-import type { SchedulingSqlStorage } from './emp002-scheduling-store';
-import type { WhatsAppSchedulingDispatchRecord, WhatsAppSchedulingDispatchStore } from './emp002-whatsapp-dispatch-store';
-import { normalizeDispatchWhatsapp } from './emp002-whatsapp-dispatch-store';
+import type { SchedulingSqlStorage } from "./emp002-scheduling-store";
+import type {
+  WhatsAppSchedulingDispatchRecord,
+  WhatsAppSchedulingDispatchStore
+} from "./emp002-whatsapp-dispatch-store";
+import { normalizeDispatchWhatsapp } from "./emp002-whatsapp-dispatch-store";
 
-interface DispatchRow { payload: string }
+interface DispatchRow extends Record<string, unknown> {
+  payload: string;
+}
 
 export class SqliteWhatsAppSchedulingDispatchStore implements WhatsAppSchedulingDispatchStore {
   constructor(private readonly sql: SchedulingSqlStorage) {
@@ -15,15 +20,23 @@ export class SqliteWhatsAppSchedulingDispatchStore implements WhatsAppScheduling
     )`);
   }
 
-  async findActiveByWhatsapp(tenantId: string, whatsapp: string): Promise<WhatsAppSchedulingDispatchRecord | undefined> {
+  async findActiveByWhatsapp(
+    tenantId: string,
+    whatsapp: string
+  ): Promise<WhatsAppSchedulingDispatchRecord | undefined> {
     const normalized = normalizeDispatchWhatsapp(whatsapp);
-    const rows = Array.from(this.sql.exec<DispatchRow>(
-      `SELECT payload FROM emp002_whatsapp_dispatch WHERE tenant_id = ? AND whatsapp = ?`, tenantId, normalized,
-    ));
+    const rows = Array.from(
+      this.sql.exec<DispatchRow>(
+        `SELECT payload FROM emp002_whatsapp_dispatch WHERE tenant_id = ? AND whatsapp = ?`,
+        tenantId,
+        normalized
+      )
+    );
     if (!rows.length) return undefined;
     const record = JSON.parse(rows[0].payload) as WhatsAppSchedulingDispatchRecord;
-    if (record.tenantId !== tenantId || normalizeDispatchWhatsapp(record.whatsapp) !== normalized) throw new Error('EMP002_WHATSAPP_DISPATCH_TENANT_MISMATCH');
-    return record.state.recovery?.status === 'OFFER_PENDING' ? record : undefined;
+    if (record.tenantId !== tenantId || normalizeDispatchWhatsapp(record.whatsapp) !== normalized)
+      throw new Error("EMP002_WHATSAPP_DISPATCH_TENANT_MISMATCH");
+    return record.state.recovery?.status === "OFFER_PENDING" ? record : undefined;
   }
 
   async save(record: WhatsAppSchedulingDispatchRecord): Promise<void> {
@@ -32,7 +45,10 @@ export class SqliteWhatsAppSchedulingDispatchStore implements WhatsAppScheduling
     this.sql.exec(
       `INSERT INTO emp002_whatsapp_dispatch (tenant_id, whatsapp, updated_at, payload) VALUES (?, ?, ?, ?)
        ON CONFLICT(tenant_id, whatsapp) DO UPDATE SET updated_at = excluded.updated_at, payload = excluded.payload`,
-      record.tenantId, normalized, updatedAt, JSON.stringify({ ...record, whatsapp: normalized }),
+      record.tenantId,
+      normalized,
+      updatedAt,
+      JSON.stringify({ ...record, whatsapp: normalized })
     );
   }
 }
