@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { WhatsAppTransport, WhatsAppSendTextInput } from "../adapters/whatsapp";
+import type { WhatsAppTransport, WhatsAppMessage } from "../adapters/whatsapp";
 import type { AutonomousSchedulingState } from "./emp002-autonomous-scheduling";
 import { finalizeSlotConfirmation } from "./emp002-confirmation-finalizer";
 
-const sent: WhatsAppSendTextInput[] = [];
+const sent: WhatsAppMessage[] = [];
 const whatsapp: WhatsAppTransport = {
   async sendText(message) {
     sent.push(message);
