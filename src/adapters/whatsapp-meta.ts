@@ -12,6 +12,21 @@ export interface MetaWhatsAppEnv {
   META_API_VERSION?: string;
 }
 
+interface MetaWhatsAppResponse {
+  messages?: Array<{ id?: string }>;
+  [key: string]: unknown;
+}
+
+function parseMetaResponse(raw: string): MetaWhatsAppResponse | null {
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as MetaWhatsAppResponse) : null;
+  } catch {
+    return { raw };
+  }
+}
+
 export class MetaWhatsAppTransport implements WhatsAppTransport {
   constructor(private readonly env: MetaWhatsAppEnv) {}
 
@@ -45,8 +60,7 @@ export class MetaWhatsAppTransport implements WhatsAppTransport {
     );
 
     const raw = await response.text();
-    let data: any = null;
-    try { data = raw ? JSON.parse(raw) : null; } catch { data = { raw }; }
+    const data = parseMetaResponse(raw);
 
     if (!response.ok) {
       throw new Error(`Meta ${response.status}: ${JSON.stringify(data)}`);
