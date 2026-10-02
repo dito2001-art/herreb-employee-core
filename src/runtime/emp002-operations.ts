@@ -1,13 +1,13 @@
 import { SqliteWhatsAppSchedulingDispatchStore } from './emp002-whatsapp-sqlite-dispatch-store';
 import type { WhatsAppSchedulingDispatchRecord } from './emp002-whatsapp-dispatch-store';
 import type { RoutedWhatsAppInbound } from './emp002-whatsapp-endpoint';
-
-interface OperationsEnv {}
+import { dispatchSchedulingWhatsAppInbound } from './emp002-whatsapp-dispatcher';
+import { buildEMP002OperationsTransports, type EMP002OperationsTransportEnv } from './emp002-operations-transports';
 
 export class EMP002Operations implements DurableObject {
   private readonly dispatchStore: SqliteWhatsAppSchedulingDispatchStore;
 
-  constructor(private readonly state: DurableObjectState, private readonly env: OperationsEnv) {
+  constructor(private readonly state: DurableObjectState, private readonly env: EMP002OperationsTransportEnv) {
     this.dispatchStore = new SqliteWhatsAppSchedulingDispatchStore(this.state.storage.sql);
   }
 
@@ -36,21 +36,24 @@ export class EMP002Operations implements DurableObject {
       if (!message?.tenantId || !message?.from || !message?.messageId || typeof message.body !== 'string') {
         return Response.json({ ok: false, error: 'INVALID_WHATSAPP_INBOUND' }, { status: 400 });
       }
+
       const record = await this.dispatchStore.findActiveByWhatsapp(message.tenantId, message.from);
-      if (!record) {
-        return Response.json({ ok: true, handled: false, reason: 'NO_ACTIVE_SCHEDULING_CONVERSATION' });
+      if (!record) return Response.json({ ok: true, handled: false, reason: 'NO_ACTIVE_SCHEDULING_CONVERSATION' });
+
+      try {
+        const transports = buildEMP002OperationsTransports(this.env, message.tenantId);
+        const result = await dispatchSchedulingWhatsAppInbound({
+          message,
+          store: this.dispatchStore,
+          calendar: transports.calendar,
+          whatsapp: transports.whatsapp,
+        });
+        return Response.json({ ok: true, ...result });
+      } catch (error) {
+        const code = error instanceof Error ? error.message : 'EMP002_OPERATIONS_EXECUTION_FAILED';
+        const status = code === 'EMP002_OPERATIONS_TENANT_SCOPE_MISMATCH' ? 403 : 503;
+        return Response.json({ ok: false, error: code }, { status });
       }
-      // The durable boundary has now resolved the tenant-scoped active state.
-      // Execution adapters are injected in the next layer; never borrow an
-      // owner ChatAgent identity or session for an external contact.
-      return Response.json({
-        ok: true,
-        handled: true,
-        stage: 'ACTIVE_SCHEDULING_RESOLVED',
-        contactId: record.contactId,
-        goalId: record.state.goal.id,
-        correlationId: record.state.correlationId,
-      });
     }
 
     return new Response('Not found', { status: 404 });
