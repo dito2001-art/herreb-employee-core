@@ -59,6 +59,7 @@ export class EMP002Operations implements DurableObject {
             tenantId: message.tenantId,
             to: message.from,
             body: reply,
+            audience: 'EXTERNAL_CONTACT',
             correlationId,
             idempotencyKey: `emp002-general:${message.messageId}`,
           });
