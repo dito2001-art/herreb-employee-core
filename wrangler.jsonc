@@ -9,6 +9,9 @@
     "EMP002_TEST_CONSOLE": "client0",
     "AG002_TENANT_ID": "herreb-client-0",
     "CALENDAR_TENANT_ID": "herreb-client-0",
+    "META_API_VERSION": "v26.0",
+    "META_GRAPH_VERSION": "v26.0",
+    "META_PHONE_NUMBER_ID": "1292296713970881",
     "ACCESS_IDENTITY_MAP_JSON": "[{\"email\":\"dito2001@gmail.com\",\"tenantId\":\"herreb-client-0\",\"actorId\":\"fernando\",\"role\":\"owner\"}]",
     "TENANT_MANIFESTS_JSON": "[{\"tenantId\":\"herreb-client-0\",\"name\":\"HerreB Client 0\",\"enabledEmployees\":[\"EMP-002\"],\"knowledgeNamespace\":\"herreb-client-0:knowledge\",\"offeringNamespace\":\"herreb-client-0:offerings\"}]",
     "WHATSAPP_TENANT_ROUTES_JSON": "[{\"phoneNumberId\":\"1292296713970881\",\"tenantId\":\"herreb-client-0\"}]"
