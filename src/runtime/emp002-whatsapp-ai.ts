@@ -28,12 +28,12 @@ function responseText(value: unknown): string {
     if (Array.isArray(content)) {
       const parts = content
         .map((part) => {
-          if (typeof part === 'string') return part;
+          if (typeof part === 'string') return part.trim();
           if (!part || typeof part !== 'object') return '';
           return nonEmptyText((part as Record<string, unknown>).text) ?? '';
         })
         .filter(Boolean);
-      if (parts.length) return parts.join('').trim();
+      if (parts.length) return parts.join(' ').trim();
     }
   }
 
