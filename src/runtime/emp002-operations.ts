@@ -2,13 +2,16 @@ import { SqliteWhatsAppSchedulingDispatchStore } from './emp002-whatsapp-sqlite-
 import type { WhatsAppSchedulingDispatchRecord } from './emp002-whatsapp-dispatch-store';
 import type { RoutedWhatsAppInbound } from './emp002-whatsapp-endpoint';
 import { dispatchSchedulingWhatsAppInbound } from './emp002-whatsapp-dispatcher';
+import { SqliteEMP002WhatsAppConversationStore } from './emp002-whatsapp-conversation-store';
 import { buildEMP002OperationsTransports, type EMP002OperationsTransportEnv } from './emp002-operations-transports';
 
 export class EMP002Operations implements DurableObject {
   private readonly dispatchStore: SqliteWhatsAppSchedulingDispatchStore;
+  private readonly conversationStore: SqliteEMP002WhatsAppConversationStore;
 
   constructor(private readonly state: DurableObjectState, private readonly env: EMP002OperationsTransportEnv) {
     this.dispatchStore = new SqliteWhatsAppSchedulingDispatchStore(this.state.storage.sql);
+    this.conversationStore = new SqliteEMP002WhatsAppConversationStore(this.state.storage.sql);
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -38,7 +41,23 @@ export class EMP002Operations implements DurableObject {
       }
 
       const record = await this.dispatchStore.findActiveByWhatsapp(message.tenantId, message.from);
-      if (!record) return Response.json({ ok: true, handled: false, reason: 'NO_ACTIVE_SCHEDULING_CONVERSATION' });
+      if (!record) {
+        const isNew = await this.conversationStore.markInboundOnce(message.tenantId, message.messageId, message.receivedAt);
+        if (!isNew) return Response.json({ ok: true, handled: true, duplicate: true, mode: 'general-conversation' });
+        const conversation = await this.conversationStore.append(message.tenantId, message.from, {
+          role: 'user',
+          content: message.body,
+          at: message.receivedAt,
+          messageId: message.messageId,
+        });
+        return Response.json({
+          ok: true,
+          handled: false,
+          reason: 'GENERAL_CONVERSATION_INFERENCE_PENDING',
+          mode: 'general-conversation',
+          historyLength: conversation.messages.length,
+        });
+      }
 
       try {
         const transports = buildEMP002OperationsTransports(this.env, message.tenantId);
