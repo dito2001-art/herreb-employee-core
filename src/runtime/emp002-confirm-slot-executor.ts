@@ -26,6 +26,12 @@ export interface ConfirmSlotExecution {
   error?: string;
 }
 
+interface CalendarConfirmationOutput {
+  eventId?: string;
+  id?: string;
+  calendarEventId?: string;
+}
+
 export async function executeConfirmSlotCommands(
   input: ConfirmSlotExecutionInput,
 ): Promise<ConfirmSlotExecution[]> {
@@ -35,7 +41,12 @@ export async function executeConfirmSlotCommands(
     if (command.type !== 'CONFIRM_SLOT') continue;
     const contact = input.contacts[command.contactId];
     if (!contact) {
-      executions.push({ commandType: 'CONFIRM_SLOT', idempotencyKey: command.idempotencyKey, ok: false, error: 'CONTACT_NOT_FOUND' });
+      executions.push({
+        commandType: 'CONFIRM_SLOT',
+        idempotencyKey: command.idempotencyKey,
+        ok: false,
+        error: 'CONTACT_NOT_FOUND',
+      });
       continue;
     }
 
@@ -56,16 +67,20 @@ export async function executeConfirmSlotCommands(
 
     if (!response.ok) {
       executions.push({
-        commandType: 'CONFIRM_SLOT', idempotencyKey: command.idempotencyKey, ok: false,
+        commandType: 'CONFIRM_SLOT',
+        idempotencyKey: command.idempotencyKey,
+        ok: false,
         upstreamStatus: Number(response.evidence?.upstreamStatus ?? 0) || undefined,
         error: response.error?.code ?? 'CALENDAR_CONFIRMATION_FAILED',
       });
       continue;
     }
 
-    const output = response.output as any;
+    const output = response.output as CalendarConfirmationOutput | undefined;
     executions.push({
-      commandType: 'CONFIRM_SLOT', idempotencyKey: command.idempotencyKey, ok: true,
+      commandType: 'CONFIRM_SLOT',
+      idempotencyKey: command.idempotencyKey,
+      ok: true,
       eventId: output?.eventId ?? output?.id ?? output?.calendarEventId,
       upstreamStatus: Number(response.evidence?.upstreamStatus ?? 0) || undefined,
     });
