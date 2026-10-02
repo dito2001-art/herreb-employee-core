@@ -54,3 +54,22 @@ export async function generateEMP002WhatsAppReply(
   ];
   return responseText(await ai.run(MODEL, { messages }));
 }
+
+export async function generateEMP002CalendarReply(
+  ai: EMP002WorkersAI | undefined,
+  question: string,
+  calendarOutput: unknown,
+): Promise<string> {
+  if (!ai) throw new Error('EMP002_WORKERS_AI_MISSING');
+  const messages = [
+    {
+      role: 'system',
+      content: 'You are EMP-002 AI Assistant answering the verified tenant owner about their calendar. Use ONLY the calendar tool result supplied below. Never invent events, systems, access limitations, or facts. If the result contains no events, say clearly that there are no events in the requested period. Keep the WhatsApp answer concise and in the same language as the user.',
+    },
+    {
+      role: 'user',
+      content: `Question: ${question}\nCalendar tool result: ${JSON.stringify(calendarOutput)}`,
+    },
+  ];
+  return responseText(await ai.run(MODEL, { messages }));
+}
