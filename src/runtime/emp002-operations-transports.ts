@@ -2,7 +2,12 @@ import { createCalendarControlledWriteTransport } from '../adapters/controlled-w
 import type { ServiceFetcher } from '../adapters/sales-ops';
 import { MetaWhatsAppTransport } from '../adapters/whatsapp-meta';
 
+export interface EMP002WorkersAI {
+  run(model: string, input: unknown): Promise<unknown>;
+}
+
 export interface EMP002OperationsTransportEnv {
+  AI?: EMP002WorkersAI;
   AG002_GATEWAY?: ServiceFetcher;
   RUNTIME_GATEWAY_TOKEN?: string;
   AG002_TENANT_ID?: string;
