@@ -1,4 +1,5 @@
 import { createCalendarControlledWriteTransport } from '../adapters/controlled-write-http';
+import { createCalendarReadOnlyTransport } from '../adapters/read-only-http';
 import type { ServiceFetcher } from '../adapters/sales-ops';
 import { MetaWhatsAppTransport } from '../adapters/whatsapp-meta';
 
@@ -9,8 +10,11 @@ export interface EMP002WorkersAI {
 export interface EMP002OperationsTransportEnv {
   AI?: EMP002WorkersAI;
   AG002_GATEWAY?: ServiceFetcher;
+  CALENDAR_READ?: ServiceFetcher;
   RUNTIME_GATEWAY_TOKEN?: string;
+  CALENDAR_READ_TOKEN?: string;
   AG002_TENANT_ID?: string;
+  CALENDAR_TENANT_ID?: string;
   META_ACCESS_TOKEN?: string;
   META_PHONE_NUMBER_ID?: string;
   META_GRAPH_VERSION?: string;
@@ -30,6 +34,22 @@ export function buildEMP002WhatsAppTransport(env: EMP002OperationsTransportEnv, 
     throw new Error('EMP002_WHATSAPP_TRANSPORT_MISSING');
   }
   return new MetaWhatsAppTransport(env);
+}
+
+/** Calendar READ_ONLY transport used by conversational agenda queries. */
+export function buildEMP002CalendarReadTransport(env: EMP002OperationsTransportEnv, tenantId: string) {
+  assertTenantScope(env, tenantId);
+  const calendarTenant = env.CALENDAR_TENANT_ID?.trim() || env.AG002_TENANT_ID?.trim();
+  if (!calendarTenant || calendarTenant !== tenantId) throw new Error('EMP002_CALENDAR_READ_TENANT_SCOPE_MISMATCH');
+  if (!env.CALENDAR_READ || !env.CALENDAR_READ_TOKEN?.trim()) {
+    throw new Error('EMP002_CALENDAR_READ_TRANSPORT_MISSING');
+  }
+  return createCalendarReadOnlyTransport({
+    service: env.CALENDAR_READ,
+    token: env.CALENDAR_READ_TOKEN,
+    tenantId: calendarTenant,
+    baseUrl: 'https://internal',
+  });
 }
 
 /** Calendar controlled-write transport used only by scheduling flows. */
