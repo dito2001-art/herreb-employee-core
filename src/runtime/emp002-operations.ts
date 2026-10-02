@@ -3,7 +3,8 @@ import type { WhatsAppSchedulingDispatchRecord } from './emp002-whatsapp-dispatc
 import type { RoutedWhatsAppInbound } from './emp002-whatsapp-endpoint';
 import { dispatchSchedulingWhatsAppInbound } from './emp002-whatsapp-dispatcher';
 import { SqliteEMP002WhatsAppConversationStore } from './emp002-whatsapp-conversation-store';
-import { buildEMP002OperationsTransports, type EMP002OperationsTransportEnv } from './emp002-operations-transports';
+import { generateEMP002WhatsAppReply } from './emp002-whatsapp-ai';
+import { buildEMP002OperationsTransports, buildEMP002WhatsAppTransport, type EMP002OperationsTransportEnv } from './emp002-operations-transports';
 
 export class EMP002Operations implements DurableObject {
   private readonly dispatchStore: SqliteWhatsAppSchedulingDispatchStore;
@@ -42,21 +43,45 @@ export class EMP002Operations implements DurableObject {
 
       const record = await this.dispatchStore.findActiveByWhatsapp(message.tenantId, message.from);
       if (!record) {
-        const isNew = await this.conversationStore.markInboundOnce(message.tenantId, message.messageId, message.receivedAt);
-        if (!isNew) return Response.json({ ok: true, handled: true, duplicate: true, mode: 'general-conversation' });
-        const conversation = await this.conversationStore.append(message.tenantId, message.from, {
-          role: 'user',
-          content: message.body,
-          at: message.receivedAt,
-          messageId: message.messageId,
-        });
-        return Response.json({
-          ok: true,
-          handled: false,
-          reason: 'GENERAL_CONVERSATION_INFERENCE_PENDING',
-          mode: 'general-conversation',
-          historyLength: conversation.messages.length,
-        });
+        try {
+          const isNew = await this.conversationStore.markInboundOnce(message.tenantId, message.messageId, message.receivedAt);
+          if (!isNew) return Response.json({ ok: true, handled: true, duplicate: true, mode: 'general-conversation' });
+          const conversation = await this.conversationStore.append(message.tenantId, message.from, {
+            role: 'user',
+            content: message.body,
+            at: message.receivedAt,
+            messageId: message.messageId,
+          });
+          const reply = await generateEMP002WhatsAppReply(this.env.AI, conversation);
+          const correlationId = `wa:${message.messageId}`;
+          const whatsapp = buildEMP002WhatsAppTransport(this.env, message.tenantId);
+          const outbound = await whatsapp.sendText({
+            tenantId: message.tenantId,
+            to: message.from,
+            body: reply,
+            correlationId,
+            idempotencyKey: `emp002-general:${message.messageId}`,
+          });
+          const saved = await this.conversationStore.append(message.tenantId, message.from, {
+            role: 'assistant',
+            content: reply,
+            at: new Date().toISOString(),
+            messageId: outbound.messageId ?? undefined,
+          });
+          return Response.json({
+            ok: true,
+            handled: true,
+            mode: 'general-conversation',
+            provider: outbound.provider,
+            outboundMessageId: outbound.messageId,
+            correlationId,
+            historyLength: saved.messages.length,
+          });
+        } catch (error) {
+          const code = error instanceof Error ? error.message : 'EMP002_GENERAL_CONVERSATION_FAILED';
+          const status = code === 'EMP002_OPERATIONS_TENANT_SCOPE_MISMATCH' ? 403 : 503;
+          return Response.json({ ok: false, handled: false, mode: 'general-conversation', error: code }, { status });
+        }
       }
 
       try {
