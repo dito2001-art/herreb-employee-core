@@ -21,11 +21,7 @@ function goal() {
   });
 }
 
-function request(
-  id: string,
-  contactId: string,
-  priority: number
-): WaitlistRequest {
+function request(id: string, contactId: string, priority: number): WaitlistRequest {
   return {
     id,
     tenantId: "herreb-client-0",
@@ -87,9 +83,7 @@ test("EMP-002 continues autonomously with the next candidate after decline", () 
   });
   assert.equal(declined.commands[0]?.type, "SEND_SLOT_OFFER");
   assert.equal(
-    declined.commands[0]?.type === "SEND_SLOT_OFFER"
-      ? declined.commands[0].contactId
-      : undefined,
+    declined.commands[0]?.type === "SEND_SLOT_OFFER" ? declined.commands[0].contactId : undefined,
     "patient-2"
   );
   assert.equal(declined.state.goal.status, "WAITING_FOR_TRIGGER");
@@ -115,6 +109,7 @@ test("EMP-002 produces confirmation after acceptance and completes the goal", ()
     type: "CONFIRM_SLOT",
     idempotencyKey:
       "herreb-client-0:doctor-1:2026-09-22T17:00:00-03:00:2026-09-22T18:00:00-03:00:confirm:winner",
+    contactId: "patient-1",
     requestId: "winner",
     slot
   });
@@ -130,12 +125,7 @@ test("EMP-002 fails closed on tenant mismatch", () => {
     () =>
       reduceAutonomousScheduling(
         { tenantId: "other-tenant", correlationId: "corr-1", goal: goal() },
-        {
-          type: "SLOT_RELEASED",
-          slot,
-          requests: [],
-          now: "2026-09-20T12:00:00-03:00"
-        }
+        { type: "SLOT_RELEASED", slot, requests: [], now: "2026-09-20T12:00:00-03:00" }
       ),
     /EMP002_SCHEDULING_TENANT_MISMATCH/
   );

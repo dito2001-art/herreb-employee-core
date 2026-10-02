@@ -1,14 +1,10 @@
 import type { AutonomousSchedulingState } from "./emp002-autonomous-scheduling";
 
 export interface SchedulingSqlStorage {
-  exec<T = Record<string, unknown>>(
+  exec(
     query: string,
     ...bindings: unknown[]
-  ): Iterable<T>;
-}
-
-interface StateRow {
-  payload: string;
+  ): Iterable<Record<string, unknown>>;
 }
 
 export class SqliteSchedulingStateStore {
@@ -25,13 +21,10 @@ export class SqliteSchedulingStateStore {
     `);
   }
 
-  load(
-    tenantId: string,
-    goalId: string
-  ): AutonomousSchedulingState | undefined {
+  load(tenantId: string, goalId: string): AutonomousSchedulingState | undefined {
     if (!tenantId.trim() || !goalId.trim()) return undefined;
     const rows = Array.from(
-      this.sql.exec<StateRow>(
+      this.sql.exec(
         `SELECT payload FROM emp002_scheduling_state
          WHERE tenant_id = ? AND goal_id = ?`,
         tenantId,
@@ -39,16 +32,16 @@ export class SqliteSchedulingStateStore {
       )
     );
     if (!rows.length) return undefined;
-    const state = JSON.parse(rows[0].payload) as AutonomousSchedulingState;
+    const payload = rows[0].payload;
+    if (typeof payload !== "string")
+      throw new Error("EMP002_SCHEDULING_INVALID_PERSISTED_STATE");
+    const state = JSON.parse(payload) as AutonomousSchedulingState;
     if (state.tenantId !== tenantId || state.goal.id !== goalId)
       throw new Error("EMP002_SCHEDULING_PERSISTENCE_TENANT_MISMATCH");
     return state;
   }
 
-  save(
-    state: AutonomousSchedulingState,
-    expectedVersion?: number
-  ): AutonomousSchedulingState {
+  save(state: AutonomousSchedulingState, expectedVersion?: number): AutonomousSchedulingState {
     if (state.goal.tenantId !== state.tenantId)
       throw new Error("EMP002_SCHEDULING_PERSISTENCE_TENANT_MISMATCH");
     const current = this.load(state.tenantId, state.goal.id);

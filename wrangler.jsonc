@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "herreb-employee-core",
-  "main": "src/server.ts",
+  "main": "src/worker.ts",
   "compatibility_date": "2026-06-11",
   "compatibility_flags": ["nodejs_compat"],
   "ai": { "binding": "AI", "remote": true },
@@ -10,47 +10,30 @@
     "AG002_TENANT_ID": "herreb-client-0",
     "CALENDAR_TENANT_ID": "herreb-client-0",
     "ACCESS_IDENTITY_MAP_JSON": "[{\"email\":\"dito2001@gmail.com\",\"tenantId\":\"herreb-client-0\",\"actorId\":\"fernando\",\"role\":\"owner\"}]",
-    "TENANT_MANIFESTS_JSON": "[{\"tenantId\":\"herreb-client-0\",\"name\":\"HerreB Client 0\",\"enabledEmployees\":[\"EMP-002\"],\"knowledgeNamespace\":\"herreb-client-0:knowledge\",\"offeringNamespace\":\"herreb-client-0:offerings\"}]"
+    "TENANT_MANIFESTS_JSON": "[{\"tenantId\":\"herreb-client-0\",\"name\":\"HerreB Client 0\",\"enabledEmployees\":[\"EMP-002\"],\"knowledgeNamespace\":\"herreb-client-0:knowledge\",\"offeringNamespace\":\"herreb-client-0:offerings\"}]",
+    "WHATSAPP_TENANT_ROUTES_JSON": "[{\"phoneNumberId\":\"1292296713970881\",\"tenantId\":\"herreb-client-0\"}]"
   },
   "services": [
-    {
-      "binding": "SALES_OPS",
-      "service": "herreb-emp001-sales-ops-sandbox"
-    },
-    {
-      "binding": "AG002_GATEWAY",
-      "service": "herreb-agent-gateway-v3"
-    },
-    {
-      "binding": "CALENDAR_READ",
-      "service": "herreb-calendar-read"
-    }
+    { "binding": "SALES_OPS", "service": "herreb-emp001-sales-ops-sandbox" },
+    { "binding": "AG002_GATEWAY", "service": "herreb-agent-gateway-v3" },
+    { "binding": "CALENDAR_READ", "service": "herreb-calendar-read" }
   ],
   "assets": {
     "directory": "./dist/client",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/agents/*", "/oauth/*"]
+    "run_worker_first": ["/agents/*", "/oauth/*", "/webhooks/*"]
   },
-  "build": {
-    "command": "npm run build:console"
-  },
+  "build": { "command": "npm run build:console" },
   "durable_objects": {
     "bindings": [
-      {
-        "class_name": "ChatAgent",
-        "name": "ChatAgent"
-      }
+      { "class_name": "ChatAgent", "name": "ChatAgent" },
+      { "class_name": "EMP002Operations", "name": "EMP002_OPERATIONS" }
     ]
   },
   "migrations": [
-    {
-      "new_sqlite_classes": ["ChatAgent"],
-      "tag": "v1"
-    }
+    { "new_sqlite_classes": ["ChatAgent"], "tag": "v1" },
+    { "new_sqlite_classes": ["EMP002Operations"], "tag": "v2" }
   ],
-  "observability": {
-    "enabled": true,
-    "logs": { "enabled": true, "invocation_logs": true }
-  }
+  "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": true } }
 }

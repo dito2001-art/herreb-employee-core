@@ -44,6 +44,7 @@ export interface AutonomousSchedulingResult {
     | {
         type: "CONFIRM_SLOT";
         idempotencyKey: string;
+        contactId: string;
         requestId: string;
         slot: AvailableSlot;
       }
@@ -132,6 +133,10 @@ export function reduceAutonomousScheduling(
     resolved.recovery.status === "FILLED" &&
     resolved.recovery.filledByRequestId
   ) {
+    const acceptedRequest = action.requests.find(
+      (request) => request.id === resolved.recovery.filledByRequestId
+    );
+    if (!acceptedRequest) throw new Error("EMP002_ACCEPTED_REQUEST_NOT_FOUND");
     return {
       state: {
         ...state,
@@ -142,6 +147,7 @@ export function reduceAutonomousScheduling(
         {
           type: "CONFIRM_SLOT",
           idempotencyKey: `${resolved.recovery.id}:confirm:${resolved.recovery.filledByRequestId}`,
+          contactId: acceptedRequest.contactId,
           requestId: resolved.recovery.filledByRequestId,
           slot: resolved.recovery.slot
         }
