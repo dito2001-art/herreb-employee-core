@@ -48,17 +48,10 @@ function normalizeCapabilityInput(capabilityId: string, args: Record<string, unk
     delete normalized.startsBefore;
   }
 
-  if (capabilityId === "crm.read" || capabilityId === "crm.write") {
-    normalizeCrmEntity(normalized);
-  }
+  if (capabilityId === "crm.read" || capabilityId === "crm.write") normalizeCrmEntity(normalized);
 
   if (capabilityId === "crm.read") {
-    // crm.read has exactly one legal adapter operation. Do not let model wording
-    // (search/list/filter/get/etc.) leak into the stable CRM adapter contract.
     normalized.operation = "read";
-
-    // The CRM adapter expects filters/query controls in payload. Models may emit
-    // them beside operation/entity, so canonicalize them here before execution.
     const reserved = new Set(["operation", "entity", "payload"]);
     const payload = normalized.payload && typeof normalized.payload === "object" && !Array.isArray(normalized.payload)
       ? { ...(normalized.payload as Record<string, unknown>) }
@@ -73,8 +66,6 @@ function normalizeCapabilityInput(capabilityId: string, args: Record<string, unk
   }
 
   if (capabilityId === "crm.write") {
-    // Models sometimes put business fields beside operation/entity. Move those
-    // fields into payload, which is the stable CrmCapabilityInput contract.
     const reserved = new Set(["operation", "entity", "payload"]);
     const payload = normalized.payload && typeof normalized.payload === "object" && !Array.isArray(normalized.payload)
       ? { ...(normalized.payload as Record<string, unknown>) }
@@ -106,6 +97,24 @@ export function capabilityIdToToolName(capabilityId: string): string {
 
 export function toolNameToCapabilityId(manifest: EmployeeManifest, toolName: string): string | undefined {
   return manifest.capabilities.find((capabilityId) => capabilityIdToToolName(capabilityId) === toolName);
+}
+
+/**
+ * Returns the capabilities that may be exposed as model tools for a channel.
+ * External WhatsApp contacts are deliberately read-only. Runtime provenance
+ * remains the second authorization boundary for controlled writes.
+ */
+export function channelSafeCapabilities(
+  channel: string,
+  connectedCapabilities: ReadonlySet<string>,
+  options: { trustedOwner?: boolean } = {}
+): ReadonlySet<string> {
+  if (channel !== "whatsapp" || options.trustedOwner) return connectedCapabilities;
+  const safe = new Set<string>();
+  for (const capabilityId of connectedCapabilities) {
+    if (capabilityId.endsWith(".read")) safe.add(capabilityId);
+  }
+  return safe;
 }
 
 export function buildEmployeeTools(session: EmployeeRuntimeSession, executableCapabilities: ReadonlySet<string> = new Set()): ToolSet {
