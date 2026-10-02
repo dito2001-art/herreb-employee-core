@@ -3,12 +3,41 @@ import type { EMP002WhatsAppConversation } from './emp002-whatsapp-conversation-
 
 const MODEL = '@cf/zai-org/glm-4.7-flash';
 
+function nonEmptyText(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
 function responseText(value: unknown): string {
   if (!value || typeof value !== 'object') throw new Error('EMP002_AI_EMPTY_RESPONSE');
   const result = value as Record<string, unknown>;
-  const text = result.response ?? result.text;
-  if (typeof text !== 'string' || !text.trim()) throw new Error('EMP002_AI_TEXT_MISSING');
-  return text.trim();
+
+  const legacy = nonEmptyText(result.response) ?? nonEmptyText(result.text);
+  if (legacy) return legacy;
+
+  const choices = Array.isArray(result.choices) ? result.choices : [];
+  for (const choice of choices) {
+    if (!choice || typeof choice !== 'object') continue;
+    const item = choice as Record<string, unknown>;
+    const direct = nonEmptyText(item.text);
+    if (direct) return direct;
+    const message = item.message;
+    if (!message || typeof message !== 'object') continue;
+    const content = (message as Record<string, unknown>).content;
+    const messageText = nonEmptyText(content);
+    if (messageText) return messageText;
+    if (Array.isArray(content)) {
+      const parts = content
+        .map((part) => {
+          if (typeof part === 'string') return part;
+          if (!part || typeof part !== 'object') return '';
+          return nonEmptyText((part as Record<string, unknown>).text) ?? '';
+        })
+        .filter(Boolean);
+      if (parts.length) return parts.join('').trim();
+    }
+  }
+
+  throw new Error('EMP002_AI_TEXT_MISSING');
 }
 
 export async function generateEMP002WhatsAppReply(
