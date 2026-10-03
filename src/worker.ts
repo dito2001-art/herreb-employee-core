@@ -1,5 +1,6 @@
 import employeeServer from './server';
 import { extractMetaTextMessages, handleMetaWhatsAppWebhook } from './runtime';
+import { handleWorkforceAdminApi } from './runtime/workforce-admin-api';
 
 interface OperationsNamespace {
   idFromName(name: string): DurableObjectId;
@@ -16,6 +17,8 @@ type WorkerEnv = Env & {
   EMP002_OWNER_WHATSAPP?: string;
   EMP002_OPERATIONS?: OperationsNamespace;
   EMP001_WHATSAPP?: ServiceFetcher;
+  TENANT_MANIFESTS_JSON?: string;
+  ACCESS_IDENTITY_MAP?: string;
 };
 
 function normalizeWhatsAppNumber(value?: string): string {
@@ -28,9 +31,12 @@ export { EMP002Operations } from './runtime/emp002-operations';
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname === '/webhooks/meta/whatsapp') {
-      const runtimeEnv = env as WorkerEnv;
+    const runtimeEnv = env as WorkerEnv;
 
+    const adminResponse = handleWorkforceAdminApi(request, runtimeEnv);
+    if (adminResponse) return adminResponse;
+
+    if (url.pathname === '/webhooks/meta/whatsapp') {
       // Meta verification remains owned by Employee Core.
       if (request.method === 'GET') {
         return handleMetaWhatsAppWebhook(request, runtimeEnv, async () => undefined);
