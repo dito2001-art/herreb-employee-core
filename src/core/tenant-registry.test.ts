@@ -1,25 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { TenantRegistry } from "./tenant-registry";
+import { TenantRegistry, type TenantManifest } from "./tenant-registry";
 
-const tenantA = {
+const tenantA: TenantManifest = {
   tenantId: "herreb-client-0",
   name: "HerreB Client 0",
-  enabledEmployees: ["EMP-001", "EMP-002"] as const,
+  enabledEmployees: ["EMP-001", "EMP-002"],
   knowledgeNamespace: "herreb-client-0:knowledge",
   offeringNamespace: "herreb-client-0:offerings",
 };
-const tenantB = {
+const tenantB: TenantManifest = {
   tenantId: "tenant-b-test",
   name: "Tenant B Synthetic",
-  enabledEmployees: ["EMP-002"] as const,
+  enabledEmployees: ["EMP-002"],
   knowledgeNamespace: "tenant-b-test:knowledge",
   offeringNamespace: "tenant-b-test:offerings",
 };
 
 function registry() {
   const r = new TenantRegistry();
-  r.registerTenant({ ...tenantA, enabledEmployees: [...tenantA.enabledEmployees] });
-  r.registerTenant({ ...tenantB, enabledEmployees: [...tenantB.enabledEmployees] });
+  r.registerTenant(tenantA);
+  r.registerTenant(tenantB);
   return r;
 }
 
