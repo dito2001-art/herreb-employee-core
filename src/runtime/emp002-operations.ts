@@ -3,8 +3,9 @@ import type { WhatsAppSchedulingDispatchRecord } from './emp002-whatsapp-dispatc
 import type { RoutedWhatsAppInbound } from './emp002-whatsapp-endpoint';
 import { dispatchSchedulingWhatsAppInbound } from './emp002-whatsapp-dispatcher';
 import { SqliteEMP002WhatsAppConversationStore } from './emp002-whatsapp-conversation-store';
-import { generateEMP002WhatsAppReply } from './emp002-whatsapp-ai';
-import { buildEMP002OperationsTransports, buildEMP002WhatsAppTransport, type EMP002OperationsTransportEnv } from './emp002-operations-transports';
+import { generateEMP002CalendarReply, generateEMP002WhatsAppReply } from './emp002-whatsapp-ai';
+import { buildEMP002CalendarReadTransport, buildEMP002OperationsTransports, buildEMP002WhatsAppTransport, type EMP002OperationsTransportEnv } from './emp002-operations-transports';
+import { isEMP002CalendarReadIntent, isVerifiedEMP002Owner, resolveEMP002CalendarQueryWindow } from './emp002-calendar-query';
 
 export class EMP002Operations implements DurableObject {
   private readonly dispatchStore: SqliteWhatsAppSchedulingDispatchStore;
@@ -52,16 +53,36 @@ export class EMP002Operations implements DurableObject {
             at: message.receivedAt,
             messageId: message.messageId,
           });
-          const reply = await generateEMP002WhatsAppReply(this.env.AI, conversation);
           const correlationId = `wa:${message.messageId}`;
           const whatsapp = buildEMP002WhatsAppTransport(this.env, message.tenantId);
+
+          let reply: string;
+          let mode = 'general-conversation';
+          if (isEMP002CalendarReadIntent(message.body) && isVerifiedEMP002Owner(message.from, this.env.EMP002_OWNER_WHATSAPP)) {
+            const calendar = buildEMP002CalendarReadTransport(this.env, message.tenantId);
+            const window = resolveEMP002CalendarQueryWindow(message.body, new Date(message.receivedAt));
+            const calendarResult = await calendar.execute({
+              tenantId: message.tenantId,
+              request: { operation: 'search', timeMin: window.timeMin, timeMax: window.timeMax },
+              correlationId,
+            });
+            if (!calendarResult.ok) {
+              const errorCode = calendarResult.error?.code ?? 'EMP002_CALENDAR_READ_FAILED';
+              throw new Error(`EMP002_CALENDAR_READ_FAILED:${errorCode}`);
+            }
+            reply = await generateEMP002CalendarReply(this.env.AI, message.body, calendarResult.output);
+            mode = 'calendar-read';
+          } else {
+            reply = await generateEMP002WhatsAppReply(this.env.AI, conversation);
+          }
+
           const outbound = await whatsapp.sendText({
             tenantId: message.tenantId,
             to: message.from,
             body: reply,
             audience: 'EXTERNAL_CONTACT',
             correlationId,
-            idempotencyKey: `emp002-general:${message.messageId}`,
+            idempotencyKey: `emp002-${mode}:${message.messageId}`,
           });
           const saved = await this.conversationStore.append(message.tenantId, message.from, {
             role: 'assistant',
@@ -72,7 +93,7 @@ export class EMP002Operations implements DurableObject {
           return Response.json({
             ok: true,
             handled: true,
-            mode: 'general-conversation',
+            mode,
             provider: outbound.provider,
             outboundMessageId: outbound.messageId,
             correlationId,
