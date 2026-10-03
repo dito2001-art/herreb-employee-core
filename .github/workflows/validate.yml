@@ -10,6 +10,7 @@ on:
     branches:
       - main
       - feature/employee-core-v0.1
+      - feat/workforce-admin-foundation
 
 permissions:
   contents: read
@@ -40,7 +41,10 @@ jobs:
       - name: Formatting
         id: formatting
         continue-on-error: true
-        run: npx oxfmt --write src/adapters/controlled-write-http.ts src/adapters/controlled-write-http.test.ts\n          git diff -- src/adapters/controlled-write-http.ts src/adapters/controlled-write-http.test.ts\n          git diff --quiet -- src/adapters/controlled-write-http.ts src/adapters/controlled-write-http.test.ts
+        run: |
+          npx oxfmt --write src/adapters/controlled-write-http.ts src/adapters/controlled-write-http.test.ts
+          git diff -- src/adapters/controlled-write-http.ts src/adapters/controlled-write-http.test.ts
+          git diff --quiet -- src/adapters/controlled-write-http.ts src/adapters/controlled-write-http.test.ts
 
       - name: Lint
         id: lint
