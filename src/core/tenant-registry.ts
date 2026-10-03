@@ -1,6 +1,6 @@
 import type { EmployeeId } from "./contracts";
 
-export interface TenantManifest {
+export interface TenantRegistryManifest {
   tenantId: string;
   name: string;
   enabledEmployees: EmployeeId[];
@@ -23,30 +23,31 @@ function assertTenantId(value: string): string {
 }
 
 export class TenantRegistry {
-  private readonly tenants = new Map<string, TenantManifest>();
+  private readonly tenants = new Map<string, TenantRegistryManifest>();
   private readonly identities = new Map<string, TenantIdentity>();
 
-  registerTenant(manifest: TenantManifest): TenantManifest {
+  registerTenant(manifest: TenantRegistryManifest): TenantRegistryManifest {
     const tenantId = assertTenantId(manifest.tenantId);
-    const normalized: TenantManifest = {
+    const normalized: TenantRegistryManifest = {
       ...manifest,
       tenantId,
-      enabledEmployees: [...new Set(manifest.enabledEmployees)],
+      enabledEmployees: [...new Set(manifest.enabledEmployees)]
     };
     this.tenants.set(tenantId, normalized);
     return normalized;
   }
 
-  getTenant(tenantId: string): TenantManifest {
+  getTenant(tenantId: string): TenantRegistryManifest {
     const id = assertTenantId(tenantId);
     const tenant = this.tenants.get(id);
     if (!tenant) throw new Error("TENANT_NOT_FOUND");
     return tenant;
   }
 
-  requireEmployee(tenantId: string, employeeId: EmployeeId): TenantManifest {
+  requireEmployee(tenantId: string, employeeId: EmployeeId): TenantRegistryManifest {
     const tenant = this.getTenant(tenantId);
-    if (!tenant.enabledEmployees.includes(employeeId)) throw new Error("EMPLOYEE_NOT_ENABLED_FOR_TENANT");
+    if (!tenant.enabledEmployees.includes(employeeId))
+      throw new Error("EMPLOYEE_NOT_ENABLED_FOR_TENANT");
     return tenant;
   }
 
@@ -56,7 +57,8 @@ export class TenantRegistry {
     const normalized = { ...identity, tenantId };
     for (const key of this.identityKeys(normalized)) {
       const existing = this.identities.get(key);
-      if (existing && existing.tenantId !== tenantId) throw new Error("IDENTITY_TENANT_CONFLICT");
+      if (existing && existing.tenantId !== tenantId)
+        throw new Error("IDENTITY_TENANT_CONFLICT");
       this.identities.set(key, normalized);
     }
     return normalized;
@@ -73,7 +75,8 @@ export class TenantRegistry {
   }
 
   assertTenantAccess(identity: TenantIdentity, requestedTenantId: string): void {
-    if (identity.tenantId !== assertTenantId(requestedTenantId)) throw new Error("CROSS_TENANT_ACCESS_DENIED");
+    if (identity.tenantId !== assertTenantId(requestedTenantId))
+      throw new Error("CROSS_TENANT_ACCESS_DENIED");
   }
 
   private identityKeys(identity: TenantIdentity): string[] {
