@@ -29,6 +29,12 @@ function assertTenantScope(env: EMP002OperationsTransportEnv, tenantId: string):
   return scopedTenant;
 }
 
+function crmDate(value: string): string {
+  const match = value.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (!match) throw new Error('EMP002_INVALID_CALENDAR_DATE');
+  return match[1];
+}
+
 /** WhatsApp-only transport for general EMP-002 conversations. */
 export function buildEMP002WhatsAppTransport(env: EMP002OperationsTransportEnv, tenantId: string) {
   assertTenantScope(env, tenantId);
@@ -67,13 +73,22 @@ export function buildEMP002CalendarReadTransport(env: EMP002OperationsTransportE
         };
       }
 
+      // /api/agent tasks uses the CRM date contract (YYYY-MM-DD), not RFC3339
+      // calendar timestamps. `timeMax` is exclusive in the calendar capability,
+      // so convert it to the last included CRM date.
+      const from = crmDate(request.timeMin);
+      const exclusiveTo = new Date(request.timeMax);
+      if (Number.isNaN(exclusiveTo.getTime())) throw new Error('EMP002_INVALID_CALENDAR_DATE');
+      exclusiveTo.setUTCDate(exclusiveTo.getUTCDate() - 1);
+      const to = exclusiveTo.toISOString().slice(0, 10);
+
       const result = await crm.execute({
         tenantId: input.tenantId,
         operation: 'read',
         entity: 'tasks',
         payload: {
-          from: request.timeMin,
-          to: request.timeMax,
+          from,
+          to,
           limit: 100,
           offset: 0,
         },
@@ -86,6 +101,8 @@ export function buildEMP002CalendarReadTransport(env: EMP002OperationsTransportE
           ...(result.evidence ?? {}),
           calendarSource: 'HERREB_CRM',
           calendarOperation: request.operation,
+          crmDateFrom: from,
+          crmDateTo: to,
         },
       };
     },
