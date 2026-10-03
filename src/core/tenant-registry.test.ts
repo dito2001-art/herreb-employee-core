@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { TenantRegistry, type TenantManifest } from "./tenant-registry";
+import { TenantRegistry, type TenantRegistryManifest } from "./tenant-registry";
 
-const tenantA: TenantManifest = {
+const tenantA: TenantRegistryManifest = {
   tenantId: "herreb-client-0",
   name: "HerreB Client 0",
   enabledEmployees: ["EMP-001", "EMP-002"],
   knowledgeNamespace: "herreb-client-0:knowledge",
   offeringNamespace: "herreb-client-0:offerings"
 };
-const tenantB: TenantManifest = {
+const tenantB: TenantRegistryManifest = {
   tenantId: "tenant-b-test",
   name: "Tenant B Synthetic",
   enabledEmployees: ["EMP-002"],
