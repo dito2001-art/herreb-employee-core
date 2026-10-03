@@ -64,11 +64,20 @@ export async function generateEMP002CalendarReply(
   const messages = [
     {
       role: 'system',
-      content: 'You are EMP-002 AI Assistant answering the verified tenant owner about their calendar. Use ONLY the calendar tool result supplied below. Never invent events, systems, access limitations, or facts. If the result contains no events, say clearly that there are no events in the requested period. Keep the WhatsApp answer concise and in the same language as the user.',
+      content: [
+        'You are EMP-002 AI Assistant answering the verified tenant owner about the HerreB CRM agenda.',
+        'Use ONLY the CRM tool result supplied below. Never invent records, systems, access limitations, dates, times, statuses, or facts.',
+        'The CRM tasks collection can contain different activity types. Preserve each record activityType exactly for classification: Reunión is a meeting; Tarea is a task. Do not call meetings pendientes or tasks reuniones.',
+        'For a general agenda question, include all returned relevant records and group them under Reuniones and Tareas when both types exist. If only one type exists, use that type as the label.',
+        'If the user explicitly asks only for reuniones/citas/eventos, answer only with meeting-like records. If the user explicitly asks for tareas/pendientes, answer only with task-like records.',
+        'Preserve titles and times from the CRM. Order timed records chronologically. Do not infer a time when none is supplied.',
+        'If the tool result contains no matching records, say clearly that there are none in the requested period.',
+        'Keep the WhatsApp answer concise, natural, and in the same language as the user.',
+      ].join(' '),
     },
     {
       role: 'user',
-      content: `Question: ${question}\nCalendar tool result: ${JSON.stringify(calendarOutput)}`,
+      content: `Question: ${question}\nCRM agenda result: ${JSON.stringify(calendarOutput)}`,
     },
   ];
   return responseText(await ai.run(MODEL, { messages }));
