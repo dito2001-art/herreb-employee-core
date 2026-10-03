@@ -1,5 +1,6 @@
+import { createAg002GatewayReadOnlyTransport } from '../adapters/ag002-gateway';
 import { createCalendarControlledWriteTransport } from '../adapters/controlled-write-http';
-import { createCalendarReadOnlyTransport } from '../adapters/read-only-http';
+import type { CalendarTransport } from '../adapters/calendar';
 import type { ServiceFetcher } from '../adapters/sales-ops';
 import { MetaWhatsAppTransport } from '../adapters/whatsapp-meta';
 
@@ -37,20 +38,58 @@ export function buildEMP002WhatsAppTransport(env: EMP002OperationsTransportEnv, 
   return new MetaWhatsAppTransport(env);
 }
 
-/** Calendar READ_ONLY transport used by conversational agenda queries. */
-export function buildEMP002CalendarReadTransport(env: EMP002OperationsTransportEnv, tenantId: string) {
-  assertTenantScope(env, tenantId);
-  const calendarTenant = env.CALENDAR_TENANT_ID?.trim() || env.AG002_TENANT_ID?.trim();
-  if (!calendarTenant || calendarTenant !== tenantId) throw new Error('EMP002_CALENDAR_READ_TENANT_SCOPE_MISMATCH');
-  if (!env.CALENDAR_READ || !env.CALENDAR_READ_TOKEN?.trim()) {
-    throw new Error('EMP002_CALENDAR_READ_TRANSPORT_MISSING');
+/**
+ * Calendar READ_ONLY capability backed by the HerreB CRM.
+ * EMP-002 deliberately does not read Google Calendar directly: the CRM is the
+ * operational system of record and owns any downstream calendar sync.
+ */
+export function buildEMP002CalendarReadTransport(env: EMP002OperationsTransportEnv, tenantId: string): CalendarTransport {
+  const scopedTenant = assertTenantScope(env, tenantId);
+  if (!env.AG002_GATEWAY || !env.RUNTIME_GATEWAY_TOKEN?.trim()) {
+    throw new Error('EMP002_CRM_CALENDAR_READ_TRANSPORT_MISSING');
   }
-  return createCalendarReadOnlyTransport({
-    service: env.CALENDAR_READ,
-    token: env.CALENDAR_READ_TOKEN,
-    tenantId: calendarTenant,
+
+  const crm = createAg002GatewayReadOnlyTransport({
+    service: env.AG002_GATEWAY,
+    runtimeToken: env.RUNTIME_GATEWAY_TOKEN,
+    tenantId: scopedTenant,
     baseUrl: 'https://internal',
   });
+
+  return {
+    async execute(input) {
+      const request = input.request;
+      if (request.operation !== 'search' && request.operation !== 'availability') {
+        return {
+          ok: false,
+          error: { code: 'CALENDAR_READ_ONLY', message: 'CRM-backed calendar read accepts reads only' },
+          evidence: { executed: false, tenantId: input.tenantId, correlationId: input.correlationId, operation: request.operation },
+        };
+      }
+
+      const result = await crm.execute({
+        tenantId: input.tenantId,
+        operation: 'read',
+        entity: 'tasks',
+        payload: {
+          from: request.timeMin,
+          to: request.timeMax,
+          limit: 100,
+          offset: 0,
+        },
+        correlationId: input.correlationId,
+      });
+
+      return {
+        ...result,
+        evidence: {
+          ...(result.evidence ?? {}),
+          calendarSource: 'HERREB_CRM',
+          calendarOperation: request.operation,
+        },
+      };
+    },
+  };
 }
 
 /** Calendar controlled-write transport used only by scheduling flows. */
