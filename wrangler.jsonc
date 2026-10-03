@@ -13,10 +13,11 @@
     "META_GRAPH_VERSION": "v26.0",
     "META_PHONE_NUMBER_ID": "1292296713970881",
     "ACCESS_IDENTITY_MAP_JSON": "[{\"email\":\"dito2001@gmail.com\",\"tenantId\":\"herreb-client-0\",\"actorId\":\"fernando\",\"role\":\"owner\"}]",
-    "TENANT_MANIFESTS_JSON": "[{\"tenantId\":\"herreb-client-0\",\"name\":\"HerreB Client 0\",\"enabledEmployees\":[\"EMP-002\"],\"knowledgeNamespace\":\"herreb-client-0:knowledge\",\"offeringNamespace\":\"herreb-client-0:offerings\"}]",
+    "TENANT_MANIFESTS_JSON": "[{\"tenantId\":\"herreb-client-0\",\"name\":\"HerreB Client 0\",\"enabledEmployees\":[\"EMP-001\",\"EMP-002\"],\"knowledgeNamespace\":\"herreb-client-0:knowledge\",\"offeringNamespace\":\"herreb-client-0:offerings\"}]",
     "WHATSAPP_TENANT_ROUTES_JSON": "[{\"phoneNumberId\":\"1292296713970881\",\"tenantId\":\"herreb-client-0\"}]"
   },
   "services": [
+    { "binding": "EMP001_WHATSAPP", "service": "herreb-emp001-meta-whatsapp-adapter" },
     { "binding": "SALES_OPS", "service": "herreb-emp001-sales-ops-sandbox" },
     { "binding": "AG002_GATEWAY", "service": "herreb-agent-gateway-v3" },
     { "binding": "CALENDAR_READ", "service": "herreb-calendar-read" }
