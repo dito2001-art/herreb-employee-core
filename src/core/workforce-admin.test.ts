@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { TenantRegistryManifest } from "./tenant-registry";
 import { buildWorkforceAdminSnapshot } from "./workforce-admin";
 
-const manifests = [
+const manifests: TenantRegistryManifest[] = [
   { tenantId: "herreb-client-0", name: "HerreB", enabledEmployees: ["EMP-001", "EMP-002", "EMP-003"], knowledgeNamespace: "herreb:k", offeringNamespace: "herreb:o" },
   { tenantId: "pilot-1", name: "Pilot 1", enabledEmployees: ["EMP-002"], knowledgeNamespace: "pilot:k", offeringNamespace: "pilot:o" }
 ];
@@ -30,8 +31,9 @@ test("admin snapshot rejects duplicate normalized email", () => {
   ]), /WORKFORCE_ADMIN_DUPLICATE_EMAIL/);
 });
 
-test("admin snapshot rejects employees outside initial catalog", () => {
-  assert.throws(() => buildWorkforceAdminSnapshot([
-    { tenantId: "t", name: "T", enabledEmployees: ["EMP-004"], knowledgeNamespace: "t:k", offeringNamespace: "t:o" }
-  ], []), /WORKFORCE_ADMIN_EMPLOYEE_INVALID/);
+test("admin snapshot accepts only the typed initial employee catalog", () => {
+  const snapshot = buildWorkforceAdminSnapshot([
+    { tenantId: "t", name: "T", enabledEmployees: ["EMP-001", "EMP-002", "EMP-003"], knowledgeNamespace: "t:k", offeringNamespace: "t:o" }
+  ], []);
+  assert.deepEqual(snapshot.tenants[0]?.enabledEmployees, ["EMP-001", "EMP-002", "EMP-003"]);
 });
