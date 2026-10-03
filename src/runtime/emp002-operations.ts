@@ -56,9 +56,18 @@ export class EMP002Operations implements DurableObject {
           const correlationId = `wa:${message.messageId}`;
           const whatsapp = buildEMP002WhatsAppTransport(this.env, message.tenantId);
 
+          const calendarIntent = isEMP002CalendarReadIntent(message.body);
+          const ownerConfigured = Boolean(this.env.EMP002_OWNER_WHATSAPP?.trim());
+          const ownerVerified = isVerifiedEMP002Owner(message.from, this.env.EMP002_OWNER_WHATSAPP);
+          console.log(JSON.stringify({ event: 'EMP002_ROUTING_DECISION', correlationId, tenantId: message.tenantId, calendarIntent, ownerConfigured, ownerVerified, route: calendarIntent ? (ownerVerified ? 'calendar-read' : 'owner-verification-failed') : 'general-conversation' }));
+
+          if (calendarIntent && !ownerVerified) {
+            return Response.json({ ok: false, handled: false, mode: 'owner-verification-failed', error: 'EMP002_OWNER_VERIFICATION_FAILED', correlationId, routing: { calendarIntent, ownerConfigured, ownerVerified } }, { status: 403 });
+          }
+
           let reply: string;
           let mode = 'general-conversation';
-          if (isEMP002CalendarReadIntent(message.body) && isVerifiedEMP002Owner(message.from, this.env.EMP002_OWNER_WHATSAPP)) {
+          if (calendarIntent && ownerVerified) {
             const calendar = buildEMP002CalendarReadTransport(this.env, message.tenantId);
             const window = resolveEMP002CalendarQueryWindow(message.body, new Date(message.receivedAt));
             const calendarResult = await calendar.execute({
