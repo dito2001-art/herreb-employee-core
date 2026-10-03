@@ -17,7 +17,8 @@ import {
   buildTenantReadOnlyRuntime,
   createTenantManifestResolverFromJson,
   HerreBEmployeeRuntime,
-  resolveAccessIdentity,
+  parseRuntimeTenantRegistryManifests,
+  resolveAccessIdentityWithRegistry,
   type TenantCapabilityBinding,
   type VerifiedAccessIdentity
 } from "./runtime";
@@ -182,7 +183,17 @@ async function authenticatedAgentRequest(request: Request, env: RuntimeEnv, ctx:
   if (!email && url.hostname === EMPLOYEE_HOST) email = request.headers.get("cf-access-authenticated-user-email")?.trim().toLowerCase();
   if (!email) return new Response("Google sign-in required", { status: 401 });
 
-  const identity = resolveAccessIdentity(email, env.ACCESS_IDENTITY_MAP_JSON);
+  let identity: VerifiedAccessIdentity | undefined;
+  try {
+    identity = resolveAccessIdentityWithRegistry(
+      email,
+      env.ACCESS_IDENTITY_MAP_JSON,
+      parseRuntimeTenantRegistryManifests(env.TENANT_MANIFESTS_JSON)
+    );
+  } catch (error) {
+    console.error(JSON.stringify({ event: "ACCESS_TENANT_REGISTRY_REJECTED", email, error: error instanceof Error ? error.message : "UNKNOWN" }));
+    return new Response("Authenticated identity failed tenant validation", { status: 403 });
+  }
   if (!identity) return new Response("Authenticated user is not assigned to a HerreB tenant", { status: 403 });
 
   const parts = url.pathname.split("/");
