@@ -44,7 +44,10 @@ export function buildAccessTenantRegistry(
 ): TenantRegistry {
   const registry = new TenantRegistry();
   for (const manifest of manifests) registry.registerTenant(manifest);
+  const seenEmails = new Set<string>();
   for (const binding of bindings) {
+    if (seenEmails.has(binding.email)) throw new Error("ACCESS_IDENTITY_MAP_DUPLICATE_EMAIL");
+    seenEmails.add(binding.email);
     registry.registerIdentity({
       tenantId: binding.tenantId,
       actorId: binding.actorId,
