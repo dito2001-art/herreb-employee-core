@@ -8,6 +8,7 @@ export * from "./sqlite-audit";
 export * from "./tenant";
 export * from "./tenant-manifest";
 export * from "./tenant-registry";
+export * from "./workforce-admin";
 export * from "./knowledge";
 export * from "./marketing";
 export * from "./marketing-brain";
