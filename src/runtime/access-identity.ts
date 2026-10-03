@@ -1,3 +1,4 @@
+import { TenantRegistry, type TenantRegistryManifest } from "../core/tenant-registry";
 import type { RuntimeProvenance } from "./provenance";
 
 export interface AccessIdentityBinding {
@@ -35,6 +36,40 @@ export function parseAccessIdentityBindings(raw: string | undefined): AccessIden
     if (!email || !tenantId || !actorId || !role) throw new Error(`ACCESS_IDENTITY_MAP_INVALID_ENTRY:${index}`);
     return { email, tenantId, actorId, role };
   });
+}
+
+export function buildAccessTenantRegistry(
+  bindings: AccessIdentityBinding[],
+  manifests: TenantRegistryManifest[]
+): TenantRegistry {
+  const registry = new TenantRegistry();
+  for (const manifest of manifests) registry.registerTenant(manifest);
+  for (const binding of bindings) {
+    registry.registerIdentity({
+      tenantId: binding.tenantId,
+      actorId: binding.actorId,
+      role: binding.role === "owner" ? "owner" : "team",
+      email: binding.email
+    });
+  }
+  return registry;
+}
+
+export function resolveAccessIdentityWithRegistry(
+  email: string,
+  rawBindings: string | undefined,
+  manifests: TenantRegistryManifest[]
+): VerifiedAccessIdentity | undefined {
+  const normalized = normalizeEmail(email);
+  const bindings = parseAccessIdentityBindings(rawBindings);
+  const registry = buildAccessTenantRegistry(bindings, manifests);
+  const identity = registry.resolveIdentity({ email: normalized });
+  if (!identity) return undefined;
+  const binding = bindings.find(
+    (entry) => entry.email === normalized && entry.tenantId === identity.tenantId && entry.actorId === identity.actorId
+  );
+  if (!binding) throw new Error("ACCESS_IDENTITY_REGISTRY_MISMATCH");
+  return { ...binding, email: normalized };
 }
 
 export function resolveAccessIdentity(
