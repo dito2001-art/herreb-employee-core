@@ -4,6 +4,7 @@
   "main": "src/worker.ts",
   "compatibility_date": "2026-06-11",
   "compatibility_flags": ["nodejs_compat"],
+  "keep_vars": true,
   "ai": { "binding": "AI", "remote": true },
   "vars": {
     "EMP002_TEST_CONSOLE": "client0",
