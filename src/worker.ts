@@ -44,9 +44,12 @@ export default {
         return stub.fetch('https://workforce.admin/state', { method: 'GET' });
       }
       if (request.method === 'POST') {
+        const authenticatedEmail = request.headers.get('cf-access-authenticated-user-email');
+        const headers = new Headers({ 'content-type': request.headers.get('content-type') ?? 'application/json' });
+        if (authenticatedEmail) headers.set('cf-access-authenticated-user-email', authenticatedEmail);
         return stub.fetch('https://workforce.admin/mutate', {
           method: 'POST',
-          headers: { 'content-type': request.headers.get('content-type') ?? 'application/json' },
+          headers,
           body: request.body,
         });
       }
