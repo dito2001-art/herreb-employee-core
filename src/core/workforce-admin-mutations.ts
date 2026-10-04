@@ -56,7 +56,7 @@ export function planWorkforceAdminMutation(
   if (mutation.type === "identity.delete") {
     const email = normalizedEmail(mutation.email);
     const index = identities.findIndex((candidate) => candidate.email.trim().toLowerCase() === email);
-    if (index < 0) throw new Error("WORKFORCE_ADMIN_IDENTITY_NOT_FOUND");
+    if (index < 0) throw new Error("WORKFORCE_ADMIN_IDENTITY_RECORD_NOT_FOUND");
     identities.splice(index, 1);
   }
 
