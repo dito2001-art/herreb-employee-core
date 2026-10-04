@@ -11,7 +11,7 @@ interface ServiceFetcher {
 }
 
 type WorkforceAdminResolvedActor = {
-  email: string;
+  email?: string;
   actorId: string;
   tenantId: string;
   role: 'owner' | 'user';
@@ -25,6 +25,8 @@ type WorkerEnv = Env & {
   EMP001_WHATSAPP?: ServiceFetcher;
   WORKFORCE_ADMIN_STATE?: OperationsNamespace;
   WORKFORCE_ADMIN_M2M_TOKEN?: string;
+  WORKFORCE_ADMIN_M2M_ACTOR_ID?: string;
+  WORKFORCE_ADMIN_M2M_TENANT_ID?: string;
   TENANT_MANIFESTS_JSON?: string;
   ACCESS_IDENTITY_MAP_JSON?: string;
 };
@@ -58,7 +60,7 @@ function configuredAdminIdentities(env: WorkerEnv): WorkforceAdminResolvedActor[
       const actorId = identity.actorId?.trim();
       const tenantId = identity.tenantId?.trim();
       const role = identity.role === 'owner' ? 'owner' : identity.role === 'user' ? 'user' : undefined;
-      return email && actorId && tenantId && role ? [{ email, actorId, tenantId, role }] : [];
+      return actorId && tenantId && role ? [{ email, actorId, tenantId, role }] : [];
     });
   } catch {
     return [];
@@ -74,7 +76,25 @@ function resolveWorkforceAdminActor(request: Request, env: WorkerEnv): Workforce
   const suppliedToken = request.headers.get('x-herreb-workforce-admin-token');
   if (!expectedToken || !suppliedToken || !constantTimeEqual(expectedToken, suppliedToken)) return undefined;
 
-  return identities.find((identity) => identity.role === 'owner');
+  const configuredActorId = env.WORKFORCE_ADMIN_M2M_ACTOR_ID?.trim();
+  const configuredTenantId = env.WORKFORCE_ADMIN_M2M_TENANT_ID?.trim();
+  if (configuredActorId && configuredTenantId) {
+    return { actorId: configuredActorId, tenantId: configuredTenantId, role: 'owner' };
+  }
+
+  const owner = identities.find((identity) => identity.role === 'owner');
+  if (owner) return owner;
+
+  const manifests = (() => {
+    try {
+      return JSON.parse(env.TENANT_MANIFESTS_JSON ?? '[]') as Array<{ tenantId?: string }>;
+    } catch {
+      return [];
+    }
+  })();
+  const tenantId = manifests.find((manifest) => manifest.tenantId?.trim())?.tenantId?.trim();
+  if (!tenantId) return undefined;
+  return { actorId: 'workforce-admin-m2m', tenantId, role: 'owner' };
 }
 
 export { ChatAgent } from './server';
@@ -99,7 +119,7 @@ export default {
         const actor = resolveWorkforceAdminActor(request, runtimeEnv);
         const headers = new Headers({ 'content-type': request.headers.get('content-type') ?? 'application/json' });
         if (actor) {
-          headers.set('cf-access-authenticated-user-email', actor.email);
+          if (actor.email) headers.set('cf-access-authenticated-user-email', actor.email);
           headers.set('x-herreb-internal-actor-id', actor.actorId);
           headers.set('x-herreb-internal-tenant-id', actor.tenantId);
           headers.set('x-herreb-internal-role', actor.role);
