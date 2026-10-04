@@ -62,7 +62,8 @@ export class EMP002Operations implements DurableObject {
         const results = [];
         for (const item of prepared) {
           const result = await executePreparedAppointmentAction(item, whatsapp);
-          if (result.status === 'FAILED_RETRYABLE') this.appointmentStore.releaseActionClaim(body.tenantId, item.action.actionKey);
+          if (result.status === 'EXECUTED') this.appointmentStore.completeActionClaim(body.tenantId, item.action.actionKey);
+          else this.appointmentStore.releaseActionClaim(body.tenantId, item.action.actionKey);
           results.push(result);
         }
         const executed = results.filter((result) => result.status === 'EXECUTED').length;
