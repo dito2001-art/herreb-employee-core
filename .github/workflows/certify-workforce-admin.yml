@@ -1,0 +1,26 @@
+name: Certify Workforce Admin
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Certify deployed Workforce Admin
+        run: node scripts/certify-workforce-admin.mjs
+        env:
+          WORKFORCE_ADMIN_BASE_URL: ${{ vars.WORKFORCE_ADMIN_BASE_URL }}
+          WORKFORCE_ADMIN_ACCESS_EMAIL: ${{ secrets.WORKFORCE_ADMIN_ACCESS_EMAIL }}
