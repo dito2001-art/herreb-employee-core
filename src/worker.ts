@@ -10,6 +10,13 @@ interface ServiceFetcher {
   fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>;
 }
 
+type WorkforceAdminResolvedActor = {
+  email: string;
+  actorId: string;
+  tenantId: string;
+  role: 'owner' | 'user';
+};
+
 type WorkerEnv = Env & {
   META_VERIFY_TOKEN?: string;
   WHATSAPP_TENANT_ROUTES_JSON?: string;
@@ -38,20 +45,36 @@ function constantTimeEqual(left: string, right: string): boolean {
   return diff === 0;
 }
 
-function resolveWorkforceAdminEmail(request: Request, env: WorkerEnv): string | undefined {
+function configuredAdminIdentities(env: WorkerEnv): WorkforceAdminResolvedActor[] {
+  try {
+    const identities = JSON.parse(env.ACCESS_IDENTITY_MAP_JSON ?? '[]') as Array<{
+      email?: string;
+      actorId?: string;
+      tenantId?: string;
+      role?: string;
+    }>;
+    return identities.flatMap((identity) => {
+      const email = identity.email?.trim().toLowerCase();
+      const actorId = identity.actorId?.trim();
+      const tenantId = identity.tenantId?.trim();
+      const role = identity.role === 'owner' ? 'owner' : identity.role === 'user' ? 'user' : undefined;
+      return email && actorId && tenantId && role ? [{ email, actorId, tenantId, role }] : [];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function resolveWorkforceAdminActor(request: Request, env: WorkerEnv): WorkforceAdminResolvedActor | undefined {
+  const identities = configuredAdminIdentities(env);
   const accessEmail = request.headers.get('cf-access-authenticated-user-email')?.trim().toLowerCase();
-  if (accessEmail) return accessEmail;
+  if (accessEmail) return identities.find((identity) => identity.email === accessEmail);
 
   const expectedToken = env.WORKFORCE_ADMIN_M2M_TOKEN;
   const suppliedToken = request.headers.get('x-herreb-workforce-admin-token');
   if (!expectedToken || !suppliedToken || !constantTimeEqual(expectedToken, suppliedToken)) return undefined;
 
-  try {
-    const identities = JSON.parse(env.ACCESS_IDENTITY_MAP_JSON ?? '[]') as Array<{ email?: string; role?: string }>;
-    return identities.find((identity) => identity.role === 'owner' && identity.email)?.email?.trim().toLowerCase();
-  } catch {
-    return undefined;
-  }
+  return identities.find((identity) => identity.role === 'owner');
 }
 
 export { ChatAgent } from './server';
@@ -73,9 +96,14 @@ export default {
         return stub.fetch('https://workforce.admin/state', { method: 'GET' });
       }
       if (request.method === 'POST') {
-        const authenticatedEmail = resolveWorkforceAdminEmail(request, runtimeEnv);
+        const actor = resolveWorkforceAdminActor(request, runtimeEnv);
         const headers = new Headers({ 'content-type': request.headers.get('content-type') ?? 'application/json' });
-        if (authenticatedEmail) headers.set('cf-access-authenticated-user-email', authenticatedEmail);
+        if (actor) {
+          headers.set('cf-access-authenticated-user-email', actor.email);
+          headers.set('x-herreb-internal-actor-id', actor.actorId);
+          headers.set('x-herreb-internal-tenant-id', actor.tenantId);
+          headers.set('x-herreb-internal-role', actor.role);
+        }
         return stub.fetch('https://workforce.admin/mutate', {
           method: 'POST',
           headers,
