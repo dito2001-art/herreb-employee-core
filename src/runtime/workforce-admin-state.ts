@@ -14,10 +14,13 @@ interface AdminStateEnv {
 }
 
 function doReceiveProbe(request: Request): Record<string, string> {
+  const role = request.headers.get("x-herreb-internal-role")?.trim();
   return {
     "x-herreb-do-internal-actor-received": String(Boolean(request.headers.get("x-herreb-internal-actor-id")?.trim())),
     "x-herreb-do-internal-tenant-received": String(Boolean(request.headers.get("x-herreb-internal-tenant-id")?.trim())),
-    "x-herreb-do-internal-role-received": String(Boolean(request.headers.get("x-herreb-internal-role")?.trim())),
+    "x-herreb-do-internal-role-received": String(Boolean(role)),
+    "x-herreb-do-internal-role-owner": String(role === "owner"),
+    "x-herreb-do-internal-role-user": String(role === "user"),
   };
 }
 
