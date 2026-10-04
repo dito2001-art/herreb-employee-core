@@ -66,8 +66,9 @@ export function reminderSchedule(
     .map((minutes) => new Date(start - minutes * 60_000).toISOString());
 }
 
-export function nextCancellationEvent(
-  policy: AppointmentLifecyclePolicy,
-): AppointmentLifecycleEvent {
-  return policy.waitlistEnabled ? 'RELEASE_SLOT' : 'RELEASE_SLOT';
+export function cancellationFollowUp(policy: AppointmentLifecyclePolicy): {
+  releaseSlot: true;
+  offerWaitlist: boolean;
+} {
+  return { releaseSlot: true, offerWaitlist: policy.waitlistEnabled };
 }
