@@ -3,6 +3,8 @@ import type { WhatsAppSchedulingDispatchRecord } from './emp002-whatsapp-dispatc
 import type { RoutedWhatsAppInbound } from './emp002-whatsapp-endpoint';
 import { dispatchSchedulingWhatsAppInbound } from './emp002-whatsapp-dispatcher';
 import { SqliteEMP002WhatsAppConversationStore } from './emp002-whatsapp-conversation-store';
+import { SqliteAppointmentLifecycleStore } from './emp002-appointment-lifecycle-store';
+import { transitionAppointment, type AppointmentLifecycleEvent, type AppointmentLifecycleRecord } from './emp002-appointment-lifecycle';
 import { generateEMP002CalendarReply, generateEMP002WhatsAppReply } from './emp002-whatsapp-ai';
 import { buildEMP002CalendarReadTransport, buildEMP002OperationsTransports, buildEMP002WhatsAppTransport, type EMP002OperationsTransportEnv } from './emp002-operations-transports';
 import { isEMP002CalendarReadIntent, isVerifiedEMP002Owner, resolveEMP002CalendarQueryWindow } from './emp002-calendar-query';
@@ -10,16 +12,46 @@ import { isEMP002CalendarReadIntent, isVerifiedEMP002Owner, resolveEMP002Calenda
 export class EMP002Operations implements DurableObject {
   private readonly dispatchStore: SqliteWhatsAppSchedulingDispatchStore;
   private readonly conversationStore: SqliteEMP002WhatsAppConversationStore;
+  private readonly appointmentStore: SqliteAppointmentLifecycleStore;
 
   constructor(private readonly state: DurableObjectState, private readonly env: EMP002OperationsTransportEnv) {
     this.dispatchStore = new SqliteWhatsAppSchedulingDispatchStore(this.state.storage.sql);
     this.conversationStore = new SqliteEMP002WhatsAppConversationStore(this.state.storage.sql);
+    this.appointmentStore = new SqliteAppointmentLifecycleStore(this.state.storage.sql);
   }
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === 'GET' && url.pathname === '/health') {
       return Response.json({ ok: true, service: 'EMP002Operations' });
+    }
+
+    if (request.method === 'POST' && url.pathname === '/appointment/register') {
+      const record = await request.json<AppointmentLifecycleRecord>();
+      if (!record?.tenantId || !record?.appointmentId || !record?.startsAt || !record?.state) return Response.json({ ok: false, error: 'INVALID_APPOINTMENT_RECORD' }, { status: 400 });
+      try {
+        const saved = this.appointmentStore.save(record, 0);
+        return Response.json({ ok: true, record: saved });
+      } catch (error) {
+        const code = error instanceof Error ? error.message : 'EMP002_APPOINTMENT_REGISTER_FAILED';
+        return Response.json({ ok: false, error: code }, { status: code === 'EMP002_APPOINTMENT_CONCURRENT_MODIFICATION' ? 409 : 400 });
+      }
+    }
+
+    if (request.method === 'POST' && url.pathname === '/appointment/transition') {
+      const body = await request.json<{ tenantId?: string; appointmentId?: string; event?: AppointmentLifecycleEvent; expectedVersion?: number; at?: string }>();
+      if (!body?.tenantId || !body?.appointmentId || !body?.event) return Response.json({ ok: false, error: 'INVALID_APPOINTMENT_TRANSITION_REQUEST' }, { status: 400 });
+      try {
+        const current = this.appointmentStore.load(body.tenantId, body.appointmentId);
+        if (!current) return Response.json({ ok: false, error: 'APPOINTMENT_NOT_FOUND' }, { status: 404 });
+        const next = transitionAppointment(current, body.event, body.at);
+        const saved = this.appointmentStore.save(next, body.expectedVersion ?? current.version);
+        return Response.json({ ok: true, record: saved });
+      } catch (error) {
+        const code = error instanceof Error ? error.message : 'EMP002_APPOINTMENT_TRANSITION_FAILED';
+        const status = code === 'EMP002_APPOINTMENT_CONCURRENT_MODIFICATION' ? 409 : 400;
+        return Response.json({ ok: false, error: code }, { status });
+      }
     }
 
     if (request.method === 'POST' && url.pathname === '/dispatch/register') {
