@@ -12,7 +12,9 @@ function runtimeProbe(response) { return {
   internalContextSent: response.headers.get("x-herreb-internal-context-sent"),
   doInternalActorReceived: response.headers.get("x-herreb-do-internal-actor-received"),
   doInternalTenantReceived: response.headers.get("x-herreb-do-internal-tenant-received"),
-  doInternalRoleReceived: response.headers.get("x-herreb-do-internal-role-received")
+  doInternalRoleReceived: response.headers.get("x-herreb-do-internal-role-received"),
+  doInternalRoleOwner: response.headers.get("x-herreb-do-internal-role-owner"),
+  doInternalRoleUser: response.headers.get("x-herreb-do-internal-role-user")
 }; }
 const getResponse = await fetch(endpoint); const initial = await json(getResponse);
 assert(getResponse.ok, `ADMIN_GET_FAILED:${getResponse.status}:${JSON.stringify(initial)}`); assert(initial?.ok === true,"ADMIN_GET_NOT_OK"); assert(Array.isArray(initial?.state?.manifests),"ADMIN_MANIFESTS_MISSING"); assert(Array.isArray(initial?.state?.identities),"ADMIN_IDENTITIES_MISSING");
