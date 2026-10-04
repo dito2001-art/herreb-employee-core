@@ -1,6 +1,6 @@
 import "./styles.css";
 import { createRoot } from "react-dom/client";
-import App from "./app";
+import { WorkforceRoot } from "./workforce-root";
 
 const root = createRoot(document.getElementById("root")!);
-root.render(<App />);
+root.render(<WorkforceRoot />);
