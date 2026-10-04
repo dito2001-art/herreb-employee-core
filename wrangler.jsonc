@@ -26,18 +26,20 @@
     "directory": "./dist/client",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/agents/*", "/oauth/*", "/webhooks/*"]
+    "run_worker_first": ["/agents/*", "/oauth/*", "/webhooks/*", "/api/admin/*"]
   },
   "build": { "command": "npm run build:console" },
   "durable_objects": {
     "bindings": [
       { "class_name": "ChatAgent", "name": "ChatAgent" },
-      { "class_name": "EMP002Operations", "name": "EMP002_OPERATIONS" }
+      { "class_name": "EMP002Operations", "name": "EMP002_OPERATIONS" },
+      { "class_name": "WorkforceAdminState", "name": "WORKFORCE_ADMIN_STATE" }
     ]
   },
   "migrations": [
     { "new_sqlite_classes": ["ChatAgent"], "tag": "v1" },
-    { "new_sqlite_classes": ["EMP002Operations"], "tag": "v2" }
+    { "new_sqlite_classes": ["EMP002Operations"], "tag": "v2" },
+    { "new_sqlite_classes": ["WorkforceAdminState"], "tag": "v3" }
   ],
   "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": true } }
 }
