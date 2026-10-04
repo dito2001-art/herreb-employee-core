@@ -19,6 +19,15 @@ async function json(response) {
   }
 }
 
+function runtimeProbe(response) {
+  return {
+    marker: response.headers.get("x-herreb-runtime-marker"),
+    m2mAuthenticated: response.headers.get("x-herreb-m2m-authenticated"),
+    actorResolved: response.headers.get("x-herreb-actor-resolved"),
+    internalContextSent: response.headers.get("x-herreb-internal-context-sent")
+  };
+}
+
 const getResponse = await fetch(endpoint);
 const initial = await json(getResponse);
 assert(getResponse.ok, `ADMIN_GET_FAILED:${getResponse.status}:${JSON.stringify(initial)}`);
@@ -63,7 +72,9 @@ const response = await fetch(endpoint, {
   })
 });
 const body = await json(response);
-assert(response.ok, `ADMIN_CONTROLLED_WRITE_FAILED:${response.status}:${JSON.stringify(body)}`);
+const probe = runtimeProbe(response);
+console.log(`WORKFORCE_ADMIN_RUNTIME_PROBE:${JSON.stringify(probe)}`);
+assert(response.ok, `ADMIN_CONTROLLED_WRITE_FAILED:${response.status}:${JSON.stringify(body)}:PROBE:${JSON.stringify(probe)}`);
 assert(body?.decision === "GREEN", `ADMIN_DECISION_NOT_GREEN:${body?.decision}`);
 assert(body?.persisted === true, "ADMIN_WRITE_NOT_PERSISTED");
 assert(typeof body?.auditId === "string" && body.auditId.length > 0, "ADMIN_AUDIT_ID_MISSING");
@@ -77,6 +88,7 @@ assert(Array.isArray(readBack?.state?.identities), "ADMIN_READBACK_IDENTITIES_MI
 console.log(JSON.stringify({
   ok: true,
   endpoint,
+  runtimeProbe: probe,
   get: { status: getResponse.status, manifests: initial.state.manifests.length, identities: initial.state.identities.length },
   unauthorizedWrite: { status: unauthorized.status, persisted: unauthorizedBody.persisted },
   invalidM2MWrite: { status: invalidToken.status, persisted: invalidTokenBody.persisted },
