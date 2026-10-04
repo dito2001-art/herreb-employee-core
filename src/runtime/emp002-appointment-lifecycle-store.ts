@@ -10,6 +10,8 @@ export interface AppointmentLifecycleAction {
   payload?: Record<string, unknown>;
 }
 
+const ACTION_LEASE_MS = 5 * 60 * 1000;
+
 export class SqliteAppointmentLifecycleStore {
   constructor(private readonly sql: SchedulingSqlStorage) {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS emp002_appointment_lifecycle (
@@ -24,6 +26,12 @@ export class SqliteAppointmentLifecycleStore {
       tenant_id TEXT NOT NULL,
       action_key TEXT NOT NULL,
       executed_at TEXT NOT NULL,
+      PRIMARY KEY (tenant_id, action_key)
+    )`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS emp002_appointment_action_lease (
+      tenant_id TEXT NOT NULL,
+      action_key TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
       PRIMARY KEY (tenant_id, action_key)
     )`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS emp002_appointment_action_queue (
@@ -69,14 +77,24 @@ export class SqliteAppointmentLifecycleStore {
   }
 
   claimActionOnce(tenantId: string, actionKey: string, claimedAt = new Date().toISOString()): boolean {
-    const existing = Array.from(this.sql.exec(`SELECT action_key FROM emp002_appointment_action_seen WHERE tenant_id = ? AND action_key = ?`, tenantId, actionKey));
-    if (existing.length) return false;
-    this.sql.exec(`INSERT INTO emp002_appointment_action_seen (tenant_id, action_key, executed_at) VALUES (?, ?, ?)`, tenantId, actionKey, claimedAt);
+    const executed = Array.from(this.sql.exec(`SELECT action_key FROM emp002_appointment_action_seen WHERE tenant_id = ? AND action_key = ?`, tenantId, actionKey));
+    if (executed.length) return false;
+    const claimedMs = Date.parse(claimedAt);
+    if (!Number.isFinite(claimedMs)) throw new Error('EMP002_APPOINTMENT_ACTION_INVALID_CLAIM_AT');
+    const activeLease = Array.from(this.sql.exec(`SELECT expires_at FROM emp002_appointment_action_lease WHERE tenant_id = ? AND action_key = ?`, tenantId, actionKey));
+    if (activeLease.length && typeof activeLease[0].expires_at === 'string' && Date.parse(activeLease[0].expires_at) > claimedMs) return false;
+    const expiresAt = new Date(claimedMs + ACTION_LEASE_MS).toISOString();
+    this.sql.exec(`INSERT INTO emp002_appointment_action_lease (tenant_id, action_key, expires_at) VALUES (?, ?, ?) ON CONFLICT(tenant_id, action_key) DO UPDATE SET expires_at = excluded.expires_at`, tenantId, actionKey, expiresAt);
     return true;
   }
 
+  completeActionClaim(tenantId: string, actionKey: string, executedAt = new Date().toISOString()): void {
+    this.sql.exec(`INSERT INTO emp002_appointment_action_seen (tenant_id, action_key, executed_at) VALUES (?, ?, ?) ON CONFLICT(tenant_id, action_key) DO NOTHING`, tenantId, actionKey, executedAt);
+    this.releaseActionClaim(tenantId, actionKey);
+  }
+
   releaseActionClaim(tenantId: string, actionKey: string): void {
-    this.sql.exec(`DELETE FROM emp002_appointment_action_seen WHERE tenant_id = ? AND action_key = ?`, tenantId, actionKey);
+    this.sql.exec(`DELETE FROM emp002_appointment_action_lease WHERE tenant_id = ? AND action_key = ?`, tenantId, actionKey);
   }
 
   claimDueActions(tenantId: string, now = new Date().toISOString(), limit = 50): AppointmentLifecycleAction[] {
