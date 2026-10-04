@@ -1,6 +1,5 @@
 import employeeServer from './server';
 import { extractMetaTextMessages, handleMetaWhatsAppWebhook } from './runtime';
-import { handleWorkforceAdminApi } from './runtime/workforce-admin-api';
 
 interface OperationsNamespace {
   idFromName(name: string): DurableObjectId;
@@ -17,8 +16,9 @@ type WorkerEnv = Env & {
   EMP002_OWNER_WHATSAPP?: string;
   EMP002_OPERATIONS?: OperationsNamespace;
   EMP001_WHATSAPP?: ServiceFetcher;
+  WORKFORCE_ADMIN_STATE?: OperationsNamespace;
   TENANT_MANIFESTS_JSON?: string;
-  ACCESS_IDENTITY_MAP?: string;
+  ACCESS_IDENTITY_MAP_JSON?: string;
 };
 
 function normalizeWhatsAppNumber(value?: string): string {
@@ -27,17 +27,33 @@ function normalizeWhatsAppNumber(value?: string): string {
 
 export { ChatAgent } from './server';
 export { EMP002Operations } from './runtime/emp002-operations';
+export { WorkforceAdminState } from './runtime/workforce-admin-state';
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const runtimeEnv = env as WorkerEnv;
 
-    const adminResponse = handleWorkforceAdminApi(request, runtimeEnv);
-    if (adminResponse) return adminResponse;
+    if (url.pathname === '/api/admin/workforce') {
+      if (!runtimeEnv.WORKFORCE_ADMIN_STATE) {
+        return Response.json({ ok: false, error: 'WORKFORCE_ADMIN_STATE_BINDING_MISSING' }, { status: 503 });
+      }
+      const id = runtimeEnv.WORKFORCE_ADMIN_STATE.idFromName('global');
+      const stub = runtimeEnv.WORKFORCE_ADMIN_STATE.get(id);
+      if (request.method === 'GET') {
+        return stub.fetch('https://workforce.admin/state', { method: 'GET' });
+      }
+      if (request.method === 'POST') {
+        return stub.fetch('https://workforce.admin/mutate', {
+          method: 'POST',
+          headers: { 'content-type': request.headers.get('content-type') ?? 'application/json' },
+          body: request.body,
+        });
+      }
+      return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405, headers: { allow: 'GET, POST' } });
+    }
 
     if (url.pathname === '/webhooks/meta/whatsapp') {
-      // Meta verification remains owned by Employee Core.
       if (request.method === 'GET') {
         return handleMetaWhatsAppWebhook(request, runtimeEnv, async () => undefined);
       }
@@ -46,9 +62,6 @@ export default {
         const payload = await request.clone().json().catch(() => undefined);
         const inbound = extractMetaTextMessages(payload);
         const owner = normalizeWhatsAppNumber(runtimeEnv.EMP002_OWNER_WHATSAPP);
-
-        // Meta normally delivers one sender per webhook. Route owner traffic to
-        // EMP-002; customer traffic keeps the proven EMP-001 adapter/runtime path.
         const hasOwnerMessage = Boolean(owner) && inbound.some((message) => normalizeWhatsAppNumber(message.from) === owner);
         const hasExternalMessage = inbound.some((message) => normalizeWhatsAppNumber(message.from) !== owner);
 
