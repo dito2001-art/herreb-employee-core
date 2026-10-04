@@ -1,6 +1,9 @@
 name: Forensic Wrangler Bundle
 
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/forensic-wrangler-bundle.yml'
   workflow_dispatch:
 
 permissions:
