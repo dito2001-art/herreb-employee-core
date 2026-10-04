@@ -13,6 +13,14 @@ interface AdminStateEnv {
   ACCESS_IDENTITY_MAP_JSON?: string;
 }
 
+function doReceiveProbe(request: Request): Record<string, string> {
+  return {
+    "x-herreb-do-internal-actor-received": String(Boolean(request.headers.get("x-herreb-internal-actor-id")?.trim())),
+    "x-herreb-do-internal-tenant-received": String(Boolean(request.headers.get("x-herreb-internal-tenant-id")?.trim())),
+    "x-herreb-do-internal-role-received": String(Boolean(request.headers.get("x-herreb-internal-role")?.trim())),
+  };
+}
+
 export class WorkforceAdminState extends DurableObject<AdminStateEnv> {
   async fetch(request: Request): Promise<Response> {
     const bootstrap = bootstrapWorkforceAdminState({
@@ -31,13 +39,14 @@ export class WorkforceAdminState extends DurableObject<AdminStateEnv> {
     }
 
     if (request.method === "POST" && url.pathname === "/mutate") {
+      const probe = doReceiveProbe(request);
       const body = (await request.json().catch(() => undefined)) as
         | { mutation?: WorkforceAdminMutation; approveYellow?: boolean }
         | undefined;
       if (!body?.mutation) {
         return Response.json(
           { ok: false, error: "WORKFORCE_ADMIN_MUTATION_INVALID" },
-          { status: 400 }
+          { status: 400, headers: probe }
         );
       }
       try {
@@ -55,7 +64,7 @@ export class WorkforceAdminState extends DurableObject<AdminStateEnv> {
           { ...result, state },
           {
             status: result.ok ? 200 : 403,
-            headers: { "cache-control": "no-store" },
+            headers: { "cache-control": "no-store", ...probe },
           }
         );
       } catch (error) {
@@ -63,7 +72,7 @@ export class WorkforceAdminState extends DurableObject<AdminStateEnv> {
         const status = message === "WORKFORCE_ADMIN_AUTH_REQUIRED" || message === "WORKFORCE_ADMIN_IDENTITY_NOT_FOUND" ? 401 : 400;
         return Response.json(
           { ok: false, persisted: false, error: message },
-          { status, headers: { "cache-control": "no-store" } }
+          { status, headers: { "cache-control": "no-store", ...probe } }
         );
       }
     }
