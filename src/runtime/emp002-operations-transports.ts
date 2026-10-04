@@ -1,5 +1,5 @@
-import { createAg002GatewayReadOnlyTransport } from '../adapters/ag002-gateway';
-import { createCalendarControlledWriteTransport } from '../adapters/controlled-write-http';
+import { createAg002GatewayControlledWriteTransport, createAg002GatewayReadOnlyTransport } from '../adapters/ag002-gateway';
+import { createCrmCalendarControlledWriteTransport } from '../adapters/crm-calendar-write';
 import type { CalendarTransport } from '../adapters/calendar';
 import type { ServiceFetcher } from '../adapters/sales-ops';
 import { MetaWhatsAppTransport } from '../adapters/whatsapp-meta';
@@ -73,9 +73,6 @@ export function buildEMP002CalendarReadTransport(env: EMP002OperationsTransportE
         };
       }
 
-      // /api/agent tasks uses the CRM date contract (YYYY-MM-DD), not RFC3339
-      // calendar timestamps. `timeMax` is exclusive in the calendar capability,
-      // so convert it to the last included CRM date.
       const from = crmDate(request.timeMin);
       const exclusiveTo = new Date(request.timeMax);
       if (Number.isNaN(exclusiveTo.getTime())) throw new Error('EMP002_INVALID_CALENDAR_DATE');
@@ -86,12 +83,7 @@ export function buildEMP002CalendarReadTransport(env: EMP002OperationsTransportE
         tenantId: input.tenantId,
         operation: 'read',
         entity: 'tasks',
-        payload: {
-          from,
-          to,
-          limit: 100,
-          offset: 0,
-        },
+        payload: { from, to, limit: 100, offset: 0 },
         correlationId: input.correlationId,
       });
 
@@ -109,18 +101,22 @@ export function buildEMP002CalendarReadTransport(env: EMP002OperationsTransportE
   };
 }
 
-/** Calendar controlled-write transport used only by scheduling flows. */
-export function buildEMP002CalendarTransport(env: EMP002OperationsTransportEnv, tenantId: string) {
+/**
+ * Calendar CONTROLLED_WRITE backed by the same tenant-scoped AG-002 CRM gateway.
+ * CRM remains the system of record and owns downstream Google Calendar sync.
+ */
+export function buildEMP002CalendarTransport(env: EMP002OperationsTransportEnv, tenantId: string): CalendarTransport {
   const scopedTenant = assertTenantScope(env, tenantId);
   if (!env.AG002_GATEWAY || !env.RUNTIME_GATEWAY_TOKEN?.trim()) {
     throw new Error('EMP002_CALENDAR_WRITE_TRANSPORT_MISSING');
   }
-  return createCalendarControlledWriteTransport({
+  const crm = createAg002GatewayControlledWriteTransport({
     service: env.AG002_GATEWAY,
-    token: env.RUNTIME_GATEWAY_TOKEN,
+    runtimeToken: env.RUNTIME_GATEWAY_TOKEN,
     tenantId: scopedTenant,
     baseUrl: 'https://internal',
   });
+  return createCrmCalendarControlledWriteTransport(crm);
 }
 
 /** Backward-compatible combined transport factory for scheduling. */
