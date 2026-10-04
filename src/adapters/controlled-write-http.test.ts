@@ -67,7 +67,12 @@ test("controlled write requires idempotency before upstream", async () => {
   const result = await transport.execute({
     tenantId: "herreb-client-0",
     correlationId: "corr-1",
-    request: { operation: "send", to: ["client@example.com"], subject: "Turno", body: "Confirmado" }
+    request: {
+      operation: "send",
+      to: ["client@example.com"],
+      subject: "Turno",
+      body: "Confirmado"
+    }
   });
   assert.equal(result.error?.code, "CONTROLLED_WRITE_IDEMPOTENCY_REQUIRED");
   assert.equal(requests.length, 0);

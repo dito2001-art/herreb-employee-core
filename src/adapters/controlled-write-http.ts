@@ -25,7 +25,8 @@ async function callControlledWrite(
       ok: false,
       error: {
         code: "CONTROLLED_WRITE_TENANT_SCOPE_MISMATCH",
-        message: "Controlled-write service tenant does not match authorized tenant scope"
+        message:
+          "Controlled-write service tenant does not match authorized tenant scope"
       },
       evidence: { ...baseEvidence, executed: false }
     };
@@ -80,13 +81,21 @@ async function callControlledWrite(
         message: `Controlled-write service returned HTTP ${response.status}`,
         retryable: response.status >= 500
       },
-      evidence: { ...baseEvidence, executed: true, upstreamStatus: response.status }
+      evidence: {
+        ...baseEvidence,
+        executed: true,
+        upstreamStatus: response.status
+      }
     };
   }
   return {
     ok: true,
     output: body,
-    evidence: { ...baseEvidence, executed: true, upstreamStatus: response.status }
+    evidence: {
+      ...baseEvidence,
+      executed: true,
+      upstreamStatus: response.status
+    }
   };
 }
 
@@ -96,11 +105,21 @@ export function createCalendarControlledWriteTransport(
   return {
     async execute(input) {
       const request: CalendarInput = input.request;
-      if (request.operation === "search" || request.operation === "availability") {
+      if (
+        request.operation === "search" ||
+        request.operation === "availability"
+      ) {
         return {
           ok: false,
-          error: { code: "CALENDAR_WRITE_ONLY", message: "Controlled calendar transport accepts mutations only" },
-          evidence: { executed: false, tenantId: input.tenantId, correlationId: input.correlationId }
+          error: {
+            code: "CALENDAR_WRITE_ONLY",
+            message: "Controlled calendar transport accepts mutations only"
+          },
+          evidence: {
+            executed: false,
+            tenantId: input.tenantId,
+            correlationId: input.correlationId
+          }
         };
       }
       return callControlledWrite(
@@ -125,8 +144,15 @@ export function createEmailControlledSendTransport(
       if (request.operation !== "send") {
         return {
           ok: false,
-          error: { code: "EMAIL_SEND_ONLY", message: "Controlled email transport accepts send only" },
-          evidence: { executed: false, tenantId: input.tenantId, correlationId: input.correlationId }
+          error: {
+            code: "EMAIL_SEND_ONLY",
+            message: "Controlled email transport accepts send only"
+          },
+          evidence: {
+            executed: false,
+            tenantId: input.tenantId,
+            correlationId: input.correlationId
+          }
         };
       }
       return callControlledWrite(
