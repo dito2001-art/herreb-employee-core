@@ -50,10 +50,7 @@ export class EMP002Operations implements DurableObject {
       try {
         const actions = prepareDueAppointmentActions(this.appointmentStore, body.tenantId, body.now, body.limit);
         return Response.json({ ok: true, status: 'PREPARED', count: actions.length, actions });
-      } catch (error) {
-        const code = error instanceof Error ? error.message : 'EMP002_APPOINTMENT_ACTION_PREPARE_FAILED';
-        return Response.json({ ok: false, error: code }, { status: 400 });
-      }
+      } catch (error) { return Response.json({ ok: false, error: error instanceof Error ? error.message : 'EMP002_APPOINTMENT_ACTION_PREPARE_FAILED' }, { status: 400 }); }
     }
 
     if (request.method === 'POST' && url.pathname === '/appointment/actions/execute') {
@@ -63,13 +60,16 @@ export class EMP002Operations implements DurableObject {
         const prepared = prepareDueAppointmentActions(this.appointmentStore, body.tenantId, body.now, body.limit);
         const whatsapp = buildEMP002WhatsAppTransport(this.env, body.tenantId);
         const results = [];
-        for (const item of prepared) results.push(await executePreparedAppointmentAction(item, whatsapp));
+        for (const item of prepared) {
+          const result = await executePreparedAppointmentAction(item, whatsapp);
+          if (result.status === 'FAILED_RETRYABLE') this.appointmentStore.releaseActionClaim(body.tenantId, item.action.actionKey);
+          results.push(result);
+        }
         const executed = results.filter((result) => result.status === 'EXECUTED').length;
         const retryable = results.length - executed;
         return Response.json({ ok: retryable === 0, status: retryable === 0 ? 'EXECUTED' : 'PARTIAL', prepared: prepared.length, executed, retryable, results }, { status: retryable === 0 ? 200 : 503 });
       } catch (error) {
-        const code = error instanceof Error ? error.message : 'EMP002_APPOINTMENT_ACTION_EXECUTION_FAILED';
-        return Response.json({ ok: false, status: 'FAILED_RETRYABLE', error: code }, { status: 503 });
+        return Response.json({ ok: false, status: 'FAILED_RETRYABLE', error: error instanceof Error ? error.message : 'EMP002_APPOINTMENT_ACTION_EXECUTION_FAILED' }, { status: 503 });
       }
     }
 
