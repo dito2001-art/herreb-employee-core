@@ -17,12 +17,41 @@ type WorkerEnv = Env & {
   EMP002_OPERATIONS?: OperationsNamespace;
   EMP001_WHATSAPP?: ServiceFetcher;
   WORKFORCE_ADMIN_STATE?: OperationsNamespace;
+  WORKFORCE_ADMIN_M2M_TOKEN?: string;
   TENANT_MANIFESTS_JSON?: string;
   ACCESS_IDENTITY_MAP_JSON?: string;
 };
 
 function normalizeWhatsAppNumber(value?: string): string {
   return String(value ?? '').replace(/\D/g, '');
+}
+
+function constantTimeEqual(left: string, right: string): boolean {
+  const encoder = new TextEncoder();
+  const a = encoder.encode(left);
+  const b = encoder.encode(right);
+  const length = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for (let index = 0; index < length; index += 1) {
+    diff |= (a[index] ?? 0) ^ (b[index] ?? 0);
+  }
+  return diff === 0;
+}
+
+function resolveWorkforceAdminEmail(request: Request, env: WorkerEnv): string | undefined {
+  const accessEmail = request.headers.get('cf-access-authenticated-user-email')?.trim().toLowerCase();
+  if (accessEmail) return accessEmail;
+
+  const expectedToken = env.WORKFORCE_ADMIN_M2M_TOKEN;
+  const suppliedToken = request.headers.get('x-herreb-workforce-admin-token');
+  if (!expectedToken || !suppliedToken || !constantTimeEqual(expectedToken, suppliedToken)) return undefined;
+
+  try {
+    const identities = JSON.parse(env.ACCESS_IDENTITY_MAP_JSON ?? '[]') as Array<{ email?: string; role?: string }>;
+    return identities.find((identity) => identity.role === 'owner' && identity.email)?.email?.trim().toLowerCase();
+  } catch {
+    return undefined;
+  }
 }
 
 export { ChatAgent } from './server';
@@ -44,7 +73,7 @@ export default {
         return stub.fetch('https://workforce.admin/state', { method: 'GET' });
       }
       if (request.method === 'POST') {
-        const authenticatedEmail = request.headers.get('cf-access-authenticated-user-email');
+        const authenticatedEmail = resolveWorkforceAdminEmail(request, runtimeEnv);
         const headers = new Headers({ 'content-type': request.headers.get('content-type') ?? 'application/json' });
         if (authenticatedEmail) headers.set('cf-access-authenticated-user-email', authenticatedEmail);
         return stub.fetch('https://workforce.admin/mutate', {
