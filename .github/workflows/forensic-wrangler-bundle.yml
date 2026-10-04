@@ -42,8 +42,8 @@ jobs:
           echo "=== Wrangler forensic output ==="
           find .wrangler-forensics -maxdepth 2 -type f -print
           echo "=== Resolver markers ==="
-          grep -R -n -E 'x-herreb-internal-actor-id|WORKFORCE_ADMIN_IDENTITY_NOT_FOUND' .wrangler-forensics || true
-          if grep -R -q 'x-herreb-internal-actor-id' .wrangler-forensics && grep -R -q 'WORKFORCE_ADMIN_IDENTITY_NOT_FOUND' .wrangler-forensics; then
+          grep -aR -n -E 'x-herreb-internal-actor-id|WORKFORCE_ADMIN_IDENTITY_NOT_FOUND' .wrangler-forensics || true
+          if grep -aR -q 'x-herreb-internal-actor-id' .wrangler-forensics && grep -aR -q 'WORKFORCE_ADMIN_IDENTITY_NOT_FOUND' .wrangler-forensics; then
             echo 'FORENSIC_RESOLVER_MARKERS_PRESENT=true'
           else
             echo 'FORENSIC_RESOLVER_MARKERS_PRESENT=false'
@@ -51,6 +51,7 @@ jobs:
           fi
 
       - name: Upload forensic bundle
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: wrangler-bundle-forensics
