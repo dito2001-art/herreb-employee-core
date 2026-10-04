@@ -8,6 +8,7 @@ type Row = Record<string, unknown>;
 function memorySql(): SchedulingSqlStorage {
   const lifecycle = new Map<string, { version: number; payload: string }>();
   const actions = new Set<string>();
+  const leases = new Map<string, string>();
   const queue = new Map<string, { tenant_id: string; appointment_id: string; action_key: string; kind: string; due_at: string; payload: string | null }>();
   return {
     exec(query, ...bindings): Iterable<Row> {
@@ -28,7 +29,10 @@ function memorySql(): SchedulingSqlStorage {
         const tenant = String(bindings[0]); const now = String(bindings[1]); const limit = Number(bindings[2]);
         return [...queue.values()].filter((row) => row.tenant_id === tenant && row.due_at <= now).sort((a, b) => a.due_at.localeCompare(b.due_at)).slice(0, limit);
       }
-      if (query.includes('SELECT action_key')) return actions.has(`${bindings[0]}:${bindings[1]}`) ? [{ action_key: bindings[1] }] : [];
+      if (query.includes('SELECT action_key FROM emp002_appointment_action_seen')) return actions.has(`${bindings[0]}:${bindings[1]}`) ? [{ action_key: bindings[1] }] : [];
+      if (query.includes('SELECT expires_at FROM emp002_appointment_action_lease')) { const value = leases.get(`${bindings[0]}:${bindings[1]}`); return value ? [{ expires_at: value }] : []; }
+      if (query.includes('INSERT INTO emp002_appointment_action_lease')) { leases.set(`${bindings[0]}:${bindings[1]}`, String(bindings[2])); return []; }
+      if (query.includes('DELETE FROM emp002_appointment_action_lease')) { leases.delete(`${bindings[0]}:${bindings[1]}`); return []; }
       if (query.includes('INSERT INTO emp002_appointment_action_seen')) { actions.add(`${bindings[0]}:${bindings[1]}`); return []; }
       throw new Error(`UNEXPECTED_SQL:${query}`);
     },
@@ -53,9 +57,18 @@ test('tenant scoped appointment ids cannot read each other', () => {
   const store = new SqliteAppointmentLifecycleStore(memorySql()); store.save(record); assert.equal(store.load('tenant-b', 'appt-1'), undefined);
 });
 
-test('appointment side effects can be claimed only once per tenant', () => {
+test('appointment action lease blocks concurrent execution but expires after crash window', () => {
   const store = new SqliteAppointmentLifecycleStore(memorySql());
-  assert.equal(store.claimActionOnce('tenant-a', 'reminder:appt-1:120'), true); assert.equal(store.claimActionOnce('tenant-a', 'reminder:appt-1:120'), false); assert.equal(store.claimActionOnce('tenant-b', 'reminder:appt-1:120'), true);
+  assert.equal(store.claimActionOnce('tenant-a', 'reminder:appt-1:120', '2026-10-04T12:00:00.000Z'), true);
+  assert.equal(store.claimActionOnce('tenant-a', 'reminder:appt-1:120', '2026-10-04T12:04:59.000Z'), false);
+  assert.equal(store.claimActionOnce('tenant-a', 'reminder:appt-1:120', '2026-10-04T12:05:00.000Z'), true);
+});
+
+test('completed appointment action remains permanently deduplicated', () => {
+  const store = new SqliteAppointmentLifecycleStore(memorySql());
+  assert.equal(store.claimActionOnce('tenant-a', 'reminder:appt-1:120', '2026-10-04T12:00:00.000Z'), true);
+  store.completeActionClaim('tenant-a', 'reminder:appt-1:120', '2026-10-04T12:00:01.000Z');
+  assert.equal(store.claimActionOnce('tenant-a', 'reminder:appt-1:120', '2026-10-05T12:00:00.000Z'), false);
 });
 
 test('due action queue returns only due actions for requested tenant in chronological order', () => {
@@ -69,11 +82,12 @@ test('due action queue returns only due actions for requested tenant in chronolo
   assert.deepEqual(due[1].payload, { offset: 120 });
 });
 
-test('claimDueActions guarantees an action is returned only once', () => {
+test('claimDueActions suppresses an action while its lease is active', () => {
   const store = new SqliteAppointmentLifecycleStore(memorySql());
   store.scheduleAction({ tenantId: 'tenant-a', appointmentId: 'appt-1', actionKey: 'reminder:120', kind: 'REMINDER', dueAt: '2026-10-10T13:00:00.000Z' });
   assert.equal(store.claimDueActions('tenant-a', '2026-10-10T14:00:00.000Z').length, 1);
   assert.equal(store.claimDueActions('tenant-a', '2026-10-10T14:01:00.000Z').length, 0);
+  assert.equal(store.claimDueActions('tenant-a', '2026-10-10T14:05:00.000Z').length, 1);
 });
 
 test('invalid due timestamp is rejected before persistence', () => {
