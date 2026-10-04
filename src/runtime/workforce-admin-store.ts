@@ -28,6 +28,36 @@ export function bootstrapWorkforceAdminState(input: {
   };
 }
 
+function normalizeEmail(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function reconcileState(
+  persisted: WorkforceAdminMutationPlan,
+  bootstrap: WorkforceAdminMutationPlan
+): WorkforceAdminMutationPlan {
+  const identities = [...persisted.identities];
+  const knownEmails = new Set(identities.map((identity) => normalizeEmail(identity.email)));
+  for (const identity of bootstrap.identities) {
+    const email = normalizeEmail(identity.email);
+    if (!knownEmails.has(email)) {
+      identities.push(identity);
+      knownEmails.add(email);
+    }
+  }
+
+  const manifests = [...persisted.manifests];
+  const knownTenants = new Set(manifests.map((manifest) => manifest.tenantId));
+  for (const manifest of bootstrap.manifests) {
+    if (!knownTenants.has(manifest.tenantId)) {
+      manifests.push(manifest);
+      knownTenants.add(manifest.tenantId);
+    }
+  }
+
+  return { manifests, identities };
+}
+
 export class DurableWorkforceAdminStore implements WorkforceAdminStateStore {
   constructor(
     private readonly storage: DurableStorage,
@@ -36,7 +66,13 @@ export class DurableWorkforceAdminStore implements WorkforceAdminStateStore {
 
   async read(): Promise<WorkforceAdminMutationPlan> {
     const persisted = await this.storage.get<WorkforceAdminMutationPlan>(STATE_KEY);
-    return persisted ?? this.bootstrap;
+    if (!persisted) return this.bootstrap;
+
+    const reconciled = reconcileState(persisted, this.bootstrap);
+    if (JSON.stringify(reconciled) !== JSON.stringify(persisted)) {
+      await this.storage.put(STATE_KEY, reconciled);
+    }
+    return reconciled;
   }
 
   async write(next: WorkforceAdminMutationPlan): Promise<void> {
