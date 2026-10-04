@@ -23,7 +23,7 @@ function parseMetaResponse(raw: string): MetaWhatsAppResponse | null {
     const parsed: unknown = JSON.parse(raw);
     return parsed && typeof parsed === 'object' ? (parsed as MetaWhatsAppResponse) : null;
   } catch {
-    return { raw };
+    return null;
   }
 }
 
@@ -63,13 +63,18 @@ export class MetaWhatsAppTransport implements WhatsAppTransport {
     const data = parseMetaResponse(raw);
 
     if (!response.ok) {
-      throw new Error(`Meta ${response.status}: ${JSON.stringify(data)}`);
+      throw new Error(`META_WHATSAPP_HTTP_ERROR:${response.status}`);
+    }
+
+    const messageId = data?.messages?.[0]?.id?.trim();
+    if (!messageId) {
+      throw new Error('META_WHATSAPP_PROVIDER_EVIDENCE_MISSING');
     }
 
     return {
       ok: true,
       provider: 'meta-cloud-api',
-      messageId: data?.messages?.[0]?.id ?? null,
+      messageId,
       status: response.status,
       tenantId: message.tenantId,
       correlationId: message.correlationId,
