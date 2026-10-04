@@ -31,6 +31,8 @@ type WorkerEnv = Env & {
   ACCESS_IDENTITY_MAP_JSON?: string;
 };
 
+const WORKFORCE_ADMIN_RUNTIME_MARKER = 'runtime-probe-v1';
+
 function normalizeWhatsAppNumber(value?: string): string {
   return String(value ?? '').replace(/\D/g, '');
 }
@@ -67,14 +69,18 @@ function configuredAdminIdentities(env: WorkerEnv): WorkforceAdminResolvedActor[
   }
 }
 
+function isValidM2M(request: Request, env: WorkerEnv): boolean {
+  const expectedToken = env.WORKFORCE_ADMIN_M2M_TOKEN;
+  const suppliedToken = request.headers.get('x-herreb-workforce-admin-token');
+  return Boolean(expectedToken && suppliedToken && constantTimeEqual(expectedToken, suppliedToken));
+}
+
 function resolveWorkforceAdminActor(request: Request, env: WorkerEnv): WorkforceAdminResolvedActor | undefined {
   const identities = configuredAdminIdentities(env);
   const accessEmail = request.headers.get('cf-access-authenticated-user-email')?.trim().toLowerCase();
   if (accessEmail) return identities.find((identity) => identity.email === accessEmail);
 
-  const expectedToken = env.WORKFORCE_ADMIN_M2M_TOKEN;
-  const suppliedToken = request.headers.get('x-herreb-workforce-admin-token');
-  if (!expectedToken || !suppliedToken || !constantTimeEqual(expectedToken, suppliedToken)) return undefined;
+  if (!isValidM2M(request, env)) return undefined;
 
   const configuredActorId = env.WORKFORCE_ADMIN_M2M_ACTOR_ID?.trim();
   const configuredTenantId = env.WORKFORCE_ADMIN_M2M_TENANT_ID?.trim();
@@ -116,6 +122,7 @@ export default {
         return stub.fetch('https://workforce.admin/state', { method: 'GET' });
       }
       if (request.method === 'POST') {
+        const m2mAuthenticated = isValidM2M(request, runtimeEnv);
         const actor = resolveWorkforceAdminActor(request, runtimeEnv);
         const headers = new Headers({ 'content-type': request.headers.get('content-type') ?? 'application/json' });
         if (actor) {
@@ -124,11 +131,17 @@ export default {
           headers.set('x-herreb-internal-tenant-id', actor.tenantId);
           headers.set('x-herreb-internal-role', actor.role);
         }
-        return stub.fetch('https://workforce.admin/mutate', {
+        const response = await stub.fetch('https://workforce.admin/mutate', {
           method: 'POST',
           headers,
           body: request.body,
         });
+        const responseHeaders = new Headers(response.headers);
+        responseHeaders.set('x-herreb-runtime-marker', WORKFORCE_ADMIN_RUNTIME_MARKER);
+        responseHeaders.set('x-herreb-m2m-authenticated', String(m2mAuthenticated));
+        responseHeaders.set('x-herreb-actor-resolved', String(Boolean(actor)));
+        responseHeaders.set('x-herreb-internal-context-sent', String(Boolean(actor)));
+        return new Response(response.body, { status: response.status, statusText: response.statusText, headers: responseHeaders });
       }
       return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405, headers: { allow: 'GET, POST' } });
     }
