@@ -1,0 +1,56 @@
+name: Forensic Wrangler Bundle
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle-forensics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact branch commit
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply production formatter step
+        run: npx oxfmt --write .
+
+      - name: Validate exactly as deploy workflow
+        run: npm run check
+
+      - name: Build Wrangler bundle without deploying
+        run: npx wrangler deploy --dry-run --outdir .wrangler-forensics
+
+      - name: Verify Workforce Admin fast-path is present in bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== Wrangler forensic output ==="
+          find .wrangler-forensics -maxdepth 2 -type f -print
+          echo "=== Resolver markers ==="
+          grep -R -n -E 'x-herreb-internal-actor-id|WORKFORCE_ADMIN_IDENTITY_NOT_FOUND' .wrangler-forensics || true
+          if grep -R -q 'x-herreb-internal-actor-id' .wrangler-forensics && grep -R -q 'WORKFORCE_ADMIN_IDENTITY_NOT_FOUND' .wrangler-forensics; then
+            echo 'FORENSIC_RESOLVER_MARKERS_PRESENT=true'
+          else
+            echo 'FORENSIC_RESOLVER_MARKERS_PRESENT=false'
+            exit 1
+          fi
+
+      - name: Upload forensic bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: wrangler-bundle-forensics
+          path: .wrangler-forensics/
+          if-no-files-found: error
+          retention-days: 7
