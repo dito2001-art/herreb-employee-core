@@ -12,7 +12,9 @@ export interface CalendarCertificationEnv {
 function recordFrom(output: unknown): Record<string, unknown> | undefined {
   if (!output || typeof output !== "object") return undefined;
   const body = output as Record<string, unknown>;
+  if (body.record && typeof body.record === "object" && !Array.isArray(body.record)) return body.record as Record<string, unknown>;
   if (body.data && typeof body.data === "object" && !Array.isArray(body.data)) return body.data as Record<string, unknown>;
+  if (Array.isArray(body.data) && body.data[0] && typeof body.data[0] === "object") return body.data[0] as Record<string, unknown>;
   return body;
 }
 
@@ -45,8 +47,9 @@ export async function runEMP002CalendarProductionCertification(
   });
   if (!created.ok) return { ok: false, stage: "create", created };
 
+  const createdBody = created.output as Record<string, unknown> | undefined;
   const createdRecord = recordFrom(created.output);
-  const id = String(createdRecord?.id ?? "");
+  const id = String(createdBody?.id ?? createdRecord?.id ?? "");
   if (!id) return { ok: false, stage: "create-id", created };
 
   const readBack = await readCrm.execute({
@@ -57,9 +60,8 @@ export async function runEMP002CalendarProductionCertification(
     correlationId: input.correlationId + ":readback"
   });
 
-  const readBody = readBack.output as { data?: Array<Record<string, unknown>> } | undefined;
-  const record = readBody?.data?.[0];
-  const persistenceConfirmed = record?.persistenceConfirmed === true || createdRecord?.persistenceConfirmed === true;
+  const record = recordFrom(readBack.output);
+  const persistenceConfirmed = createdBody?.persistenceConfirmed === true || record?.persistenceConfirmed === true || createdRecord?.persistenceConfirmed === true;
   const calendarEventId = String(record?.calendarEventId ?? createdRecord?.calendarEventId ?? "");
   const calendarSyncStatus = String(record?.calendarSyncStatus ?? createdRecord?.calendarSyncStatus ?? "");
   const verified = Boolean(readBack.ok && record && persistenceConfirmed && calendarEventId && calendarSyncStatus === "SYNCED");
