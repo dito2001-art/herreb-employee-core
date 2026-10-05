@@ -11,16 +11,32 @@ export interface EMP002LifecycleE2EInput {
   startsAt: string;
 }
 
-async function post(stub: DurableObjectStub, path: string, body: unknown): Promise<{ status: number; body: any }> {
+interface ExecutionResult {
+  providerMessageId?: string;
+  [key: string]: unknown;
+}
+
+interface ExecutionBody {
+  executed?: number;
+  prepared?: number;
+  results?: ExecutionResult[];
+  [key: string]: unknown;
+}
+
+async function post(stub: DurableObjectStub, path: string, body: unknown): Promise<{ status: number; body: unknown }> {
   const response = await stub.fetch(`https://emp002.operations${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
   const text = await response.text();
-  let parsed: any = text;
-  try { parsed = text ? JSON.parse(text) : undefined; } catch { /* keep text */ }
+  let parsed: unknown = text;
+  try { parsed = text ? JSON.parse(text) as unknown : undefined; } catch { /* keep text */ }
   return { status: response.status, body: parsed };
+}
+
+function executionBody(value: unknown): ExecutionBody {
+  return value && typeof value === 'object' ? value as ExecutionBody : {};
 }
 
 export async function runEMP002LifecycleE2EHarness(namespace: EMP002LifecycleE2ENamespace, input: EMP002LifecycleE2EInput) {
@@ -48,12 +64,15 @@ export async function runEMP002LifecycleE2EHarness(namespace: EMP002LifecycleE2E
   if (schedule.status !== 200) throw new Error(`EMP002_E2E_SCHEDULE_FAILED:${schedule.status}`);
 
   const execute = await post(stub, '/appointment/actions/execute', { tenantId: input.tenantId, now: input.now, limit: 1 });
-  if (execute.status !== 200 || execute.body?.executed !== 1 || !execute.body?.results?.[0]?.providerMessageId) {
+  const first = executionBody(execute.body);
+  const providerMessageId = first.results?.[0]?.providerMessageId;
+  if (execute.status !== 200 || first.executed !== 1 || !providerMessageId) {
     throw new Error(`EMP002_E2E_EXECUTION_EVIDENCE_FAILED:${execute.status}`);
   }
 
   const dedupe = await post(stub, '/appointment/actions/execute', { tenantId: input.tenantId, now: input.now, limit: 1 });
-  if (dedupe.status !== 200 || dedupe.body?.executed !== 0 || dedupe.body?.prepared !== 0) {
+  const second = executionBody(dedupe.body);
+  if (dedupe.status !== 200 || second.executed !== 0 || second.prepared !== 0) {
     throw new Error(`EMP002_E2E_DEDUPLICATION_FAILED:${dedupe.status}`);
   }
 
@@ -62,8 +81,8 @@ export async function runEMP002LifecycleE2EHarness(namespace: EMP002LifecycleE2E
     tenantId: input.tenantId,
     appointmentId: input.appointmentId,
     actionKey,
-    providerMessageId: execute.body.results[0].providerMessageId as string,
-    firstExecution: execute.body,
-    secondExecution: dedupe.body,
+    providerMessageId,
+    firstExecution: first,
+    secondExecution: second,
   };
 }
