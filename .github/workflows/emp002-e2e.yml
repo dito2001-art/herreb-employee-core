@@ -20,6 +20,7 @@ jobs:
     if: ${{ inputs.confirm == 'RUN_EMP002_E2E' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,27 +37,54 @@ jobs:
       - name: Validate exact revision
         run: npm run check
 
-      - name: Run guarded EMP-002 E2E through Cloudflare
+      - name: Run guarded EMP-002 production E2E
         shell: bash
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          E2E_TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
+          E2E_URL: https://herreb-employee-core.dito2001.workers.dev/api/internal/emp002/e2e
           E2E_TENANT: herreb-client-0
           E2E_WHATSAPP: '595981538641'
         run: |
           set -euo pipefail
+
           test "$E2E_TENANT" = 'herreb-client-0'
           test "$E2E_WHATSAPP" = '595981538641'
+          test -n "$E2E_TOKEN"
+
           APPT_ID="emp002-e2e-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           NOW="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
           STARTS_AT="$(date -u -d '+1 day' +%Y-%m-%dT%H:%M:%S.000Z)"
-          npx wrangler dev --remote --test-scheduled --port 8787 > /tmp/emp002-e2e-wrangler.log 2>&1 &
-          WRANGLER_PID=$!
-          trap 'kill $WRANGLER_PID 2>/dev/null || true; cat /tmp/emp002-e2e-wrangler.log || true' EXIT
-          for i in {1..30}; do
-            if curl -fsS http://127.0.0.1:8787/ >/dev/null 2>&1; then break; fi
-            sleep 1
-          done
-          echo "E2E harness requires a private invocation route; refusing to expose Durable Object endpoints publicly."
-          echo "tenant=$E2E_TENANT appointment=$APPT_ID now=$NOW startsAt=$STARTS_AT"
-          exit 2
+
+          BODY="$(printf '{"tenantId":"%s","whatsapp":"%s","appointmentId":"%s","now":"%s","startsAt":"%s"}' \
+            "$E2E_TENANT" \
+            "$E2E_WHATSAPP" \
+            "$APPT_ID" \
+            "$NOW" \
+            "$STARTS_AT")"
+
+          RESPONSE="$(curl \
+            --fail-with-body \
+            --silent \
+            --show-error \
+            -X POST "$E2E_URL" \
+            -H 'content-type: application/json' \
+            -H "x-herreb-workforce-admin-token: $E2E_TOKEN" \
+            --data "$BODY")"
+
+          echo "$RESPONSE"
+
+          node -e '
+            const r = JSON.parse(process.argv[1]);
+
+            if (
+              !r.ok ||
+              !r.providerMessageId ||
+              r.secondExecution?.prepared !== 0 ||
+              r.secondExecution?.executed !== 0
+            ) {
+              console.error("EMP-002 E2E certification failed");
+              process.exit(1);
+            }
+
+            console.log(`CERTIFIED wamid=${r.providerMessageId}`);
+          ' "$RESPONSE"
