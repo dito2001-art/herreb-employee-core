@@ -33,6 +33,18 @@ test("EMP-002 calendar create becomes idempotent CRM task create", async () => {
   assert.equal(calls[0]?.operation, "create");
   assert.equal(calls[0]?.entity, "tasks");
   assert.equal(calls[0]?.idempotencyKey, "calendar:create:task-1");
+  assert.deepEqual(calls[0]?.payload, {
+    title: "Presentación",
+    startDate: "2026-10-05",
+    endDate: "2026-10-05",
+    startTime: "15:00",
+    endTime: "16:00",
+    activityType: "Reunión",
+    priority: "Media",
+    reminderMinutes: 30,
+    completed: false,
+    notes: ""
+  });
 });
 
 test("EMP-002 calendar update preserves event id for CRM mutation", async () => {
