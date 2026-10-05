@@ -72,7 +72,18 @@ export class SqliteAppointmentLifecycleStore {
 
   dueActions(tenantId: string, now = new Date().toISOString(), limit = 50): AppointmentLifecycleAction[] {
     const safeLimit = Math.max(1, Math.min(100, Math.trunc(limit)));
-    const rows = Array.from(this.sql.exec(`SELECT appointment_id, action_key, kind, due_at, payload FROM emp002_appointment_action_queue WHERE tenant_id = ? AND due_at <= ? ORDER BY due_at ASC LIMIT ?`, tenantId, now, safeLimit));
+    const rows = Array.from(this.sql.exec(`SELECT q.appointment_id, q.action_key, q.kind, q.due_at, q.payload
+      FROM emp002_appointment_action_queue q
+      WHERE q.tenant_id = ? AND q.due_at <= ?
+        AND NOT EXISTS (
+          SELECT 1 FROM emp002_appointment_action_seen s
+          WHERE s.tenant_id = q.tenant_id AND s.action_key = q.action_key
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM emp002_appointment_action_lease l
+          WHERE l.tenant_id = q.tenant_id AND l.action_key = q.action_key AND l.expires_at > ?
+        )
+      ORDER BY q.due_at ASC LIMIT ?`, tenantId, now, now, safeLimit));
     return rows.map((row) => ({ tenantId, appointmentId: String(row.appointment_id), actionKey: String(row.action_key), kind: String(row.kind) as AppointmentLifecycleAction['kind'], dueAt: String(row.due_at), payload: typeof row.payload === 'string' && row.payload ? JSON.parse(row.payload) as Record<string, unknown> : undefined }));
   }
 
