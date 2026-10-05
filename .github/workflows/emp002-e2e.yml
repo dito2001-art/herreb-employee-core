@@ -68,16 +68,28 @@ jobs:
             "$NOW" \
             "$STARTS_AT")"
 
-          RESPONSE="$(curl \
-            --fail-with-body \
+          RESPONSE_FILE="$(mktemp)"
+          trap 'rm -f "$RESPONSE_FILE"' EXIT
+
+          HTTP_STATUS="$(curl \
             --silent \
             --show-error \
+            --output "$RESPONSE_FILE" \
+            --write-out '%{http_code}' \
             -X POST "$E2E_URL" \
             -H 'content-type: application/json' \
             -H "x-herreb-workforce-admin-token: $E2E_TOKEN" \
             --data "$BODY")"
 
-          echo "$RESPONSE"
+          RESPONSE="$(cat "$RESPONSE_FILE")"
+          echo "EMP-002 E2E HTTP status: $HTTP_STATUS"
+          echo 'EMP-002 E2E response body:'
+          printf '%s\n' "$RESPONSE"
+
+          if [[ ! "$HTTP_STATUS" =~ ^2[0-9][0-9]$ ]]; then
+            echo "EMP-002 E2E request failed with HTTP $HTTP_STATUS" >&2
+            exit 1
+          fi
 
           node -e '
             const r = JSON.parse(process.argv[1]);
