@@ -8,22 +8,32 @@ function requireIdempotencyKey(value: string | undefined): string {
   return key;
 }
 
+function crmDateTime(value: string): { date: string; time: string } {
+  const match = value.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
+  if (!match) throw new Error("CRM_CALENDAR_DATETIME_INVALID");
+  return { date: match[1], time: match[2] };
+}
+
 function mutationFor(request: CalendarInput): {
   operation: "create" | "update" | "delete";
   payload: Record<string, unknown>;
 } | undefined {
   if (request.operation === "create") {
+    const start = crmDateTime(request.startTime);
+    const end = crmDateTime(request.endTime);
     return {
       operation: "create",
       payload: {
-        type: "meeting",
         title: request.title,
-        startTime: request.startTime,
-        endTime: request.endTime,
-        timezone: request.timezone,
-        attendees: request.attendees ?? [],
-        description: request.description,
-        location: request.location
+        startDate: start.date,
+        endDate: end.date,
+        startTime: start.time,
+        endTime: end.time,
+        activityType: "Reunión",
+        priority: "Media",
+        reminderMinutes: 30,
+        completed: false,
+        notes: request.description ?? ""
       }
     };
   }
