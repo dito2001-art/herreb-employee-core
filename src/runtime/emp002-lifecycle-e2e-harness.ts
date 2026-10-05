@@ -91,7 +91,7 @@ export async function runEMP002LifecycleE2EHarness(namespace: EMP002LifecycleE2E
   });
   if (schedule.status !== 200) throw new Error(`EMP002_E2E_SCHEDULE_FAILED:${schedule.status}`);
 
-  const execute = await post(stub, '/appointment/actions/execute', { tenantId: input.tenantId, now: input.now, limit: 1 });
+  const execute = await post(stub, '/appointment/actions/execute', { tenantId: input.tenantId, now: input.now, limit: 1, actionKey });
   const first = executionBody(execute.body);
   const result = first.results?.[0];
   const providerMessageId = result?.providerMessageId;
@@ -111,7 +111,7 @@ export async function runEMP002LifecycleE2EHarness(namespace: EMP002LifecycleE2E
     throw new Error(`EMP002_E2E_EXECUTION_EVIDENCE_FAILED:${safeExecutionEvidence(execute.status, first)}`);
   }
 
-  const dedupe = await post(stub, '/appointment/actions/execute', { tenantId: input.tenantId, now: input.now, limit: 1 });
+  const dedupe = await post(stub, '/appointment/actions/execute', { tenantId: input.tenantId, now: input.now, limit: 1, actionKey });
   const second = executionBody(dedupe.body);
   if (dedupe.status !== 200 || second.executed !== 0 || second.prepared !== 0) {
     throw new Error(`EMP002_E2E_DEDUPLICATION_FAILED:${safeExecutionEvidence(dedupe.status, second)}`);
