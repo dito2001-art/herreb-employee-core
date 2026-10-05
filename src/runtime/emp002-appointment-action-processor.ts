@@ -19,9 +19,10 @@ export function prepareDueAppointmentActions(
   tenantId: string,
   now = new Date().toISOString(),
   limit = 50,
+  actionKey?: string,
 ): PreparedAppointmentAction[] {
   const prepared: PreparedAppointmentAction[] = [];
-  for (const action of store.dueActions(tenantId, now, limit)) {
+  for (const action of store.dueActions(tenantId, now, limit, actionKey)) {
     const appointment = store.load(tenantId, action.appointmentId);
     if (!appointment || !compatible(appointment, action)) continue;
     if (!store.claimActionOnce(tenantId, action.actionKey, now)) continue;
