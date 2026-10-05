@@ -2,12 +2,14 @@ import employeeServer from './server';
 import { extractMetaTextMessages, handleMetaWhatsAppWebhook } from './runtime';
 import { dispatchEMP002ScheduledActions } from './runtime/emp002-scheduler-dispatcher';
 import { runEMP002LifecycleE2EHarness } from './runtime/emp002-lifecycle-e2e-harness';
+import { runEMP002CalendarProductionCertification } from './runtime/emp002-calendar-production-certification';
 
 interface OperationsNamespace { idFromName(name: string): DurableObjectId; get(id: DurableObjectId): DurableObjectStub; }
 interface ServiceFetcher { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>; }
 type WorkforceAdminResolvedActor = { email?: string; actorId: string; tenantId: string; role: 'owner' | 'user' };
 type EMP002E2ERequest = { tenantId?: string; whatsapp?: string; appointmentId?: string; now?: string; startsAt?: string };
-type WorkerEnv = Env & { META_VERIFY_TOKEN?: string; WHATSAPP_TENANT_ROUTES_JSON?: string; EMP002_OPERATIONS?: OperationsNamespace; EMP001_WHATSAPP?: ServiceFetcher; WORKFORCE_ADMIN_STATE?: OperationsNamespace; WORKFORCE_ADMIN_M2M_TOKEN?: string; WORKFORCE_ADMIN_M2M_ACTOR_ID?: string; WORKFORCE_ADMIN_M2M_TENANT_ID?: string; TENANT_MANIFESTS_JSON?: string; ACCESS_IDENTITY_MAP_JSON?: string; };
+type EMP002CalendarCertRequest = { tenantId?: string; correlationId?: string; idempotencyKey?: string; startsAt?: string; endsAt?: string };
+type WorkerEnv = Env & { AG002_GATEWAY?: ServiceFetcher; RUNTIME_GATEWAY_TOKEN?: string; HERREB_RUNTIME_TOKEN?: string; AG002_TENANT_ID?: string; META_VERIFY_TOKEN?: string; WHATSAPP_TENANT_ROUTES_JSON?: string; EMP002_OPERATIONS?: OperationsNamespace; EMP001_WHATSAPP?: ServiceFetcher; WORKFORCE_ADMIN_STATE?: OperationsNamespace; WORKFORCE_ADMIN_M2M_TOKEN?: string; WORKFORCE_ADMIN_M2M_ACTOR_ID?: string; WORKFORCE_ADMIN_M2M_TENANT_ID?: string; TENANT_MANIFESTS_JSON?: string; ACCESS_IDENTITY_MAP_JSON?: string; };
 const WORKFORCE_ADMIN_RUNTIME_MARKER = 'runtime-probe-v1';
 function normalizeWhatsAppNumber(value?: string): string { return String(value ?? '').replace(/\D/g, ''); }
 function constantTimeEqual(left: string, right: string): boolean { const encoder = new TextEncoder(); const a = encoder.encode(left); const b = encoder.encode(right); const length = Math.max(a.length, b.length); let diff = a.length ^ b.length; for (let index = 0; index < length; index += 1) diff |= (a[index] ?? 0) ^ (b[index] ?? 0); return diff === 0; }
@@ -19,6 +21,17 @@ export { ChatAgent } from './server'; export { EMP002Operations } from './runtim
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url); const runtimeEnv = env as WorkerEnv;
+    if (url.pathname === '/api/internal/emp002/calendar-certification') {
+      if (request.method !== 'POST') return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405, headers: { allow: 'POST' } });
+      if (!isValidM2M(request, runtimeEnv)) return Response.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
+      const body: EMP002CalendarCertRequest = await request.json<EMP002CalendarCertRequest>().catch((): EMP002CalendarCertRequest => ({}));
+      const tenantId = body.tenantId?.trim(); const owner = resolveTenantOwner(request, runtimeEnv, tenantId);
+      if (!owner || owner.actorId !== 'fernando' || !body.correlationId || !body.idempotencyKey || !body.startsAt || !body.endsAt) return Response.json({ ok: false, error: 'EMP002_CALENDAR_CERT_SCOPE_REJECTED' }, { status: 403 });
+      try {
+        const result = await runEMP002CalendarProductionCertification(runtimeEnv, { tenantId: owner.tenantId, correlationId: body.correlationId, idempotencyKey: body.idempotencyKey, startsAt: body.startsAt, endsAt: body.endsAt });
+        return Response.json(result, { status: result.ok ? 200 : 503 });
+      } catch (error) { return Response.json({ ok: false, error: error instanceof Error ? error.message : 'EMP002_CALENDAR_CERT_FAILED' }, { status: 503 }); }
+    }
     if (url.pathname === '/api/internal/emp002/e2e') {
       if (request.method !== 'POST') return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405, headers: { allow: 'POST' } });
       if (!isValidM2M(request, runtimeEnv)) return Response.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
