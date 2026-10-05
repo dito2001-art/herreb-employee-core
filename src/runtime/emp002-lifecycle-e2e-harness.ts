@@ -12,11 +12,14 @@ export interface EMP002LifecycleE2EInput {
 }
 
 interface ExecutionResult {
+  actionKey?: string;
+  appointmentId?: string;
   providerMessageId?: string;
   error?: string;
   status?: string;
   provider?: string;
   providerStatus?: number;
+  correlationId?: string;
   [key: string]: unknown;
 }
 
@@ -54,9 +57,12 @@ function safeExecutionEvidence(status: number, body: ExecutionBody): string {
     executed: body.executed,
     retryable: body.retryable,
     resultStatus: first?.status,
+    appointmentId: first?.appointmentId,
+    actionKey: first?.actionKey,
     provider: first?.provider,
     providerStatus: first?.providerStatus,
     providerMessageIdPresent: Boolean(first?.providerMessageId),
+    correlationId: first?.correlationId,
     error: first?.error,
   });
 }
@@ -87,8 +93,21 @@ export async function runEMP002LifecycleE2EHarness(namespace: EMP002LifecycleE2E
 
   const execute = await post(stub, '/appointment/actions/execute', { tenantId: input.tenantId, now: input.now, limit: 1 });
   const first = executionBody(execute.body);
-  const providerMessageId = first.results?.[0]?.providerMessageId;
-  if (execute.status !== 200 || first.executed !== 1 || !providerMessageId) {
+  const result = first.results?.[0];
+  const providerMessageId = result?.providerMessageId;
+  const correlationId = `appointment:${input.appointmentId}:${actionKey}`;
+  if (
+    execute.status !== 200 ||
+    first.executed !== 1 ||
+    first.prepared !== 1 ||
+    !providerMessageId ||
+    result?.appointmentId !== input.appointmentId ||
+    result?.actionKey !== actionKey ||
+    result?.correlationId !== correlationId ||
+    result?.provider !== 'meta-cloud-api' ||
+    result?.providerStatus !== 200 ||
+    result?.status !== 'EXECUTED'
+  ) {
     throw new Error(`EMP002_E2E_EXECUTION_EVIDENCE_FAILED:${safeExecutionEvidence(execute.status, first)}`);
   }
 
@@ -103,6 +122,7 @@ export async function runEMP002LifecycleE2EHarness(namespace: EMP002LifecycleE2E
     tenantId: input.tenantId,
     appointmentId: input.appointmentId,
     actionKey,
+    correlationId,
     providerMessageId,
     firstExecution: first,
     secondExecution: second,
