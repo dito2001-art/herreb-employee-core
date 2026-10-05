@@ -26,8 +26,12 @@ function memorySql(): SchedulingSqlStorage {
         return [];
       }
       if (query.includes('FROM emp002_appointment_action_queue')) {
-        const tenant = String(bindings[0]); const now = String(bindings[1]); const limit = Number(bindings[2]);
-        return [...queue.values()].filter((row) => row.tenant_id === tenant && row.due_at <= now).sort((a, b) => a.due_at.localeCompare(b.due_at)).slice(0, limit);
+        const tenant = String(bindings[0]); const now = String(bindings[1]); const leaseNow = String(bindings[2]); const limit = Number(bindings[3]);
+        return [...queue.values()]
+          .filter((row) => row.tenant_id === tenant && row.due_at <= now)
+          .filter((row) => !actions.has(`${tenant}:${row.action_key}`))
+          .filter((row) => { const expiry = leases.get(`${tenant}:${row.action_key}`); return !expiry || expiry <= leaseNow; })
+          .sort((a, b) => a.due_at.localeCompare(b.due_at)).slice(0, limit);
       }
       if (query.includes('SELECT action_key FROM emp002_appointment_action_seen')) return actions.has(`${bindings[0]}:${bindings[1]}`) ? [{ action_key: bindings[1] }] : [];
       if (query.includes('SELECT expires_at FROM emp002_appointment_action_lease')) { const value = leases.get(`${bindings[0]}:${bindings[1]}`); return value ? [{ expires_at: value }] : []; }
@@ -88,6 +92,16 @@ test('claimDueActions suppresses an action while its lease is active', () => {
   assert.equal(store.claimDueActions('tenant-a', '2026-10-10T14:00:00.000Z').length, 1);
   assert.equal(store.claimDueActions('tenant-a', '2026-10-10T14:01:00.000Z').length, 0);
   assert.equal(store.claimDueActions('tenant-a', '2026-10-10T14:05:00.000Z').length, 1);
+});
+
+test('completed stale actions do not consume the due-action limit and starve a new action', () => {
+  const store = new SqliteAppointmentLifecycleStore(memorySql());
+  store.scheduleAction({ tenantId: 'tenant-a', appointmentId: 'old', actionKey: 'old-reminder', kind: 'REMINDER', dueAt: '2026-10-04T10:00:00.000Z' });
+  assert.equal(store.claimDueActions('tenant-a', '2026-10-04T11:00:00.000Z', 1).length, 1);
+  store.completeActionClaim('tenant-a', 'old-reminder', '2026-10-04T11:00:01.000Z');
+  store.scheduleAction({ tenantId: 'tenant-a', appointmentId: 'new', actionKey: 'new-reminder', kind: 'REMINDER', dueAt: '2026-10-05T10:00:00.000Z' });
+  const claimed = store.claimDueActions('tenant-a', '2026-10-05T10:00:00.000Z', 1);
+  assert.deepEqual(claimed.map((action) => action.actionKey), ['new-reminder']);
 });
 
 test('invalid due timestamp is rejected before persistence', () => {
