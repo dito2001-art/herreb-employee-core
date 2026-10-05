@@ -13,12 +13,18 @@ export interface EMP002LifecycleE2EInput {
 
 interface ExecutionResult {
   providerMessageId?: string;
+  error?: string;
+  status?: string;
+  provider?: string;
+  providerStatus?: number;
   [key: string]: unknown;
 }
 
 interface ExecutionBody {
   executed?: number;
   prepared?: number;
+  retryable?: number;
+  status?: string;
   results?: ExecutionResult[];
   [key: string]: unknown;
 }
@@ -37,6 +43,22 @@ async function post(stub: DurableObjectStub, path: string, body: unknown): Promi
 
 function executionBody(value: unknown): ExecutionBody {
   return value && typeof value === 'object' ? value as ExecutionBody : {};
+}
+
+function safeExecutionEvidence(status: number, body: ExecutionBody): string {
+  const first = body.results?.[0];
+  return JSON.stringify({
+    httpStatus: status,
+    status: body.status,
+    prepared: body.prepared,
+    executed: body.executed,
+    retryable: body.retryable,
+    resultStatus: first?.status,
+    provider: first?.provider,
+    providerStatus: first?.providerStatus,
+    providerMessageIdPresent: Boolean(first?.providerMessageId),
+    error: first?.error,
+  });
 }
 
 export async function runEMP002LifecycleE2EHarness(namespace: EMP002LifecycleE2ENamespace, input: EMP002LifecycleE2EInput) {
@@ -67,13 +89,13 @@ export async function runEMP002LifecycleE2EHarness(namespace: EMP002LifecycleE2E
   const first = executionBody(execute.body);
   const providerMessageId = first.results?.[0]?.providerMessageId;
   if (execute.status !== 200 || first.executed !== 1 || !providerMessageId) {
-    throw new Error(`EMP002_E2E_EXECUTION_EVIDENCE_FAILED:${execute.status}`);
+    throw new Error(`EMP002_E2E_EXECUTION_EVIDENCE_FAILED:${safeExecutionEvidence(execute.status, first)}`);
   }
 
   const dedupe = await post(stub, '/appointment/actions/execute', { tenantId: input.tenantId, now: input.now, limit: 1 });
   const second = executionBody(dedupe.body);
   if (dedupe.status !== 200 || second.executed !== 0 || second.prepared !== 0) {
-    throw new Error(`EMP002_E2E_DEDUPLICATION_FAILED:${dedupe.status}`);
+    throw new Error(`EMP002_E2E_DEDUPLICATION_FAILED:${safeExecutionEvidence(dedupe.status, second)}`);
   }
 
   return {
