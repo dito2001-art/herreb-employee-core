@@ -3,18 +3,11 @@ import { extractMetaTextMessages, handleMetaWhatsAppWebhook } from './runtime';
 import { dispatchEMP002ScheduledActions } from './runtime/emp002-scheduler-dispatcher';
 import { runEMP002LifecycleE2EHarness } from './runtime/emp002-lifecycle-e2e-harness';
 
-interface OperationsNamespace {
-  idFromName(name: string): DurableObjectId;
-  get(id: DurableObjectId): DurableObjectStub;
-}
+interface OperationsNamespace { idFromName(name: string): DurableObjectId; get(id: DurableObjectId): DurableObjectStub; }
 interface ServiceFetcher { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>; }
 type WorkforceAdminResolvedActor = { email?: string; actorId: string; tenantId: string; role: 'owner' | 'user' };
-type WorkerEnv = Env & {
-  META_VERIFY_TOKEN?: string; WHATSAPP_TENANT_ROUTES_JSON?: string; EMP002_OWNER_WHATSAPP?: string;
-  EMP002_OPERATIONS?: OperationsNamespace; EMP001_WHATSAPP?: ServiceFetcher; WORKFORCE_ADMIN_STATE?: OperationsNamespace;
-  WORKFORCE_ADMIN_M2M_TOKEN?: string; WORKFORCE_ADMIN_M2M_ACTOR_ID?: string; WORKFORCE_ADMIN_M2M_TENANT_ID?: string;
-  TENANT_MANIFESTS_JSON?: string; ACCESS_IDENTITY_MAP_JSON?: string;
-};
+type EMP002E2ERequest = { tenantId?: string; whatsapp?: string; appointmentId?: string; now?: string; startsAt?: string };
+type WorkerEnv = Env & { META_VERIFY_TOKEN?: string; WHATSAPP_TENANT_ROUTES_JSON?: string; EMP002_OWNER_WHATSAPP?: string; EMP002_OPERATIONS?: OperationsNamespace; EMP001_WHATSAPP?: ServiceFetcher; WORKFORCE_ADMIN_STATE?: OperationsNamespace; WORKFORCE_ADMIN_M2M_TOKEN?: string; WORKFORCE_ADMIN_M2M_ACTOR_ID?: string; WORKFORCE_ADMIN_M2M_TENANT_ID?: string; TENANT_MANIFESTS_JSON?: string; ACCESS_IDENTITY_MAP_JSON?: string; };
 const WORKFORCE_ADMIN_RUNTIME_MARKER = 'runtime-probe-v1';
 const EMP002_E2E_TENANT = 'herreb-client-0';
 function normalizeWhatsAppNumber(value?: string): string { return String(value ?? '').replace(/\D/g, ''); }
@@ -30,12 +23,11 @@ export default {
       if (request.method !== 'POST') return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405, headers: { allow: 'POST' } });
       if (!isValidM2M(request, runtimeEnv)) return Response.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
       if (!runtimeEnv.EMP002_OPERATIONS) return Response.json({ ok: false, error: 'EMP002_OPERATIONS_BINDING_MISSING' }, { status: 503 });
-      const body = await request.json<{ tenantId?: string; whatsapp?: string; appointmentId?: string; now?: string; startsAt?: string }>().catch(() => ({}));
+      const body: EMP002E2ERequest = await request.json<EMP002E2ERequest>().catch((): EMP002E2ERequest => ({}));
       const tenantId = body.tenantId?.trim(); const whatsapp = normalizeWhatsAppNumber(body.whatsapp); const owner = normalizeWhatsAppNumber(runtimeEnv.EMP002_OWNER_WHATSAPP);
       if (tenantId !== EMP002_E2E_TENANT || !owner || whatsapp !== owner) return Response.json({ ok: false, error: 'EMP002_E2E_SCOPE_REJECTED' }, { status: 403 });
       if (!body.appointmentId || !body.now || !body.startsAt) return Response.json({ ok: false, error: 'EMP002_E2E_INPUT_REQUIRED' }, { status: 400 });
-      try { const result = await runEMP002LifecycleE2EHarness(runtimeEnv.EMP002_OPERATIONS, { tenantId, whatsapp, appointmentId: body.appointmentId, now: body.now, startsAt: body.startsAt }); return Response.json(result); }
-      catch (error) { return Response.json({ ok: false, error: error instanceof Error ? error.message : 'EMP002_E2E_FAILED' }, { status: 503 }); }
+      try { const result = await runEMP002LifecycleE2EHarness(runtimeEnv.EMP002_OPERATIONS, { tenantId, whatsapp, appointmentId: body.appointmentId, now: body.now, startsAt: body.startsAt }); return Response.json(result); } catch (error) { return Response.json({ ok: false, error: error instanceof Error ? error.message : 'EMP002_E2E_FAILED' }, { status: 503 }); }
     }
     if (url.pathname === '/api/admin/workforce') {
       if (!runtimeEnv.WORKFORCE_ADMIN_STATE) return Response.json({ ok: false, error: 'WORKFORCE_ADMIN_STATE_BINDING_MISSING' }, { status: 503 });
