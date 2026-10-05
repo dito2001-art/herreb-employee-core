@@ -56,19 +56,19 @@ export class EMP002Operations implements DurableObject {
     }
 
     if (request.method === 'POST' && url.pathname === '/appointment/actions/prepare') {
-      const body = await request.json<{ tenantId?: string; now?: string; limit?: number }>();
+      const body = await request.json<{ tenantId?: string; now?: string; limit?: number; actionKey?: string }>();
       if (!body?.tenantId) return Response.json({ ok: false, error: 'TENANT_REQUIRED' }, { status: 400 });
       try {
-        const actions = prepareDueAppointmentActions(this.appointmentStore, body.tenantId, body.now, body.limit);
+        const actions = prepareDueAppointmentActions(this.appointmentStore, body.tenantId, body.now, body.limit, body.actionKey);
         return Response.json({ ok: true, status: 'PREPARED', count: actions.length, actions });
       } catch (error) { return Response.json({ ok: false, error: error instanceof Error ? error.message : 'EMP002_APPOINTMENT_ACTION_PREPARE_FAILED' }, { status: 400 }); }
     }
 
     if (request.method === 'POST' && url.pathname === '/appointment/actions/execute') {
-      const body = await request.json<{ tenantId?: string; now?: string; limit?: number }>();
+      const body = await request.json<{ tenantId?: string; now?: string; limit?: number; actionKey?: string }>();
       if (!body?.tenantId) return Response.json({ ok: false, error: 'TENANT_REQUIRED' }, { status: 400 });
       try {
-        const prepared = prepareDueAppointmentActions(this.appointmentStore, body.tenantId, body.now, body.limit);
+        const prepared = prepareDueAppointmentActions(this.appointmentStore, body.tenantId, body.now, body.limit, body.actionKey);
         const whatsapp = buildEMP002WhatsAppTransport(this.env, body.tenantId);
         const results = [];
         for (const item of prepared) {
