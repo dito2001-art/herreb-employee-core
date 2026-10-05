@@ -57,7 +57,7 @@ test("AG-002 controlled write propagates delete with idempotency and tenant head
   const transport = createAg002GatewayControlledWriteTransport({ service, runtimeToken: "secret", tenantId: "tenant-a" });
   const result = await transport.execute({ tenantId: "tenant-a", operation: "delete", entity: "tasks", payload: { id: 140 }, correlationId: "corr-delete", idempotencyKey: "delete-task-140" });
   assert.equal(result.ok, true); assert.equal(captured?.method, "POST"); const headers = new Headers(captured?.headers); assert.equal(headers.get("Idempotency-Key"), "delete-task-140"); assert.equal(headers.get("X-Tenant-ID"), "tenant-a");
-  const body = JSON.parse(String(captured?.body)); assert.equal(body.operation, "delete"); assert.equal(body.entity, "tasks"); assert.deepEqual(body.payload, { id: 140 });
+  const body = JSON.parse(String(captured?.body)); assert.equal(body.operation, "delete"); assert.equal(body.entity, "tasks"); assert.equal(body.id, 140); assert.equal(body.data, undefined); assert.equal(body.audit.authorizationMode, "AUTHORIZED"); assert.equal(body.audit.authorizedBy, "Fernando"); assert.equal(body.idempotencyKey, "delete-task-140");
 });
 
 test("AG-002 controlled write preserves same idempotency key across retry attempts", async () => {
@@ -74,4 +74,33 @@ test("AG-002 controlled-write upstream failure does not leak response or token",
   const result = await transport.execute({ tenantId: "tenant-a", operation: "create", entity: "tasks", payload: { title: "x" }, correlationId: "corr-cw-error", idempotencyKey: "idem-error" });
   assert.equal(result.ok, false); assert.equal(result.error?.code, "AG002_CONTROLLED_WRITE_UPSTREAM_ERROR"); assert.equal(result.error?.retryable, true); assert.equal(result.evidence?.upstreamStatus, 500);
   const serialized = JSON.stringify(result); assert.equal(serialized.includes("runtime-secret"), false); assert.equal(serialized.includes("leak-me-not"), false); assert.equal(serialized.includes("sensitive"), false);
+});
+
+
+test("AG-002 controlled write maps create payload to gateway data plus authorization audit", async () => {
+  let captured: RequestInit | undefined;
+  const service: ServiceFetcher = { async fetch(_input, init) { captured = init; return Response.json({ success: true, id: 501 }, { status: 200 }); } };
+  const transport = createAg002GatewayControlledWriteTransport({ service, runtimeToken: "secret", tenantId: "herreb-client-0" });
+  const result = await transport.execute({ tenantId: "herreb-client-0", operation: "create", entity: "tasks", payload: { title: "Certification", type: "meeting" }, correlationId: "corr-create", idempotencyKey: "idem-create" });
+  assert.equal(result.ok, true);
+  const body = JSON.parse(String(captured?.body));
+  assert.equal(body.operation, "create");
+  assert.equal(body.entity, "tasks");
+  assert.deepEqual(body.data, { title: "Certification", type: "meeting" });
+  assert.equal(body.audit.authorizationMode, "AUTHORIZED");
+  assert.equal(body.audit.authorizedBy, "Fernando");
+  assert.equal(body.idempotencyKey, "idem-create");
+  assert.equal(body.payload, undefined);
+});
+
+test("AG-002 controlled write maps update id to top level and excludes id from data", async () => {
+  let captured: RequestInit | undefined;
+  const service: ServiceFetcher = { async fetch(_input, init) { captured = init; return Response.json({ success: true, id: 140 }, { status: 200 }); } };
+  const transport = createAg002GatewayControlledWriteTransport({ service, runtimeToken: "secret", tenantId: "herreb-client-0" });
+  const result = await transport.execute({ tenantId: "herreb-client-0", operation: "update", entity: "tasks", payload: { id: 140, title: "Updated" }, correlationId: "corr-update", idempotencyKey: "idem-update" });
+  assert.equal(result.ok, true);
+  const body = JSON.parse(String(captured?.body));
+  assert.equal(body.id, 140);
+  assert.deepEqual(body.data, { title: "Updated" });
+  assert.equal(body.audit.authorizedBy, "Fernando");
 });
