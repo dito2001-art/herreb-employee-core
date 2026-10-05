@@ -3,7 +3,7 @@ import type { WhatsAppSchedulingDispatchRecord } from './emp002-whatsapp-dispatc
 import type { RoutedWhatsAppInbound } from './emp002-whatsapp-endpoint';
 import { dispatchSchedulingWhatsAppInbound } from './emp002-whatsapp-dispatcher';
 import { SqliteEMP002WhatsAppConversationStore } from './emp002-whatsapp-conversation-store';
-import { SqliteAppointmentLifecycleStore } from './emp002-appointment-lifecycle-store';
+import { SqliteAppointmentLifecycleStore, type AppointmentLifecycleAction } from './emp002-appointment-lifecycle-store';
 import { prepareDueAppointmentActions } from './emp002-appointment-action-processor';
 import { executePreparedAppointmentAction } from './emp002-appointment-action-executor';
 import { transitionAppointment, type AppointmentLifecycleEvent, type AppointmentLifecycleRecord } from './emp002-appointment-lifecycle';
@@ -42,6 +42,17 @@ export class EMP002Operations implements DurableObject {
         const next = transitionAppointment(current, body.event, body.at);
         return Response.json({ ok: true, record: this.appointmentStore.save(next, body.expectedVersion ?? current.version) });
       } catch (error) { const code = error instanceof Error ? error.message : 'EMP002_APPOINTMENT_TRANSITION_FAILED'; return Response.json({ ok: false, error: code }, { status: code === 'EMP002_APPOINTMENT_CONCURRENT_MODIFICATION' ? 409 : 400 }); }
+    }
+
+    if (request.method === 'POST' && url.pathname === '/appointment/actions/schedule') {
+      const action = await request.json<AppointmentLifecycleAction>();
+      if (!action?.tenantId || !action?.appointmentId || !action?.actionKey || !action?.kind || !action?.dueAt) return Response.json({ ok: false, error: 'INVALID_APPOINTMENT_ACTION' }, { status: 400 });
+      const appointment = this.appointmentStore.load(action.tenantId, action.appointmentId);
+      if (!appointment) return Response.json({ ok: false, error: 'APPOINTMENT_NOT_FOUND' }, { status: 404 });
+      try {
+        this.appointmentStore.scheduleAction(action);
+        return Response.json({ ok: true, status: 'SCHEDULED', action });
+      } catch (error) { return Response.json({ ok: false, error: error instanceof Error ? error.message : 'EMP002_APPOINTMENT_ACTION_SCHEDULE_FAILED' }, { status: 400 }); }
     }
 
     if (request.method === 'POST' && url.pathname === '/appointment/actions/prepare') {
