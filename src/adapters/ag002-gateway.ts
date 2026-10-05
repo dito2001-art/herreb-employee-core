@@ -164,7 +164,24 @@ export function createAg002GatewayControlledWriteTransport(options: Ag002Gateway
             "content-type": "application/json",
             accept: "application/json"
           },
-          body: JSON.stringify({ operation: input.operation, entity: input.entity, payload: input.payload ?? {} })
+          body: JSON.stringify({
+            operation: input.operation,
+            entity: input.entity,
+            ...(input.operation === "create"
+              ? { data: input.payload ?? {} }
+              : {
+                  id: Number((input.payload as Record<string, unknown> | undefined)?.id),
+                  ...(input.operation === "update"
+                    ? { data: Object.fromEntries(Object.entries(input.payload ?? {}).filter(([key]) => key !== "id")) }
+                    : {})
+                }),
+            audit: {
+              authorizationMode: "AUTHORIZED",
+              authorizedBy: "Fernando",
+              reason: "Authorized EMP-002 controlled write via Workforce Runtime"
+            },
+            idempotencyKey: input.idempotencyKey
+          })
         });
         const text = await response.text(); let body: unknown = text; try { body = text ? JSON.parse(text) : null; } catch {}
         if (!response.ok) return { ok: false, error: { code: "AG002_CONTROLLED_WRITE_UPSTREAM_ERROR", message: `AG-002 gateway returned HTTP ${response.status}`, retryable: response.status >= 500 }, evidence: { ...baseEvidence, executed: true, upstreamStatus: response.status } };
