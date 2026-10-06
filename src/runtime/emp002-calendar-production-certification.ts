@@ -1,4 +1,4 @@
-import { createAg002GatewayControlledWriteTransport, createAg002GatewayReadOnlyTransport } from "../adapters/ag002-gateway";
+import { createCrmCapabilityControlledWriteTransport, createCrmCapabilityReadOnlyTransport } from "../adapters/crm-capability";
 import { createCrmCalendarControlledWriteTransport } from "../adapters/crm-calendar-write";
 import type { ServiceFetcher } from "../adapters/sales-ops";
 
