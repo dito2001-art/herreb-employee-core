@@ -3,10 +3,10 @@ import { createCrmCalendarControlledWriteTransport } from "../adapters/crm-calen
 import type { ServiceFetcher } from "../adapters/sales-ops";
 
 export interface CalendarCertificationEnv {
-  AG002_GATEWAY?: ServiceFetcher;
+  CRM_CAPABILITY?: ServiceFetcher;\n  AG002_GATEWAY?: ServiceFetcher;
   RUNTIME_GATEWAY_TOKEN?: string;
   HERREB_RUNTIME_TOKEN?: string;
-  AG002_TENANT_ID?: string;
+  CRM_TENANT_ID?: string;\n  AG002_TENANT_ID?: string;
 }
 
 function recordFrom(output: unknown): Record<string, unknown> | undefined {
