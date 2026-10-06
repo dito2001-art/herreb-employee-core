@@ -1,5 +1,6 @@
 import employeeServer from './server';
 import { extractMetaTextMessages, handleMetaWhatsAppWebhook } from './runtime';
+import { routeWorkforceWhatsAppMessage } from './runtime/workforce-whatsapp-router';
 import { dispatchEMP002ScheduledActions } from './runtime/emp002-scheduler-dispatcher';
 import { runEMP002LifecycleE2EHarness } from './runtime/emp002-lifecycle-e2e-harness';
 import { runEMP002CalendarProductionCertification } from './runtime/emp002-calendar-production-certification';
@@ -51,8 +52,8 @@ export default {
     }
     if (url.pathname === '/webhooks/meta/whatsapp') {
       if (request.method === 'GET') return handleMetaWhatsAppWebhook(request, runtimeEnv, async () => undefined);
-      if (request.method === 'POST') { const payload = await request.clone().json().catch(() => undefined); const inbound = extractMetaTextMessages(payload); if (inbound.length && runtimeEnv.EMP001_WHATSAPP) return runtimeEnv.EMP001_WHATSAPP.fetch('https://emp001.internal/webhooks/meta/whatsapp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }); }
-      return handleMetaWhatsAppWebhook(request, runtimeEnv, async (message) => { if (!runtimeEnv.EMP002_OPERATIONS) throw new Error('EMP002_OPERATIONS_BINDING_MISSING'); const id = runtimeEnv.EMP002_OPERATIONS.idFromName(`tenant:${message.tenantId}`); const stub = runtimeEnv.EMP002_OPERATIONS.get(id); const response = await stub.fetch('https://emp002.operations/inbound/whatsapp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(message) }); if (!response.ok) throw new Error(`EMP002_OPERATIONS_DISPATCH_FAILED:${response.status}:${await response.text()}`); });
+      if (request.method === 'POST') { const payload = await request.clone().json().catch(() => undefined); const inbound = extractMetaTextMessages(payload); if (inbound.length) { const route = routeWorkforceWhatsAppMessage(inbound[0].body); if (route.employeeId === 'EMP-001' && runtimeEnv.EMP001_WHATSAPP) return runtimeEnv.EMP001_WHATSAPP.fetch('https://emp001.internal/webhooks/meta/whatsapp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }); if (route.employeeId === 'EMP-003') return Response.json({ ok: false, error: 'EMP003_WHATSAPP_NOT_READY' }, { status: 503 }); } }
+      return handleMetaWhatsAppWebhook(request, runtimeEnv, async (message) => { const route = routeWorkforceWhatsAppMessage(message.body); if (route.employeeId !== 'EMP-002') return; message.body = route.body; if (!runtimeEnv.EMP002_OPERATIONS) throw new Error('EMP002_OPERATIONS_BINDING_MISSING'); const id = runtimeEnv.EMP002_OPERATIONS.idFromName(`tenant:${message.tenantId}`); const stub = runtimeEnv.EMP002_OPERATIONS.get(id); const response = await stub.fetch('https://emp002.operations/inbound/whatsapp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(message) }); if (!response.ok) throw new Error(`EMP002_OPERATIONS_DISPATCH_FAILED:${response.status}:${await response.text()}`); });
     }
     return employeeServer.fetch(request, env, ctx);
   },
