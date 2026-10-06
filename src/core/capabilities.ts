@@ -28,6 +28,30 @@ const definitions: CapabilityDefinition[] = [
     allowedEmployees: ["EMP-001"]
   },
   {
+    id: "lead.discover",
+    description: "Discover prospective leads within tenant sales policy",
+    risk: "GREEN",
+    allowedEmployees: ["EMP-001"]
+  },
+  {
+    id: "lead.database.sell",
+    description: "Qualify and work tenant-provided lead/customer databases",
+    risk: "GREEN",
+    allowedEmployees: ["EMP-001"]
+  },
+  {
+    id: "lead.qualify",
+    description: "Qualify and prioritize tenant sales leads",
+    risk: "GREEN",
+    allowedEmployees: ["EMP-001"]
+  },
+  {
+    id: "sales.outreach",
+    description: "Initiate policy-authorized proactive commercial outreach",
+    risk: "GREEN",
+    allowedEmployees: ["EMP-001"]
+  },
+  {
     id: "quote.create",
     description: "Create a commercial quote",
     risk: "YELLOW",
