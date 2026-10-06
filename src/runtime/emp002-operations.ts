@@ -124,7 +124,7 @@ export class EMP002Operations implements DurableObject {
           console.log(JSON.stringify({ event: 'EMP002_ROUTING_DECISION', correlationId, tenantId: message.tenantId, calendarIntent, ownerConfigured, ownerVerified, route: calendarIntent ? (ownerVerified ? 'calendar-read' : 'owner-verification-failed') : 'general-conversation' }));
           if (calendarIntent && !ownerVerified) return Response.json({ ok: false, handled: false, mode: 'owner-verification-failed', error: 'EMP002_OWNER_VERIFICATION_FAILED', correlationId, routing: { calendarIntent, ownerConfigured, ownerVerified } }, { status: 403 });
           let reply: string; let mode = 'general-conversation';
-          const ownerCommand = ownerVerified ? await parseEMP002OwnerCalendarCommand(this.env.AI, message.body, message.receivedAt) : { operation: 'none' as const };
+          const ownerCommand = ownerVerified ? await parseEMP002OwnerCalendarCommand(this.env.AI, message.body, new Date().toISOString()) : { operation: 'none' as const };
           if (ownerCommand.operation !== 'none') {
             const readCalendar = buildEMP002CalendarReadTransport(this.env, message.tenantId);
             const writeCalendar = buildEMP002CalendarTransport(this.env, message.tenantId);
@@ -142,7 +142,7 @@ export class EMP002Operations implements DurableObject {
               reply = `Hecho. Creé "${ownerCommand.title}" y confirmé su persistencia en el CRM.`;
               mode = 'calendar-create';
             } else {
-              const window = resolveEMP002CalendarQueryWindow(message.body, new Date(message.receivedAt));
+              const window = resolveEMP002CalendarQueryWindow(message.body, new Date());
               const lookup = await readCalendar.execute({ tenantId: message.tenantId, request: { operation: 'search', timeMin: window.timeMin, timeMax: window.timeMax, query: ownerCommand.query }, correlationId: `${correlationId}:lookup` });
               if (!lookup.ok) throw new Error('EMP002_OWNER_CALENDAR_LOOKUP_FAILED');
               const records = ((lookup.output as { data?: Array<Record<string, unknown>> })?.data ?? []).filter((item) => {
@@ -169,7 +169,7 @@ export class EMP002Operations implements DurableObject {
             }
           } else if (calendarIntent && ownerVerified) {
             const calendar = buildEMP002CalendarReadTransport(this.env, message.tenantId);
-            const window = resolveEMP002CalendarQueryWindow(message.body, new Date(message.receivedAt));
+            const window = resolveEMP002CalendarQueryWindow(message.body, new Date());
             const calendarResult = await calendar.execute({ tenantId: message.tenantId, request: { operation: 'search', timeMin: window.timeMin, timeMax: window.timeMax }, correlationId });
             if (!calendarResult.ok) throw new Error(`EMP002_CALENDAR_READ_FAILED:${calendarResult.error?.code ?? 'EMP002_CALENDAR_READ_FAILED'}`);
             reply = await generateEMP002CalendarReply(this.env.AI, message.body, calendarResult.output); mode = 'calendar-read';
