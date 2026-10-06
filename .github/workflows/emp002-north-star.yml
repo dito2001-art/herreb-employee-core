@@ -1,0 +1,81 @@
+name: EMP-002 North Star Prepare
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type PREPARE_EMP002_NORTH_STAR to authorize one real certification scenario"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: emp002-north-star
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: ${{ inputs.confirm == 'PREPARE_EMP002_NORTH_STAR' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Prepare guarded Client-0 North Star scenario
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
+          URL: https://herreb-employee-core.dito2001.workers.dev/api/internal/emp002/north-star/prepare
+
+        run: |
+          set -euo pipefail
+
+          test -n "$TOKEN"
+
+          NOW="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+          STARTS_AT="$(date -u -d '+2 day' +%Y-%m-%dT%H:%M:%S.000Z)"
+          ENDS_AT="$(date -u -d '+2 day +30 minutes' +%Y-%m-%dT%H:%M:%S.000Z)"
+          CONTACT_ID="north-star-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+          BODY="$(printf '{"tenantId":"herreb-client-0","whatsapp":"595981538641","contactId":"%s","displayName":"Fernando North Star","ownerWhatsapp":"595981538641","now":"%s","startsAt":"%s","endsAt":"%s","resourceId":"north-star-resource"}' \
+            "$CONTACT_ID" \
+            "$NOW" \
+            "$STARTS_AT" \
+            "$ENDS_AT")"
+
+          RESPONSE_FILE="$(mktemp)"
+          trap 'rm -f "$RESPONSE_FILE"' EXIT
+
+          HTTP_STATUS="$(curl \
+            --silent \
+            --show-error \
+            --output "$RESPONSE_FILE" \
+            --write-out '%{http_code}' \
+            -X POST "$URL" \
+            -H 'content-type: application/json' \
+            -H "x-herreb-workforce-admin-token: $TOKEN" \
+            --data "$BODY")"
+
+          RESPONSE="$(cat "$RESPONSE_FILE")"
+
+          echo "EMP-002 North Star prepare HTTP status: $HTTP_STATUS"
+          printf '%s\n' "$RESPONSE"
+
+          test "$HTTP_STATUS" = '200'
+
+          node -e '
+            const r = JSON.parse(process.argv[1]);
+
+            if (
+              !r.ok ||
+              !r.prepared ||
+              r.state !== "WAITING_FOR_CONTACT" ||
+              r.recoveryStatus !== "OFFER_PENDING"
+            ) {
+              console.error("EMP-002 North Star preparation failed");
+              process.exit(1);
+            }
+
+            console.log(`PREPARED correlationId=${r.correlationId}`);
+          ' "$RESPONSE"
