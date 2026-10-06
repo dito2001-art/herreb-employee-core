@@ -1,7 +1,7 @@
 import type { CapabilityAdapter } from "../core";
 import {
-  createAg002GatewayControlledWriteTransport,
-  createAg002GatewayReadOnlyTransport,
+  createCrmCapabilityControlledWriteTransport,
+  createCrmCapabilityReadOnlyTransport,
   createCalendarAdapter,
   createCalendarReadOnlyTransport,
   createCrmAdapter,
@@ -18,11 +18,11 @@ import {
 export interface ReadOnlyRuntimeEnv {
   SALES_OPS?: ServiceFetcher;
   SALES_OPS_TOKEN?: string;
-  AG002_GATEWAY?: ServiceFetcher;
+  CRM_CAPABILITY?: ServiceFetcher;
   RUNTIME_GATEWAY_TOKEN?: string;
   /** @deprecated Use RUNTIME_GATEWAY_TOKEN. Kept temporarily for deployment compatibility. */
   HERREB_RUNTIME_TOKEN?: string;
-  AG002_TENANT_ID?: string;
+  CRM_TENANT_ID?: string;
   /** @deprecated Calendar is CRM-backed; retained for scoped migration compatibility. */
   CALENDAR_READ?: ServiceFetcher;
   CALENDAR_READ_TOKEN?: string;
@@ -47,18 +47,18 @@ function readOnlyService(service: ServiceFetcher, token: string, tenantId: strin
 /**
  * Builds the connected runtime. The historical name is retained to avoid a
  * breaking migration for callers, but CRM now supports controlled writes via
- * the same tenant-scoped AG-002 binding used for reads.
+ * the same tenant-scoped CRM capability binding used for reads.
  */
 export function buildReadOnlyRuntime(env: ReadOnlyRuntimeEnv): ReadOnlyRuntimeBootstrap {
   const adapters: CapabilityAdapter[] = [];
   const salesToken = nonBlank(env.SALES_OPS_TOKEN);
   const runtimeToken = nonBlank(env.RUNTIME_GATEWAY_TOKEN) ?? nonBlank(env.HERREB_RUNTIME_TOKEN);
-  const ag002TenantId = nonBlank(env.AG002_TENANT_ID);
+  const crmTenantId = nonBlank(env.CRM_TENANT_ID);
   const calendarToken = nonBlank(env.CALENDAR_READ_TOKEN);
   const calendarTenantId = nonBlank(env.CALENDAR_TENANT_ID);
   const emailToken = nonBlank(env.EMAIL_READ_TOKEN);
   const emailTenantId = nonBlank(env.EMAIL_TENANT_ID);
-  const crmState = scopedConnectionState(env.AG002_GATEWAY, runtimeToken, ag002TenantId);
+  const crmState = scopedConnectionState(env.CRM_CAPABILITY, runtimeToken, crmTenantId);
   const legacyCalendarConfigured = Boolean(env.CALENDAR_READ);
   const calendarState = legacyCalendarConfigured ? scopedConnectionState(env.CALENDAR_READ, calendarToken, calendarTenantId) : crmState;
 
@@ -74,11 +74,11 @@ export function buildReadOnlyRuntime(env: ReadOnlyRuntimeEnv): ReadOnlyRuntimeBo
     adapters.push(projectReadOnlyAdapter(createSalesOpsAdapter({ service: env.SALES_OPS, token: salesToken }), ["offering.recommend"]));
   }
 
-  let crmReadTransport: ReturnType<typeof createAg002GatewayReadOnlyTransport> | undefined;
-  if (env.AG002_GATEWAY && runtimeToken && ag002TenantId) {
-    const gatewayOptions = { service: env.AG002_GATEWAY, runtimeToken, tenantId: ag002TenantId };
-    crmReadTransport = createAg002GatewayReadOnlyTransport(gatewayOptions);
-    const crmWriteTransport = createAg002GatewayControlledWriteTransport(gatewayOptions);
+  let crmReadTransport: ReturnType<typeof createCrmCapabilityReadOnlyTransport> | undefined;
+  if (env.CRM_CAPABILITY && runtimeToken && crmTenantId) {
+    const gatewayOptions = { service: env.CRM_CAPABILITY, runtimeToken, tenantId: crmTenantId };
+    crmReadTransport = createCrmCapabilityReadOnlyTransport(gatewayOptions);
+    const crmWriteTransport = createCrmCapabilityControlledWriteTransport(gatewayOptions);
     adapters.push(projectReadOnlyAdapter(createCrmAdapter(crmReadTransport), ["crm.read"]));
     // Deliberately do not project this adapter through read-only guards: it is
     // the explicit controlled-write path and enforces tenant + idempotency.
