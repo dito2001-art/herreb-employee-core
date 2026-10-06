@@ -90,6 +90,14 @@ export type EMP002OwnerCalendarCommand =
   | { operation: 'update'; query: string; changes: { startDate?: string; endDate?: string; startTime?: string; endTime?: string; title?: string } }
   | { operation: 'delete'; query: string };
 
+function normalizeCalendarDateTime(value: string): string | undefined {
+  const trimmed = value.trim();
+  const iso = trimmed.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}):(\d{2})(?::\d{2})?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/);
+  if (iso) return `${iso[1]}T${iso[2]}:${iso[3]}:00`;
+  const dateOnly = trimmed.match(/^(\d{4}-\d{2}-\d{2})$/);
+  return dateOnly ? undefined : undefined;
+}
+
 function jsonObjectFromText(text: string): Record<string, unknown> {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1] ?? text;
   const start = fenced.indexOf('{');
@@ -127,8 +135,11 @@ export async function parseEMP002OwnerCalendarCommand(
   const operation = value.operation;
   if (operation === 'none') return { operation: 'none' };
   if (operation === 'create') {
-    const title = nonEmptyText(value.title); const startTime = nonEmptyText(value.startTime); const endTime = nonEmptyText(value.endTime);
+    const title = nonEmptyText(value.title); const rawStartTime = nonEmptyText(value.startTime); const rawEndTime = nonEmptyText(value.endTime);
+    const startTime = rawStartTime ? normalizeCalendarDateTime(rawStartTime) : undefined;
+    const endTime = rawEndTime ? normalizeCalendarDateTime(rawEndTime) : undefined;
     if (!title || !startTime || !endTime) return { operation: 'none' };
+    if (new Date(endTime).getTime() <= new Date(startTime).getTime()) return { operation: 'none' };
     return { operation, title, startTime, endTime, timezone: nonEmptyText(value.timezone) ?? timezone, description: nonEmptyText(value.description) };
   }
   if (operation === 'update') {
