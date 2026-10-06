@@ -61,8 +61,11 @@ export async function runEMP002CalendarProductionCertification(
     correlationId: input.correlationId + ":readback"
   });
 
-  const record = recordFrom(readBack.output);
-  const persistenceConfirmed = createdBody?.persistenceConfirmed === true || record?.persistenceConfirmed === true || createdRecord?.persistenceConfirmed === true;
+  const readBody = readBack.output as Record<string, unknown> | undefined;
+  const readRows = Array.isArray(readBody?.data) ? readBody.data : Array.isArray(readBody?.tasks) ? readBody.tasks : [];
+  const persistedRecord = readRows.find((item) => item && typeof item === "object" && String((item as Record<string, unknown>).id ?? "") === id) as Record<string, unknown> | undefined;
+  const record = persistedRecord ?? recordFrom(readBack.output);
+  const persistenceConfirmed = Boolean(readBack.ok && persistedRecord);
   const verified = Boolean(readBack.ok && record && persistenceConfirmed);
 
   const cleanup = await calendar.execute({
