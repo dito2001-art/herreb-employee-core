@@ -82,3 +82,65 @@ export async function generateEMP002CalendarReply(
   ];
   return responseText(await ai.run(MODEL, { messages }));
 }
+
+
+export type EMP002OwnerCalendarCommand =
+  | { operation: 'none' }
+  | { operation: 'create'; title: string; startTime: string; endTime: string; timezone: string; description?: string }
+  | { operation: 'update'; query: string; changes: { startDate?: string; endDate?: string; startTime?: string; endTime?: string; title?: string } }
+  | { operation: 'delete'; query: string };
+
+function jsonObjectFromText(text: string): Record<string, unknown> {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1] ?? text;
+  const start = fenced.indexOf('{');
+  const end = fenced.lastIndexOf('}');
+  if (start < 0 || end <= start) throw new Error('EMP002_OWNER_COMMAND_JSON_MISSING');
+  const parsed = JSON.parse(fenced.slice(start, end + 1));
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('EMP002_OWNER_COMMAND_INVALID');
+  return parsed as Record<string, unknown>;
+}
+
+export async function parseEMP002OwnerCalendarCommand(
+  ai: EMP002WorkersAI | undefined,
+  text: string,
+  nowIso: string,
+  timezone = 'America/Asuncion',
+): Promise<EMP002OwnerCalendarCommand> {
+  if (!ai) throw new Error('EMP002_WORKERS_AI_MISSING');
+  const messages = [
+    {
+      role: 'system',
+      content: [
+        'Classify a verified business owner WhatsApp message for calendar mutation.',
+        'Return JSON only. Allowed operation values: none, create, update, delete.',
+        'Never invent missing title, target, date or time.',
+        'For create require title and an explicit or relative date/time resolvable from NOW; return ISO startTime and endTime. Default duration is 60 minutes only when start is clear and end/duration is omitted.',
+        'For update/delete return query containing the user target description. For update return only explicit requested changes using CRM fields startDate,endDate,startTime,endTime,title.',
+        'If the message is only asking/reading agenda, operation is none.',
+        'If required mutation information is ambiguous or missing, operation is none.',
+      ].join(' '),
+    },
+    { role: 'user', content: `NOW=${nowIso}\nTIMEZONE=${timezone}\nMESSAGE=${text}` },
+  ];
+  const raw = responseText(await ai.run(MODEL, { messages }));
+  const value = jsonObjectFromText(raw);
+  const operation = value.operation;
+  if (operation === 'none') return { operation: 'none' };
+  if (operation === 'create') {
+    const title = nonEmptyText(value.title); const startTime = nonEmptyText(value.startTime); const endTime = nonEmptyText(value.endTime);
+    if (!title || !startTime || !endTime) return { operation: 'none' };
+    return { operation, title, startTime, endTime, timezone: nonEmptyText(value.timezone) ?? timezone, description: nonEmptyText(value.description) };
+  }
+  if (operation === 'update') {
+    const query = nonEmptyText(value.query); const changes = value.changes;
+    if (!query || !changes || typeof changes !== 'object' || Array.isArray(changes)) return { operation: 'none' };
+    const allowed = Object.fromEntries(Object.entries(changes as Record<string, unknown>).filter(([key, item]) => ['startDate','endDate','startTime','endTime','title'].includes(key) && typeof item === 'string' && item.trim()));
+    if (!Object.keys(allowed).length) return { operation: 'none' };
+    return { operation, query, changes: allowed };
+  }
+  if (operation === 'delete') {
+    const query = nonEmptyText(value.query);
+    return query ? { operation, query } : { operation: 'none' };
+  }
+  return { operation: 'none' };
+}
