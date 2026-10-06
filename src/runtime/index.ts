@@ -25,3 +25,5 @@ export * from "./emp002-whatsapp-endpoint";
 export * from "./emp002-whatsapp-dispatch-store";
 export * from "./emp002-whatsapp-dispatcher";
 export * from "./emp002-whatsapp-sqlite-dispatch-store";
+
+export * from "./workforce-whatsapp-router";
