@@ -130,7 +130,7 @@ export class EMP002Operations implements DurableObject {
             const writeCalendar = buildEMP002CalendarTransport(this.env, message.tenantId);
             if (ownerCommand.operation === 'create') {
               const write = await writeCalendar.execute({ tenantId: message.tenantId, request: ownerCommand, correlationId, idempotencyKey: `emp002-owner:create:${message.messageId}` });
-              if (!write.ok) throw new Error(`EMP002_OWNER_CALENDAR_WRITE_FAILED:${write.error?.code ?? 'CREATE_FAILED'}`);
+              if (!write.ok) throw new Error(`EMP002_OWNER_CALENDAR_WRITE_FAILED:${write.error?.code ?? 'CREATE_FAILED'}:HTTP_${String(write.evidence?.upstreamStatus ?? 'UNKNOWN')}:UPSTREAM_${String(write.evidence?.upstreamErrorCode ?? 'UNKNOWN')}`);
               const output = write.output as { data?: { id?: string | number }; persistenceConfirmed?: boolean };
               const id = output.data?.id;
               if (!id || output.persistenceConfirmed !== true) throw new Error('EMP002_OWNER_CALENDAR_CREATE_NOT_CONFIRMED');
