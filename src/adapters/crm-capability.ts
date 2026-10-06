@@ -184,7 +184,23 @@ export function createCrmCapabilityControlledWriteTransport(options: CrmCapabili
           })
         });
         const text = await response.text(); let body: unknown = text; try { body = text ? JSON.parse(text) : null; } catch {}
-        if (!response.ok) return { ok: false, error: { code: "CRM_CAPABILITY_CONTROLLED_WRITE_UPSTREAM_ERROR", message: `CRM capability gateway returned HTTP ${response.status}`, retryable: response.status >= 500 }, evidence: { ...baseEvidence, executed: true, upstreamStatus: response.status } };
+        const upstreamErrorCode = isRecord(body)
+          ? typeof body.error === "string"
+            ? body.error
+            : isRecord(body.error) && typeof body.error.code === "string"
+              ? body.error.code
+              : undefined
+          : undefined;
+        safeGatewayDiagnostic("CRM_CAPABILITY_CONTROLLED_WRITE_RESPONSE", {
+          ...baseEvidence,
+          upstreamStatus: response.status,
+          upstreamOk: response.ok,
+          responseContentType: response.headers.get("content-type") ?? undefined,
+          upstreamErrorCode,
+          persistenceConfirmed: isRecord(body) && body.persistenceConfirmed === true,
+          auditLogPresent: isRecord(body) && (typeof body.auditLogId === "string" || typeof body.auditLogId === "number")
+        });
+        if (!response.ok) return { ok: false, error: { code: "CRM_CAPABILITY_CONTROLLED_WRITE_UPSTREAM_ERROR", message: `CRM capability gateway returned HTTP ${response.status}`, retryable: response.status >= 500 }, evidence: { ...baseEvidence, executed: true, upstreamStatus: response.status, upstreamErrorCode } };
         return { ok: true, output: body, evidence: { ...baseEvidence, executed: true, upstreamStatus: response.status } };
       } catch (error) {
         return { ok: false, error: { code: "CRM_CAPABILITY_CONTROLLED_WRITE_TRANSPORT_ERROR", message: error instanceof Error ? error.message : "CRM capability controlled write failed", retryable: true }, evidence: { ...baseEvidence, executed: false } };
