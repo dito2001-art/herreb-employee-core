@@ -72,7 +72,7 @@ test("EMP-002 CRM binding rejects another tenant before upstream execution", asy
   const session = await runtime.start({ tenantId: "client-b", employeeId: "EMP-002", workspaceId: "executive", actorId: "owner", channel: "test" });
   const result = await session.execute("crm.read", { operation: "read", entity: "tasks", payload: { limit: 1 } });
   assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "AG002_TENANT_SCOPE_MISMATCH");
+  assert.equal(result.error?.code, "CRM_CAPABILITY_TENANT_SCOPE_MISMATCH");
   assert.equal(calls, 0);
 });
 

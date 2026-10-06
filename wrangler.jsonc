@@ -8,7 +8,7 @@
   "ai": { "binding": "AI", "remote": true },
   "vars": {
     "EMP002_TEST_CONSOLE": "client0",
-    "AG002_TENANT_ID": "herreb-client-0",
+    "CRM_TENANT_ID": "herreb-client-0",
     "CALENDAR_TENANT_ID": "herreb-client-0",
     "META_API_VERSION": "v26.0",
     "META_GRAPH_VERSION": "v26.0",
@@ -20,7 +20,7 @@
   "services": [
     { "binding": "EMP001_WHATSAPP", "service": "herreb-emp001-meta-whatsapp-adapter" },
     { "binding": "SALES_OPS", "service": "herreb-emp001-sales-ops-sandbox" },
-    { "binding": "AG002_GATEWAY", "service": "herreb-agent-gateway-v3" },
+    { "binding": "CRM_CAPABILITY", "service": "herreb-agent-gateway-v3" },
     { "binding": "CALENDAR_READ", "service": "herreb-calendar-read" }
   ],
   "assets": {

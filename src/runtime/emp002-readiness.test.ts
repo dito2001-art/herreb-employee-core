@@ -41,7 +41,7 @@ test("EMP-002 readiness passes only with all required reads and no writes", () =
   assert.doesNotThrow(() => assertEmp002ReadOnlyReady(bootstrap));
 });
 
-test("EMP-002 readiness fails closed when a required Client0 connector is missing", () => {
+test("EMP-002 readiness remains ready when optional email connector is missing", () => {
   const bootstrap = buildTenantReadOnlyRuntime(
     {
       AG002_GATEWAY: service,
@@ -56,12 +56,9 @@ test("EMP-002 readiness fails closed when a required Client0 connector is missin
   );
   const readiness = evaluateEmp002ReadOnlyReadiness(bootstrap);
 
-  assert.equal(readiness.ready, false);
-  assert.deepEqual(readiness.missingReadCapabilities, ["email.read"]);
-  assert.throws(
-    () => assertEmp002ReadOnlyReady(bootstrap),
-    /EMP002_READ_ONLY_NOT_READY/
-  );
+  assert.equal(readiness.ready, true);
+  assert.deepEqual(readiness.missingReadCapabilities, []);
+  assert.doesNotThrow(() => assertEmp002ReadOnlyReady(bootstrap));
 });
 
 test("EMP-002 readiness fails closed for another tenant even when Client0 shared bindings exist", () => {
@@ -88,7 +85,6 @@ test("EMP-002 readiness fails closed for another tenant even when Client0 shared
   assert.equal(readiness.ready, false);
   assert.deepEqual(readiness.missingReadCapabilities, [
     "crm.read",
-    "calendar.read",
-    "email.read"
+    "calendar.read"
   ]);
 });
