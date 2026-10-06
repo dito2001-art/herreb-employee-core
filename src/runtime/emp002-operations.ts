@@ -9,7 +9,7 @@ import { executePreparedAppointmentAction } from './emp002-appointment-action-ex
 import { transitionAppointment, type AppointmentLifecycleEvent, type AppointmentLifecycleRecord } from './emp002-appointment-lifecycle';
 import { generateEMP002CalendarReply, generateEMP002WhatsAppReply } from './emp002-whatsapp-ai';
 import { buildEMP002CalendarReadTransport, buildEMP002OperationsTransports, buildEMP002WhatsAppTransport, type EMP002OperationsTransportEnv } from './emp002-operations-transports';
-import { isEMP002CalendarReadIntent, isVerifiedEMP002Owner, resolveEMP002CalendarQueryWindow } from './emp002-calendar-query';
+import { isEMP002CalendarReadIntent, resolveEMP002CalendarQueryWindow } from './emp002-calendar-query';
 
 export class EMP002Operations implements DurableObject {
   private readonly dispatchStore: SqliteWhatsAppSchedulingDispatchStore;
@@ -109,8 +109,18 @@ export class EMP002Operations implements DurableObject {
           const correlationId = `wa:${message.messageId}`;
           const whatsapp = buildEMP002WhatsAppTransport(this.env, message.tenantId);
           const calendarIntent = isEMP002CalendarReadIntent(message.body);
-          const ownerConfigured = Boolean(this.env.EMP002_OWNER_WHATSAPP?.trim());
-          const ownerVerified = isVerifiedEMP002Owner(message.from, this.env.EMP002_OWNER_WHATSAPP);
+          const normalizeWhatsApp = (value: string) => value.replace(/\\D/g, '');
+          const manifests = (() => {
+            try {
+              return JSON.parse(this.env.TENANT_MANIFESTS_JSON ?? '[]') as Array<{ tenantId?: string; whatsappOwners?: string[] }>;
+            } catch {
+              return [];
+            }
+          })();
+          const tenantManifest = manifests.find((manifest) => manifest.tenantId?.trim() === message.tenantId);
+          const owners = (tenantManifest?.whatsappOwners ?? []).map(normalizeWhatsApp).filter(Boolean);
+          const ownerConfigured = owners.length > 0;
+          const ownerVerified = owners.includes(normalizeWhatsApp(message.from));
           console.log(JSON.stringify({ event: 'EMP002_ROUTING_DECISION', correlationId, tenantId: message.tenantId, calendarIntent, ownerConfigured, ownerVerified, route: calendarIntent ? (ownerVerified ? 'calendar-read' : 'owner-verification-failed') : 'general-conversation' }));
           if (calendarIntent && !ownerVerified) return Response.json({ ok: false, handled: false, mode: 'owner-verification-failed', error: 'EMP002_OWNER_VERIFICATION_FAILED', correlationId, routing: { calendarIntent, ownerConfigured, ownerVerified } }, { status: 403 });
           let reply: string; let mode = 'general-conversation';
