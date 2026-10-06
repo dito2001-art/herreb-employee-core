@@ -25,12 +25,14 @@ export async function runEMP002CalendarProductionCertification(
   input: { tenantId: string; correlationId: string; idempotencyKey: string; startsAt: string; endsAt: string }
 ) {
   const token = env.RUNTIME_GATEWAY_TOKEN?.trim() || env.HERREB_RUNTIME_TOKEN?.trim();
-  if (!env.AG002_GATEWAY || !token || !env.AG002_TENANT_ID) throw new Error("EMP002_CALENDAR_CERT_BINDING_MISSING");
-  if (input.tenantId !== env.AG002_TENANT_ID) throw new Error("EMP002_CALENDAR_CERT_TENANT_REJECTED");
+  const crmCapability = env.CRM_CAPABILITY ?? env.AG002_GATEWAY;
+  const crmTenantId = env.CRM_TENANT_ID?.trim() || env.AG002_TENANT_ID?.trim();
+  if (!crmCapability || !token || !crmTenantId) throw new Error("EMP002_CALENDAR_CERT_BINDING_MISSING");
+  if (input.tenantId !== crmTenantId) throw new Error("EMP002_CALENDAR_CERT_TENANT_REJECTED");
 
-  const options = { service: env.AG002_GATEWAY, runtimeToken: token, tenantId: input.tenantId };
-  const writeCrm = createAg002GatewayControlledWriteTransport(options);
-  const readCrm = createAg002GatewayReadOnlyTransport(options);
+  const options = { service: crmCapability, runtimeToken: token, tenantId: input.tenantId };
+  const writeCrm = createCrmCapabilityControlledWriteTransport(options);
+  const readCrm = createCrmCapabilityReadOnlyTransport(options);
   const calendar = createCrmCalendarControlledWriteTransport(writeCrm);
 
   const created = await calendar.execute({
