@@ -62,7 +62,7 @@ test("EMP-002 CRM read forwards tenant and correlation evidence through CRM Capa
   assert.equal(observed?.headers.get("X-Correlation-ID"), "corr-bootstrap");
   assert.equal(observed?.headers.get("X-HerreB-Agent-Key"), "runtime-token");
   assert.match(observed?.url ?? "", /entity=tasks/);
-  assert.match(observed?.url ?? "", /completed=false/);
+  assert.doesNotMatch(observed?.url ?? "", /completed=false/);
 });
 
 test("EMP-002 CRM binding rejects another tenant before upstream execution", async () => {
