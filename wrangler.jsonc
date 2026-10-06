@@ -20,7 +20,7 @@
   "services": [
     { "binding": "EMP001_WHATSAPP", "service": "herreb-emp001-meta-whatsapp-adapter" },
     { "binding": "SALES_OPS", "service": "herreb-emp001-sales-ops-sandbox" },
-    { "binding": "CRM_CAPABILITY", "service": "herreb-agent-gateway-v3" },
+    { "binding": "CRM_CAPABILITY", "service": "herreb-crm-staging" },
     { "binding": "CALENDAR_READ", "service": "herreb-calendar-read" }
   ],
   "assets": {
