@@ -50,7 +50,7 @@ test("EMP-003 can read shared offerings but cannot recommend or sell", async () 
   await assert.rejects(session.execute("quote.create", {}), /EMPLOYEE_CAPABILITY_NOT_DECLARED/);
 });
 
-test("EMP-002 CRM read forwards tenant and correlation evidence through AG-002", async () => {
+test("EMP-002 CRM read forwards tenant and correlation evidence through CRM Capability", async () => {
   let observed: Request | undefined;
   const current = buildReadOnlyRuntime({ AG002_GATEWAY: service((request) => { observed = request; return Response.json({ ok: true, data: [{ id: 140 }] }); }), RUNTIME_GATEWAY_TOKEN: "runtime-token", AG002_TENANT_ID: "herreb" });
   const runtime = new HerreBEmployeeRuntime({ modelRouter: router, adapters: current.adapters });
@@ -60,7 +60,7 @@ test("EMP-002 CRM read forwards tenant and correlation evidence through AG-002",
   assert.equal(observed?.method, "GET");
   assert.equal(observed?.headers.get("X-Tenant-ID"), "herreb");
   assert.equal(observed?.headers.get("X-Correlation-ID"), "corr-bootstrap");
-  assert.equal(observed?.headers.get("X-HerreB-Runtime-Token"), "runtime-token");
+  assert.equal(observed?.headers.get("X-HerreB-Agent-Key"), "runtime-token");
   assert.match(observed?.url ?? "", /entity=tasks/);
   assert.match(observed?.url ?? "", /completed=false/);
 });

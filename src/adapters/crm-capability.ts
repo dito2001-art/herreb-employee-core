@@ -77,7 +77,7 @@ export function createCrmCapabilityReadOnlyTransport(options: CrmCapabilityTrans
             offset
           });
 
-          const response = await options.service.fetch(url.toString(), { method: "GET", headers: { "X-HerreB-Runtime-Token": options.runtimeToken, "X-Tenant-ID": input.tenantId, "X-Correlation-ID": input.correlationId, accept: "application/json" } });
+          const response = await options.service.fetch(url.toString(), { method: "GET", headers: { "X-HerreB-Agent-Key": options.runtimeToken, "X-HerreB-Agent-Name": "EMP-002", "X-Tenant-ID": input.tenantId, "X-Correlation-ID": input.correlationId, accept: "application/json" } });
           finalStatus = response.status;
           const text = await response.text();
           let body: unknown = text;
@@ -157,7 +157,8 @@ export function createCrmCapabilityControlledWriteTransport(options: CrmCapabili
         const response = await options.service.fetch(url.toString(), {
           method: "POST",
           headers: {
-            "X-HerreB-Runtime-Token": options.runtimeToken,
+            "X-HerreB-Agent-Key": options.runtimeToken,
+            "X-HerreB-Agent-Name": "EMP-002",
             "X-Tenant-ID": input.tenantId,
             "X-Correlation-ID": input.correlationId,
             "Idempotency-Key": input.idempotencyKey,
