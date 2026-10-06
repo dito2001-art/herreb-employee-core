@@ -7,8 +7,8 @@ import { SqliteAppointmentLifecycleStore, type AppointmentLifecycleAction } from
 import { prepareDueAppointmentActions } from './emp002-appointment-action-processor';
 import { executePreparedAppointmentAction } from './emp002-appointment-action-executor';
 import { transitionAppointment, type AppointmentLifecycleEvent, type AppointmentLifecycleRecord } from './emp002-appointment-lifecycle';
-import { generateEMP002CalendarReply, generateEMP002WhatsAppReply } from './emp002-whatsapp-ai';
-import { buildEMP002CalendarReadTransport, buildEMP002OperationsTransports, buildEMP002WhatsAppTransport, type EMP002OperationsTransportEnv } from './emp002-operations-transports';
+import { generateEMP002CalendarReply, generateEMP002WhatsAppReply, parseEMP002OwnerCalendarCommand } from './emp002-whatsapp-ai';
+import { buildEMP002CalendarReadTransport, buildEMP002CalendarTransport, buildEMP002OperationsTransports, buildEMP002WhatsAppTransport, type EMP002OperationsTransportEnv } from './emp002-operations-transports';
 import { isEMP002CalendarReadIntent, resolveEMP002CalendarQueryWindow } from './emp002-calendar-query';
 
 export class EMP002Operations implements DurableObject {
@@ -124,7 +124,47 @@ export class EMP002Operations implements DurableObject {
           console.log(JSON.stringify({ event: 'EMP002_ROUTING_DECISION', correlationId, tenantId: message.tenantId, calendarIntent, ownerConfigured, ownerVerified, route: calendarIntent ? (ownerVerified ? 'calendar-read' : 'owner-verification-failed') : 'general-conversation' }));
           if (calendarIntent && !ownerVerified) return Response.json({ ok: false, handled: false, mode: 'owner-verification-failed', error: 'EMP002_OWNER_VERIFICATION_FAILED', correlationId, routing: { calendarIntent, ownerConfigured, ownerVerified } }, { status: 403 });
           let reply: string; let mode = 'general-conversation';
-          if (calendarIntent && ownerVerified) {
+          const ownerCommand = ownerVerified ? await parseEMP002OwnerCalendarCommand(this.env.AI, message.body, message.receivedAt) : { operation: 'none' as const };
+          if (ownerCommand.operation !== 'none') {
+            const readCalendar = buildEMP002CalendarReadTransport(this.env, message.tenantId);
+            const writeCalendar = buildEMP002CalendarTransport(this.env, message.tenantId);
+            if (ownerCommand.operation === 'create') {
+              const write = await writeCalendar.execute({ tenantId: message.tenantId, request: ownerCommand, correlationId, idempotencyKey: `emp002-owner:create:${message.messageId}` });
+              if (!write.ok) throw new Error(`EMP002_OWNER_CALENDAR_WRITE_FAILED:${write.error?.code ?? 'CREATE_FAILED'}`);
+              const output = write.output as { data?: { id?: string | number }; persistenceConfirmed?: boolean };
+              const id = output.data?.id;
+              if (!id || output.persistenceConfirmed !== true) throw new Error('EMP002_OWNER_CALENDAR_CREATE_NOT_CONFIRMED');
+              const readBack = await readCalendar.execute({ tenantId: message.tenantId, request: { operation: 'search', timeMin: ownerCommand.startTime, timeMax: ownerCommand.endTime }, correlationId: `${correlationId}:readback` });
+              if (!readBack.ok) throw new Error('EMP002_OWNER_CALENDAR_READBACK_FAILED');
+              reply = `Hecho. Creé "${ownerCommand.title}" y confirmé su persistencia en el CRM.`;
+              mode = 'calendar-create';
+            } else {
+              const window = resolveEMP002CalendarQueryWindow(message.body, new Date(message.receivedAt));
+              const lookup = await readCalendar.execute({ tenantId: message.tenantId, request: { operation: 'search', timeMin: window.timeMin, timeMax: window.timeMax, query: ownerCommand.query }, correlationId: `${correlationId}:lookup` });
+              if (!lookup.ok) throw new Error('EMP002_OWNER_CALENDAR_LOOKUP_FAILED');
+              const records = ((lookup.output as { data?: Array<Record<string, unknown>> })?.data ?? []).filter((item) => {
+                const haystack = [item.title, item.notes].filter((v) => typeof v === 'string').join(' ').toLocaleLowerCase('es');
+                return ownerCommand.query.toLocaleLowerCase('es').split(/\s+/).filter((token) => token.length > 2).some((token) => haystack.includes(token));
+              });
+              if (records.length !== 1) {
+                reply = records.length === 0 ? 'No encontré una única reunión que coincida. Decime el título y la fecha.' : 'Encontré más de una reunión posible. Decime cuál querés modificar.';
+                mode = 'calendar-ambiguous';
+              } else {
+                const id = String(records[0].id ?? '');
+                if (!id) throw new Error('EMP002_OWNER_CALENDAR_TARGET_ID_MISSING');
+                const request = ownerCommand.operation === 'delete' ? { operation: 'delete' as const, eventId: id } : { operation: 'update' as const, eventId: id, changes: ownerCommand.changes };
+                const write = await writeCalendar.execute({ tenantId: message.tenantId, request, correlationId, idempotencyKey: `emp002-owner:${ownerCommand.operation}:${message.messageId}` });
+                if (!write.ok) throw new Error(`EMP002_OWNER_CALENDAR_WRITE_FAILED:${write.error?.code ?? ownerCommand.operation.toUpperCase() + '_FAILED'}`);
+                const verify = await readCalendar.execute({ tenantId: message.tenantId, request: { operation: 'search', timeMin: window.timeMin, timeMax: window.timeMax }, correlationId: `${correlationId}:readback` });
+                if (!verify.ok) throw new Error('EMP002_OWNER_CALENDAR_READBACK_FAILED');
+                const after = (verify.output as { data?: Array<Record<string, unknown>> })?.data ?? [];
+                const exists = after.some((item) => String(item.id ?? '') === id);
+                if (ownerCommand.operation === 'delete' ? exists : !exists) throw new Error('EMP002_OWNER_CALENDAR_PERSISTENCE_NOT_CONFIRMED');
+                reply = ownerCommand.operation === 'delete' ? 'Hecho. Cancelé la reunión y confirmé el cambio en el CRM.' : 'Hecho. Reprogramé la reunión y confirmé el cambio en el CRM.';
+                mode = ownerCommand.operation === 'delete' ? 'calendar-delete' : 'calendar-update';
+              }
+            }
+          } else if (calendarIntent && ownerVerified) {
             const calendar = buildEMP002CalendarReadTransport(this.env, message.tenantId);
             const window = resolveEMP002CalendarQueryWindow(message.body, new Date(message.receivedAt));
             const calendarResult = await calendar.execute({ tenantId: message.tenantId, request: { operation: 'search', timeMin: window.timeMin, timeMax: window.timeMax }, correlationId });
