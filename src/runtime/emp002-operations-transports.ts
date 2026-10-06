@@ -20,7 +20,7 @@ export interface EMP002OperationsTransportEnv {
   /** @deprecated temporary compatibility alias */
   AG002_TENANT_ID?: string;
   CALENDAR_TENANT_ID?: string;
-  EMP002_OWNER_WHATSAPP?: string;
+  TENANT_MANIFESTS_JSON?: string;
   META_ACCESS_TOKEN?: string;
   META_PHONE_NUMBER_ID?: string;
   META_GRAPH_VERSION?: string;
