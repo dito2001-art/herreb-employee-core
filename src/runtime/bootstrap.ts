@@ -19,10 +19,14 @@ export interface ReadOnlyRuntimeEnv {
   SALES_OPS?: ServiceFetcher;
   SALES_OPS_TOKEN?: string;
   CRM_CAPABILITY?: ServiceFetcher;
+  /** @deprecated Temporary compatibility alias during CRM capability cutover. */
+  AG002_GATEWAY?: ServiceFetcher;
   RUNTIME_GATEWAY_TOKEN?: string;
   /** @deprecated Use RUNTIME_GATEWAY_TOKEN. Kept temporarily for deployment compatibility. */
   HERREB_RUNTIME_TOKEN?: string;
   CRM_TENANT_ID?: string;
+  /** @deprecated Temporary compatibility alias during CRM capability cutover. */
+  AG002_TENANT_ID?: string;
   /** @deprecated Calendar is CRM-backed; retained for scoped migration compatibility. */
   CALENDAR_READ?: ServiceFetcher;
   CALENDAR_READ_TOKEN?: string;
@@ -53,12 +57,13 @@ export function buildReadOnlyRuntime(env: ReadOnlyRuntimeEnv): ReadOnlyRuntimeBo
   const adapters: CapabilityAdapter[] = [];
   const salesToken = nonBlank(env.SALES_OPS_TOKEN);
   const runtimeToken = nonBlank(env.RUNTIME_GATEWAY_TOKEN) ?? nonBlank(env.HERREB_RUNTIME_TOKEN);
-  const crmTenantId = nonBlank(env.CRM_TENANT_ID);
+  const crmTenantId = nonBlank(env.CRM_TENANT_ID) ?? nonBlank(env.AG002_TENANT_ID);
+  const crmCapability = env.CRM_CAPABILITY ?? env.AG002_GATEWAY;
   const calendarToken = nonBlank(env.CALENDAR_READ_TOKEN);
   const calendarTenantId = nonBlank(env.CALENDAR_TENANT_ID);
   const emailToken = nonBlank(env.EMAIL_READ_TOKEN);
   const emailTenantId = nonBlank(env.EMAIL_TENANT_ID);
-  const crmState = scopedConnectionState(env.CRM_CAPABILITY, runtimeToken, crmTenantId);
+  const crmState = scopedConnectionState(crmCapability, runtimeToken, crmTenantId);
   const legacyCalendarConfigured = Boolean(env.CALENDAR_READ);
   const calendarState = legacyCalendarConfigured ? scopedConnectionState(env.CALENDAR_READ, calendarToken, calendarTenantId) : crmState;
 
@@ -75,8 +80,8 @@ export function buildReadOnlyRuntime(env: ReadOnlyRuntimeEnv): ReadOnlyRuntimeBo
   }
 
   let crmReadTransport: ReturnType<typeof createCrmCapabilityReadOnlyTransport> | undefined;
-  if (env.CRM_CAPABILITY && runtimeToken && crmTenantId) {
-    const gatewayOptions = { service: env.CRM_CAPABILITY, runtimeToken, tenantId: crmTenantId };
+  if (crmCapability && runtimeToken && crmTenantId) {
+    const gatewayOptions = { service: crmCapability, runtimeToken, tenantId: crmTenantId };
     crmReadTransport = createCrmCapabilityReadOnlyTransport(gatewayOptions);
     const crmWriteTransport = createCrmCapabilityControlledWriteTransport(gatewayOptions);
     adapters.push(projectReadOnlyAdapter(createCrmAdapter(crmReadTransport), ["crm.read"]));
