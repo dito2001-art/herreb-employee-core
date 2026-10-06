@@ -60,7 +60,7 @@ test("EMP-002 CRM read forwards tenant and correlation evidence through CRM Capa
   assert.equal(observed?.method, "GET");
   assert.equal(observed?.headers.get("X-Tenant-ID"), "herreb");
   assert.equal(observed?.headers.get("X-Correlation-ID"), "corr-bootstrap");
-  assert.equal(observed?.headers.get("X-HerreB-Runtime-Token"), "runtime-token");
+  assert.equal(observed?.headers.get("X-HerreB-Agent-Key"), "runtime-token");
   assert.match(observed?.url ?? "", /entity=tasks/);
   assert.match(observed?.url ?? "", /completed=false/);
 });
