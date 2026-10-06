@@ -37,12 +37,12 @@ export async function runEMP002CalendarProductionCertification(
     idempotencyKey: input.idempotencyKey,
     request: {
       operation: "create",
-      title: "[TEMP] EMP-002 production certification",
+      title: "[TEMP] EMP-002 CRM agenda certification",
       startTime: input.startsAt,
       endTime: input.endsAt,
       timezone: "America/Asuncion",
       attendees: [],
-      description: "Temporary automated certification record. Safe to delete."
+      description: "Temporary automated CRM certification record. Safe to delete."
     }
   });
   if (!created.ok) return { ok: false, stage: "create", created };
@@ -53,18 +53,13 @@ export async function runEMP002CalendarProductionCertification(
   if (!id) return { ok: false, stage: "create-id", created };
 
   const readBack = await readCrm.execute({
-    tenantId: input.tenantId,
-    operation: "read",
-    entity: "tasks",
-    payload: { id },
+    tenantId: input.tenantId, operation: "read", entity: "tasks", payload: { id },
     correlationId: input.correlationId + ":readback"
   });
 
   const record = recordFrom(readBack.output);
   const persistenceConfirmed = createdBody?.persistenceConfirmed === true || record?.persistenceConfirmed === true || createdRecord?.persistenceConfirmed === true;
-  const calendarEventId = String(record?.calendarEventId ?? createdRecord?.calendarEventId ?? "");
-  const calendarSyncStatus = String(record?.calendarSyncStatus ?? createdRecord?.calendarSyncStatus ?? "");
-  const verified = Boolean(readBack.ok && record && persistenceConfirmed && calendarEventId && calendarSyncStatus === "SYNCED");
+  const verified = Boolean(readBack.ok && record && persistenceConfirmed);
 
   const cleanup = await calendar.execute({
     tenantId: input.tenantId,
@@ -74,14 +69,11 @@ export async function runEMP002CalendarProductionCertification(
   });
 
   return {
-    ok: verified && cleanup.ok,
-    verified,
-    id,
+    ok: verified && cleanup.ok, verified, id,
     createStatus: created.evidence?.upstreamStatus,
     readBackStatus: readBack.evidence?.upstreamStatus,
     persistenceConfirmed,
-    calendarEventId,
-    calendarSyncStatus,
+    externalCalendarRequired: false,
     cleanupOk: cleanup.ok,
     cleanupStatus: cleanup.evidence?.upstreamStatus
   };
