@@ -177,7 +177,7 @@ export function createCrmCapabilityControlledWriteTransport(options: CrmCapabili
                 }),
             audit: {
               authorizationMode: "AUTHORIZED",
-              authorizedBy: "Fernando",
+              authorizedBy: `EMP-002:${input.tenantId}:owner`,
               reason: "Authorized EMP-002 controlled write via Workforce Runtime"
             },
             idempotencyKey: input.idempotencyKey
