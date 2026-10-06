@@ -10,11 +10,6 @@ export interface CrmCapabilityTransportOptions {
   baseUrl?: string;
 }
 
-function asQueryValue(value: unknown): string | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
-  return undefined;
-}
 
 function tenantMismatch(options: CrmCapabilityTransportOptions, tenantId: string) {
   const scopedTenantId = options.tenantId.trim();
@@ -56,11 +51,8 @@ export function createCrmCapabilityReadOnlyTransport(options: CrmCapabilityTrans
         while (true) {
           const url = new URL("/api/agent", baseUrl);
           url.searchParams.set("entity", input.entity);
-          for (const [key, value] of Object.entries(input.payload ?? {})) {
-            if (autoPaginate && (key === "limit" || key === "offset")) continue;
-            const queryValue = asQueryValue(value);
-            if (queryValue !== undefined) url.searchParams.set(key, queryValue);
-          }
+          // Direct CRM reads return the tenant-scoped collection. Keep only
+          // the entity selector here; filtering is applied by the calendar facade.
           if (autoPaginate) {
             url.searchParams.set("limit", String(pageSize));
             url.searchParams.set("offset", String(offset));
