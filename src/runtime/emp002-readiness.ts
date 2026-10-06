@@ -2,13 +2,12 @@ import type { ReadOnlyRuntimeBootstrap } from "./bootstrap";
 
 export const EMP002_REQUIRED_READ_CAPABILITIES = [
   "crm.read",
-  "calendar.read",
-  "email.read"
+  "calendar.read"
 ] as const;
 
 // crm.write is intentionally connected for EMP-002 through the tenant-scoped,
-// idempotent controlled-write path. Calendar remains CRM-first, so direct
-// calendar.write and email.send stay forbidden until separately connected.
+// idempotent controlled-write path. Calendar remains CRM-first; email is optional.
+// Direct calendar.write, email.send and task.schedule stay forbidden unless explicitly connected.
 export const EMP002_FORBIDDEN_WRITE_CAPABILITIES = [
   "calendar.write",
   "email.send",
