@@ -1,4 +1,4 @@
-import { createAg002GatewayControlledWriteTransport, createAg002GatewayReadOnlyTransport } from '../adapters/ag002-gateway';
+import { createCrmCapabilityControlledWriteTransport, createCrmCapabilityReadOnlyTransport } from '../adapters/crm-capability';
 import { createCrmCalendarControlledWriteTransport } from '../adapters/crm-calendar-write';
 import type { CalendarTransport } from '../adapters/calendar';
 import type { ServiceFetcher } from '../adapters/sales-ops';
@@ -10,10 +10,14 @@ export interface EMP002WorkersAI {
 
 export interface EMP002OperationsTransportEnv {
   AI?: EMP002WorkersAI;
+  CRM_CAPABILITY?: ServiceFetcher;
+  /** @deprecated temporary compatibility alias */
   AG002_GATEWAY?: ServiceFetcher;
   CALENDAR_READ?: ServiceFetcher;
   RUNTIME_GATEWAY_TOKEN?: string;
   CALENDAR_READ_TOKEN?: string;
+  CRM_TENANT_ID?: string;
+  /** @deprecated temporary compatibility alias */
   AG002_TENANT_ID?: string;
   CALENDAR_TENANT_ID?: string;
   EMP002_OWNER_WHATSAPP?: string;
@@ -24,7 +28,7 @@ export interface EMP002OperationsTransportEnv {
 }
 
 function assertTenantScope(env: EMP002OperationsTransportEnv, tenantId: string): string {
-  const scopedTenant = env.AG002_TENANT_ID?.trim();
+  const scopedTenant = (env.CRM_TENANT_ID ?? env.AG002_TENANT_ID)?.trim();
   if (!scopedTenant || scopedTenant !== tenantId) throw new Error('EMP002_OPERATIONS_TENANT_SCOPE_MISMATCH');
   return scopedTenant;
 }
@@ -51,12 +55,13 @@ export function buildEMP002WhatsAppTransport(env: EMP002OperationsTransportEnv, 
  */
 export function buildEMP002CalendarReadTransport(env: EMP002OperationsTransportEnv, tenantId: string): CalendarTransport {
   const scopedTenant = assertTenantScope(env, tenantId);
-  if (!env.AG002_GATEWAY || !env.RUNTIME_GATEWAY_TOKEN?.trim()) {
+  const crmCapability = env.CRM_CAPABILITY ?? env.AG002_GATEWAY;
+  if (!crmCapability || !env.RUNTIME_GATEWAY_TOKEN?.trim()) {
     throw new Error('EMP002_CRM_CALENDAR_READ_TRANSPORT_MISSING');
   }
 
-  const crm = createAg002GatewayReadOnlyTransport({
-    service: env.AG002_GATEWAY,
+  const crm = createCrmCapabilityReadOnlyTransport({
+    service: crmCapability,
     runtimeToken: env.RUNTIME_GATEWAY_TOKEN,
     tenantId: scopedTenant,
     baseUrl: 'https://internal',
@@ -102,16 +107,17 @@ export function buildEMP002CalendarReadTransport(env: EMP002OperationsTransportE
 }
 
 /**
- * Calendar CONTROLLED_WRITE backed by the same tenant-scoped AG-002 CRM gateway.
+ * Calendar CONTROLLED_WRITE backed by the same tenant-scoped CRM capability.
  * CRM remains the system of record and owns downstream Google Calendar sync.
  */
 export function buildEMP002CalendarTransport(env: EMP002OperationsTransportEnv, tenantId: string): CalendarTransport {
   const scopedTenant = assertTenantScope(env, tenantId);
-  if (!env.AG002_GATEWAY || !env.RUNTIME_GATEWAY_TOKEN?.trim()) {
+  const crmCapability = env.CRM_CAPABILITY ?? env.AG002_GATEWAY;
+  if (!crmCapability || !env.RUNTIME_GATEWAY_TOKEN?.trim()) {
     throw new Error('EMP002_CALENDAR_WRITE_TRANSPORT_MISSING');
   }
-  const crm = createAg002GatewayControlledWriteTransport({
-    service: env.AG002_GATEWAY,
+  const crm = createCrmCapabilityControlledWriteTransport({
+    service: crmCapability,
     runtimeToken: env.RUNTIME_GATEWAY_TOKEN,
     tenantId: scopedTenant,
     baseUrl: 'https://internal',
