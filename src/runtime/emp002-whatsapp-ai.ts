@@ -91,7 +91,7 @@ export type EMP002OwnerCalendarCommand =
   | { operation: 'delete'; query: string };
 
 function jsonObjectFromText(text: string): Record<string, unknown> {
-  const fenced = text.match(/\`\`\`(?:json)?\s*([\s\S]*?)\`\`\`/i)?.[1] ?? text;
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1] ?? text;
   const start = fenced.indexOf('{');
   const end = fenced.lastIndexOf('}');
   if (start < 0 || end <= start) throw new Error('EMP002_OWNER_COMMAND_JSON_MISSING');
