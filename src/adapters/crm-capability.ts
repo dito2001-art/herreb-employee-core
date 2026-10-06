@@ -154,7 +154,7 @@ export function createCrmCapabilityControlledWriteTransport(options: CrmCapabili
       const url = new URL("/api/agent", baseUrl);
       try {
         const response = await options.service.fetch(url.toString(), {
-          method: "POST",
+          method: input.operation === "create" ? "POST" : input.operation === "update" ? "PATCH" : "DELETE",
           headers: {
             "X-HerreB-Agent-Key": options.runtimeToken,
             "X-HerreB-Agent-Name": "EMP-002",
