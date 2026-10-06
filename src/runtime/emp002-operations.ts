@@ -131,11 +131,14 @@ export class EMP002Operations implements DurableObject {
             if (ownerCommand.operation === 'create') {
               const write = await writeCalendar.execute({ tenantId: message.tenantId, request: ownerCommand, correlationId, idempotencyKey: `emp002-owner:create:${message.messageId}` });
               if (!write.ok) throw new Error(`EMP002_OWNER_CALENDAR_WRITE_FAILED:${write.error?.code ?? 'CREATE_FAILED'}:HTTP_${String(write.evidence?.upstreamStatus ?? 'UNKNOWN')}:UPSTREAM_${String(write.evidence?.upstreamErrorCode ?? 'UNKNOWN')}`);
-              const output = write.output as { data?: { id?: string | number }; persistenceConfirmed?: boolean };
-              const id = output.data?.id;
-              if (!id || output.persistenceConfirmed !== true) throw new Error('EMP002_OWNER_CALENDAR_CREATE_NOT_CONFIRMED');
+              const output = write.output as { data?: { id?: string | number }; record?: { id?: string | number }; persistenceConfirmed?: boolean; saved?: boolean };
+              const id = output.data?.id ?? output.record?.id;
+              const persistenceConfirmed = output.persistenceConfirmed === true || output.saved === true;
+              if (!id || !persistenceConfirmed) throw new Error('EMP002_OWNER_CALENDAR_CREATE_NOT_CONFIRMED');
               const readBack = await readCalendar.execute({ tenantId: message.tenantId, request: { operation: 'search', timeMin: ownerCommand.startTime, timeMax: ownerCommand.endTime }, correlationId: `${correlationId}:readback` });
               if (!readBack.ok) throw new Error('EMP002_OWNER_CALENDAR_READBACK_FAILED');
+              const readBackRecords = (readBack.output as { data?: Array<Record<string, unknown>> })?.data ?? [];
+              if (!readBackRecords.some((item) => String(item.id ?? '') === String(id))) throw new Error('EMP002_OWNER_CALENDAR_CREATE_READBACK_NOT_CONFIRMED');
               reply = `Hecho. Creé "${ownerCommand.title}" y confirmé su persistencia en el CRM.`;
               mode = 'calendar-create';
             } else {
