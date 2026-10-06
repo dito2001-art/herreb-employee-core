@@ -100,6 +100,13 @@ export function createCrmCapabilityReadOnlyTransport(options: CrmCapabilityTrans
           });
 
           if (!response.ok) return { ok: false, error: { code: "CRM_CAPABILITY_UPSTREAM_ERROR", message: `CRM capability gateway returned HTTP ${response.status}`, retryable: response.status >= 500 }, evidence: { ...baseEvidence, executed: true, upstreamStatus: response.status, pageCount } };
+          // The direct multi-tenant CRM read route currently returns entity
+          // collections by name (for example { tasks: [...] }) rather than the
+          // legacy gateway shape { data: [...] }. Normalize at the capability
+          // boundary so EMP-002 remains independent of the CRM wire shape.
+          if (isRecord(body) && !Array.isArray(body.data) && Array.isArray(body[input.entity])) {
+            body = { ...body, data: body[input.entity] };
+          }
           finalBody = body;
           if (!autoPaginate) break;
           if (!isRecord(body) || !Array.isArray(body.data)) break;
