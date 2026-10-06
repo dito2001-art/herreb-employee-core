@@ -1,0 +1,57 @@
+name: EMP-002 North Star Readback
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  readback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Read back North Star dispatch
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
+          URL: https://herreb-employee-core.dito2001.workers.dev/api/internal/emp002/north-star/readback
+
+        run: |
+          set -euo pipefail
+          test -n "$TOKEN"
+
+          RESPONSE_FILE="$(mktemp)"
+          trap 'rm -f "$RESPONSE_FILE"' EXIT
+
+          HTTP_STATUS="$(curl \
+            --silent \
+            --show-error \
+            --output "$RESPONSE_FILE" \
+            --write-out '%{http_code}' \
+            -X POST "$URL" \
+            -H 'content-type: application/json' \
+            -H "x-herreb-workforce-admin-token: $TOKEN" \
+            --data '{"tenantId":"herreb-client-0","whatsapp":"595981538641"}')"
+
+          RESPONSE="$(cat "$RESPONSE_FILE")"
+
+          echo "HTTP status: $HTTP_STATUS"
+          printf '%s\n' "$RESPONSE"
+
+          test "$HTTP_STATUS" = '200'
+
+          node -e '
+            const r = JSON.parse(process.argv[1]);
+            if (!r.ok) process.exit(1);
+
+            console.log(
+              "READBACK found=" + r.found +
+              " tenant=" + r.tenantId +
+              " whatsapp=" + r.whatsapp +
+              " contactId=" + r.contactId +
+              " state=" + r.state +
+              " recoveryStatus=" + r.recoveryStatus
+            );
+          ' "$RESPONSE"
