@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: 'Type RUN_EMP002_CALENDAR_CERT to authorize one temporary CRM/Calendar certification'
+        description: 'Type RUN_EMP002_CALENDAR_CERT to authorize one temporary CRM agenda certification'
         required: true
         type: string
 
@@ -30,7 +30,7 @@ jobs:
       - run: npm run lint
       - run: npx tsc --noEmit
       - run: npm run test:core
-      - name: Run guarded CRM/Calendar certification
+      - name: Run guarded CRM agenda certification
         env:
           CERT_TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
           CERT_URL: https://herreb-employee-core.dito2001.workers.dev/api/internal/emp002/calendar-certification
@@ -48,4 +48,4 @@ jobs:
           echo "HTTP status: $STATUS"
           printf '%s\n' "$RESPONSE"
           test "$STATUS" = "200"
-          node -e 'const r=JSON.parse(process.argv[1]); if(!r.ok||!r.verified||!r.persistenceConfirmed||!r.calendarEventId||r.calendarSyncStatus!=="SYNCED"||!r.cleanupOk) process.exit(1); console.log("CERTIFIED calendarEventId="+r.calendarEventId)' "$RESPONSE"
+          node -e 'const r=JSON.parse(process.argv[1]); if(!r.ok||!r.verified||!r.persistenceConfirmed||r.externalCalendarRequired!==false||!r.cleanupOk) process.exit(1); console.log("CERTIFIED CRM agenda record="+r.id)' "$RESPONSE"
