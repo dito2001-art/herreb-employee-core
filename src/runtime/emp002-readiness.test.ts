@@ -41,7 +41,7 @@ test("EMP-002 readiness passes only with all required reads and no writes", () =
   assert.doesNotThrow(() => assertEmp002ReadOnlyReady(bootstrap));
 });
 
-test("EMP-002 readiness fails closed when a required Client0 connector is missing", () => {
+test("EMP-002 readiness remains ready when optional email connector is missing", () => {
   const bootstrap = buildTenantReadOnlyRuntime(
     {
       AG002_GATEWAY: service,
