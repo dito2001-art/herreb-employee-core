@@ -56,15 +56,8 @@ export function createCrmCapabilityReadOnlyTransport(options: CrmCapabilityTrans
         while (true) {
           const url = new URL("/api/agent", baseUrl);
           url.searchParams.set("entity", input.entity);
-          // Direct CRM reads return the tenant-scoped collection. Legacy
-          // gateway filters are intentionally not forwarded to this endpoint.
-          if (false) {
-            for (const [key, value] of Object.entries(input.payload ?? {})) {
-              if (autoPaginate && (key === "limit" || key === "offset")) continue;
-              const queryValue = asQueryValue(value);
-              if (queryValue !== undefined) url.searchParams.set(key, queryValue);
-            }
-          }
+          // Direct CRM reads return the tenant-scoped collection. Keep only
+          // the entity selector here; filtering is applied by the calendar facade.
           if (autoPaginate) {
             url.searchParams.set("limit", String(pageSize));
             url.searchParams.set("offset", String(offset));
