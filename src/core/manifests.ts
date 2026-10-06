@@ -10,6 +10,10 @@ const manifests = {
     capabilities: [
       "offering.read",
       "offering.recommend",
+      "lead.discover",
+      "lead.database.sell",
+      "lead.qualify",
+      "sales.outreach",
       "quote.create",
       "sale.progress",
       "crm.read",
