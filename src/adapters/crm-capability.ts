@@ -10,11 +10,6 @@ export interface CrmCapabilityTransportOptions {
   baseUrl?: string;
 }
 
-function asQueryValue(value: unknown): string | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
-  return undefined;
-}
 
 function tenantMismatch(options: CrmCapabilityTransportOptions, tenantId: string) {
   const scopedTenantId = options.tenantId.trim();
