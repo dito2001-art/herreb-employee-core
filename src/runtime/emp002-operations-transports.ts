@@ -80,10 +80,17 @@ export function buildEMP002CalendarReadTransport(env: EMP002OperationsTransportE
       }
 
       const from = crmDate(request.timeMin);
-      const exclusiveTo = new Date(request.timeMax);
-      if (Number.isNaN(exclusiveTo.getTime())) throw new Error('EMP002_INVALID_CALENDAR_DATE');
-      exclusiveTo.setUTCDate(exclusiveTo.getUTCDate() - 1);
-      const to = exclusiveTo.toISOString().slice(0, 10);
+      const toDate = crmDate(request.timeMax);
+      // Calendar timeMax is exclusive. Only roll back one day when the
+      // boundary is exactly midnight on a later date (day-range queries).
+      // Intraday windows such as 15:00-16:00 must keep the same CRM date.
+      const isMidnightExclusiveBoundary = /T00:00(?::00(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?$/.test(request.timeMax);
+      let to = toDate;
+      if (isMidnightExclusiveBoundary && toDate > from) {
+        const exclusiveTo = new Date(`${toDate}T00:00:00Z`);
+        exclusiveTo.setUTCDate(exclusiveTo.getUTCDate() - 1);
+        to = exclusiveTo.toISOString().slice(0, 10);
+      }
 
       const result = await crm.execute({
         tenantId: input.tenantId,
