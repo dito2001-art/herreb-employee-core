@@ -134,7 +134,7 @@ test("wrong tenant cannot cross CRM Calendar or Email Client0 boundaries", async
     maxResults: 1
   });
   assert.equal(crm.ok, false);
-  assert.equal(crm.error?.code, "AG002_TENANT_SCOPE_MISMATCH");
+  assert.equal(crm.error?.code, "CRM_CAPABILITY_TENANT_SCOPE_MISMATCH");
   assert.equal(calendar.ok, false);
   assert.equal(calendar.error?.code, "READ_ONLY_TENANT_SCOPE_MISMATCH");
   assert.equal(email.ok, false);
