@@ -57,12 +57,12 @@ export default {
       if (request.method !== 'POST') return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405, headers: { allow: 'POST' } });
       if (!isValidM2M(request, runtimeEnv)) return Response.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
       if (!runtimeEnv.EMP002_OPERATIONS) return Response.json({ ok: false, error: 'EMP002_OPERATIONS_BINDING_MISSING' }, { status: 503 });
-      const body = await request.json<{ tenantId?: string; whatsapp?: string }>().catch(() => ({}));
+      const body: { tenantId?: string; whatsapp?: string } = await request.json<{ tenantId?: string; whatsapp?: string }>().catch(() => ({}));
       const tenantId = body.tenantId?.trim(); const whatsapp = normalizeWhatsAppNumber(body.whatsapp); const owner = resolveTenantOwner(request, runtimeEnv, tenantId);
       if (!owner || owner.actorId !== 'fernando' || !whatsapp) return Response.json({ ok: false, error: 'EMP002_NORTH_STAR_SCOPE_REJECTED' }, { status: 403 });
       const id = runtimeEnv.EMP002_OPERATIONS.idFromName(`tenant:${owner.tenantId}`); const stub = runtimeEnv.EMP002_OPERATIONS.get(id);
       const lookup = await stub.fetch('https://emp002.operations/dispatch/lookup', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ tenantId: owner.tenantId, whatsapp }) });
-      const result = await lookup.json<{ ok?: boolean; record?: { tenantId?: string; contactId?: string; whatsapp?: string; state?: { goal?: { status?: string }; recovery?: { status?: string } } } | null }>().catch(() => ({}));
+      const result: { ok?: boolean; record?: { tenantId?: string; contactId?: string; whatsapp?: string; state?: { goal?: { status?: string }; recovery?: { status?: string } } } | null } = await lookup.json<{ ok?: boolean; record?: { tenantId?: string; contactId?: string; whatsapp?: string; state?: { goal?: { status?: string }; recovery?: { status?: string } } } | null }>().catch(() => ({}));
       if (!lookup.ok || !result.ok) return Response.json({ ok: false, error: 'EMP002_NORTH_STAR_READBACK_FAILED', upstreamStatus: lookup.status }, { status: 503 });
       const record = result.record ?? null;
       return Response.json({ ok: true, found: Boolean(record), tenantId: owner.tenantId, whatsapp, contactId: record?.contactId ?? null, recordTenantId: record?.tenantId ?? null, recordWhatsapp: record?.whatsapp ?? null, state: record?.state?.goal?.status ?? null, recoveryStatus: record?.state?.recovery?.status ?? null });
