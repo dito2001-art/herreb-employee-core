@@ -100,8 +100,27 @@ export function buildEMP002CalendarReadTransport(env: EMP002OperationsTransportE
         correlationId: input.correlationId,
       });
 
+      // The direct CRM capability deliberately returns the tenant-scoped
+      // collection without forwarding arbitrary query parameters. Enforce the
+      // requested calendar window at this facade boundary before exposing data
+      // to EMP-002 so "hoy"/"mañana"/week queries cannot leak other dates.
+      let output = result.output;
+      if (result.ok && output && typeof output === 'object' && !Array.isArray(output)) {
+        const body = output as Record<string, unknown>;
+        if (Array.isArray(body.data)) {
+          const inWindow = body.data.filter((item) => {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) return false;
+            const record = item as Record<string, unknown>;
+            const startDate = typeof record.startDate === 'string' ? record.startDate.slice(0, 10) : '';
+            return startDate >= from && startDate <= to;
+          });
+          output = { ...body, data: inWindow };
+        }
+      }
+
       return {
         ...result,
+        output,
         evidence: {
           ...(result.evidence ?? {}),
           calendarSource: 'HERREB_CRM',
