@@ -8,7 +8,7 @@ import { approveGroundedContent, markContentPublishReady } from "./marketing-con
 import { executeControlledContentPublish } from "./marketing-content-publisher";
 import { scheduleCampaignAction } from "./campaign-execution";
 import { executeEmp003MarketingWrite } from "./marketing-write-orchestrator";
-import { createMarketingLeadHandoff } from "./marketing-handoff";
+import { createMarketingLeadHandoff, measureCampaign } from "./marketing-handoff";
 import { attributionFromHandoff, createPersistentMarketingAttributionRepository } from "./marketing-attribution-persistent";
 import { learnFromCampaign } from "./marketing-learning";
 import { measureCampaign } from "./marketing-handoff";
