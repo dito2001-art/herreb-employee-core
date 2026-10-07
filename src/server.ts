@@ -14,6 +14,7 @@ import {
   accessAgentInstanceSuffix,
   accessIdentityProvenance,
   buildEMP002ConversationSystemPrompt,
+  buildEmployeeSystemPrompt,
   buildTenantReadOnlyRuntime,
   createTenantManifestResolverFromJson,
   HerreBEmployeeRuntime,
@@ -155,7 +156,9 @@ export class ChatAgent extends AIChatAgent<Env, Record<string, unknown>, AgentPr
 
     const workersai = createWorkersAI({ binding: this.env.AI });
     const model = workersai(session.modelRoute.model, { sessionAffinity: this.sessionAffinity });
-    const systemPrompt = buildEMP002ConversationSystemPrompt({ context: session.context, manifest: session.manifest });
+    const systemPrompt = session.manifest.id === "EMP-002"
+      ? buildEMP002ConversationSystemPrompt({ context: session.context, manifest: session.manifest })
+      : buildEmployeeSystemPrompt(session.context, session.manifest);
 
     const result = streamText({
       model,
