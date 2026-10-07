@@ -10,7 +10,7 @@ import { scheduleCampaignAction } from "./campaign-execution";
 import { executeEmp003MarketingWrite } from "./marketing-write-orchestrator";
 import { createMarketingLeadHandoff } from "./marketing-handoff";
 import { attributionFromHandoff, createPersistentMarketingAttributionRepository } from "./marketing-attribution-persistent";
-import { learnFromCampaign, measureCampaign } from "./marketing-learning";
+import { learnFromCampaign } from "./marketing-learning";\nimport { measureCampaign } from "./marketing-handoff";
 
 test("EMP-003 North Star: objective to campaign, execution, CRM, handoff, measurement and learning", async () => {
   const tenantId = "herreb-client-0";
