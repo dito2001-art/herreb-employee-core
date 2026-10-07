@@ -35,3 +35,4 @@ export * from "./marketing-content-approval";
 export * from "./marketing-write-orchestrator";
 export * from "./marketing-research";
 export * from "./marketing-content-orchestrator";
+export * from "./marketing-content-publisher";
