@@ -2,7 +2,7 @@ import assert from "node:assert/strict"; import test from "node:test";
 import { createPersistentCampaignRepository } from "./campaign-persistent";
 import { planCampaign } from "./campaign-planner";
 import type { TenantMarketingBrain } from "./marketing-brain";
-const brain:TenantMarketingBrain={tenantId:"t1",audiences:[{id:"aud1",tenantId:"t1",name:"Audience",description:"Target audience",needs:[],channels:["EMAIL","SOCIAL"]}],offerings:[{id:"off1",tenantId:"t1",name:"Offer",description:"Canonical offer"}],publishableClaims:[],insights:[],knowledge:[]};
+const brain:TenantMarketingBrain={tenantId:"t1",audiences:[{id:"aud1",tenantId:"t1",name:"Audience",description:"Target audience",needs:[],channels:["EMAIL","SOCIAL"]}],offerings:[{id:"off1",tenantId:"t1",type:"SERVICE",name:"Offer",active:true,metadata:{},description:"Canonical offer"}],publishableClaims:[],insights:[],knowledge:[]};
 const input={tenantId:"t1",objective:{id:"obj1",tenantId:"t1",name:"Pipeline",outcome:"Generate demand",targetMetric:"qualified_leads",targetValue:10,startsAt:"s",endsAt:"e"},campaignId:"cmp1",name:"Demand",audienceIds:["aud1"],offeringIds:["off1"],startsAt:"s",endsAt:"e",createdAt:"now",correlationId:"corr1",channels:["EMAIL","SOCIAL"]};
 test("planner creates deterministic draft actions without executing",()=>{ const c=planCampaign(brain,input); assert.equal(c.status,"PLANNED"); assert.equal(c.actions.length,2); assert.ok(c.actions.every(x=>x.status==="DRAFT")); assert.equal(c.actions[0]?.correlationId,"corr1"); });
 test("planner fails closed on unknown tenant resources",()=>{ assert.throws(()=>planCampaign(brain,{...input,audienceIds:["missing"]}),/AUDIENCE_NOT_FOUND/); assert.throws(()=>planCampaign(brain,{...input,tenantId:"t2"}),/TENANT_ISOLATION/); });
