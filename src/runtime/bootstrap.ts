@@ -5,6 +5,7 @@ import {
   createCalendarAdapter,
   createCalendarReadOnlyTransport,
   createCrmAdapter,
+  createMarketingCrmAdapter,
   createCrmCalendarReadTransport,
   createEmailAdapter,
   createEmailReadOnlyTransport,
@@ -88,6 +89,10 @@ export function buildReadOnlyRuntime(env: ReadOnlyRuntimeEnv): ReadOnlyRuntimeBo
     // Deliberately do not project this adapter through read-only guards: it is
     // the explicit controlled-write path and enforces tenant + idempotency.
     adapters.push(createCrmAdapter(crmWriteTransport));
+    // EMP-003 shares the tenant-scoped CRM transport but gets a separate
+    // adapter whose write allowlist is limited to marketing-owned entities.
+    adapters.push(createMarketingCrmAdapter(crmReadTransport));
+    adapters.push(createMarketingCrmAdapter(crmWriteTransport));
   }
 
   if (env.CALENDAR_READ && calendarToken && calendarTenantId) {
