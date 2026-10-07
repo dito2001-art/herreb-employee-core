@@ -90,3 +90,48 @@ test("EMP-002 calendar and email remain GET-only through read-only transports", 
   assert.equal(email.ok, true);
   assert.deepEqual(methods, ["GET", "GET"]);
 });
+
+
+test("EMP-003 bootstrap connects tenant-scoped marketing CRM read and controlled write", async () => {
+  const requests: Request[] = [];
+  const current = buildReadOnlyRuntime({
+    AG002_GATEWAY: service((request) => {
+      requests.push(request);
+      if (request.method === "GET") return Response.json({ ok: true, data: [{ id: 1, name: "Campaign" }] });
+      return Response.json({ ok: true, data: { id: 1, status: "DRAFT" } });
+    }),
+    RUNTIME_GATEWAY_TOKEN: "runtime-token",
+    AG002_TENANT_ID: "herreb-client-0"
+  });
+  const runtime = new HerreBEmployeeRuntime({
+    modelRouter: router,
+    adapters: current.adapters,
+    resolveProvenance: (_input, context) => ({ assurance: "OWNER_VERIFIED", subjectId: context.actorId, tenantId: context.tenantId, source: "test-owner" })
+  });
+  const session = await runtime.start({ tenantId: "herreb-client-0", employeeId: "EMP-003", workspaceId: "marketing", actorId: "fernando", channel: "test", correlationId: "corr-emp003-crm" });
+
+  const read = await session.execute("marketing.read", { operation: "read", entity: "marketingCampaigns", payload: { limit: 1 } });
+  assert.equal(read.ok, true);
+  assert.equal(requests[0]?.method, "GET");
+  assert.equal(requests[0]?.headers.get("X-Tenant-ID"), "herreb-client-0");
+
+  const write = await session.execute("marketing.write", { operation: "update", entity: "marketingCampaigns", payload: { id: 1, status: "DRAFT" } }, { approvalGranted: true, idempotencyKey: "emp003-campaign-1" });
+  assert.equal(write.ok, true);
+  assert.equal(requests[1]?.headers.get("X-Tenant-ID"), "herreb-client-0");
+  assert.equal(requests[1]?.headers.get("Idempotency-Key"), "emp003-campaign-1");
+});
+
+test("EMP-003 bootstrap marketing write stays restricted to marketing-owned CRM entities", async () => {
+  let calls = 0;
+  const current = buildReadOnlyRuntime({ AG002_GATEWAY: service(() => { calls += 1; return Response.json({ ok: true }); }), RUNTIME_GATEWAY_TOKEN: "runtime-token", AG002_TENANT_ID: "herreb-client-0" });
+  const runtime = new HerreBEmployeeRuntime({
+    modelRouter: router,
+    adapters: current.adapters,
+    resolveProvenance: (_input, context) => ({ assurance: "OWNER_VERIFIED", subjectId: context.actorId, tenantId: context.tenantId, source: "test-owner" })
+  });
+  const session = await runtime.start({ tenantId: "herreb-client-0", employeeId: "EMP-003", workspaceId: "marketing", actorId: "fernando", channel: "test" });
+  const blocked = await session.execute("marketing.write", { operation: "update", entity: "contacts", payload: { id: 1 } }, { approvalGranted: true, idempotencyKey: "blocked-contact" });
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.error?.code, "CRM_WRITE_ENTITY_BLOCKED");
+  assert.equal(calls, 0);
+});
