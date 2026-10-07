@@ -91,8 +91,13 @@ export function buildReadOnlyRuntime(env: ReadOnlyRuntimeEnv): ReadOnlyRuntimeBo
     adapters.push(createCrmAdapter(crmWriteTransport));
     // EMP-003 shares the tenant-scoped CRM transport but gets a separate
     // adapter whose write allowlist is limited to marketing-owned entities.
-    adapters.push(createMarketingCrmAdapter(crmReadTransport));
-    adapters.push(createMarketingCrmAdapter(crmWriteTransport));
+    // One marketing adapter owns both marketing.read and marketing.write;
+    // route each operation through the appropriate tenant-scoped transport.
+    adapters.push(createMarketingCrmAdapter({
+      execute(input) {
+        return (input.operation === "read" ? crmReadTransport! : crmWriteTransport).execute(input);
+      }
+    }));
   }
 
   if (env.CALENDAR_READ && calendarToken && calendarTenantId) {
