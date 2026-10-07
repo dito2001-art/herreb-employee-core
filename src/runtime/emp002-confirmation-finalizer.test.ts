@@ -91,13 +91,13 @@ describe("EMP-002 confirmation finalizer", () => {
     assert.equal(sent.length, 2);
   });
 
-  it("does not notify when Calendar execution failed", async () => {
+  it("keeps a failed confirmation retryable and does not notify", async () => {
     sent.length = 0;
     const finalized = await finalizeSlotConfirmation({
       tenantId: "tenant-a",
       correlationId: "corr-1",
       now: "2026-10-01T12:11:00-03:00",
-      state: activeState(false),
+      state: activeState(),
       executions: [
         {
           commandType: "CONFIRM_SLOT",
@@ -110,6 +110,9 @@ describe("EMP-002 confirmation finalizer", () => {
       whatsapp
     });
     assert.equal(finalized.verified, false);
+    assert.equal(finalized.state.goal.status, "ACTIVE");
+    assert.equal(finalized.state.goal.nextBestAction, "RETRY_OR_ESCALATE_CONFIRMATION");
+    assert.equal(finalized.state.recovery?.status, "OFFER_PENDING");
     assert.equal(sent.length, 0);
   });
 });
