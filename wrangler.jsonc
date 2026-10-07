@@ -6,9 +6,11 @@
   "compatibility_flags": ["nodejs_compat"],
   "keep_vars": true,
   "ai": { "binding": "AI", "remote": true },
+  "routes": [{ "pattern": "employee.herreb.com", "zone_name": "herreb.com", "custom_domain": true }],
   "vars": {
     "EMP002_TEST_CONSOLE": "client0",
     "CRM_TENANT_ID": "herreb-client-0",
+    "AG002_TENANT_ID": "herreb-client-0",
     "CALENDAR_TENANT_ID": "herreb-client-0",
     "META_API_VERSION": "v26.0",
     "META_GRAPH_VERSION": "v26.0",
