@@ -32,6 +32,11 @@ export async function dispatchSchedulingWhatsAppInbound(input: DispatchSchedulin
     timezone: record.timezone,
   });
 
-  if (result.handled && 'state' in result) await input.store.save({ ...record, state: result.state });
+  if (result.handled && 'state' in result) {
+    const confirmationEvidence = result.response === 'ACCEPT' && 'executions' in result && 'verified' in result && 'notifications' in result
+      ? { recordedAt: input.message.receivedAt, verified: result.verified, executions: result.executions, notifications: result.notifications }
+      : undefined;
+    await input.store.save({ ...record, state: result.state, ...(confirmationEvidence ? { lastConfirmation: confirmationEvidence } : {}) });
+  }
   return result;
 }
