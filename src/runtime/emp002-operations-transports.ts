@@ -57,13 +57,13 @@ export function buildEMP002WhatsAppTransport(env: EMP002OperationsTransportEnv, 
 export function buildEMP002CalendarReadTransport(env: EMP002OperationsTransportEnv, tenantId: string): CalendarTransport {
   const scopedTenant = assertTenantScope(env, tenantId);
   const crmCapability = env.CRM_CAPABILITY ?? env.AG002_GATEWAY;
-  if (!crmCapability || !(env.CRM_AGENT_API_KEY ?? env.RUNTIME_GATEWAY_TOKEN)?.trim()) {
+  if (!crmCapability || !env.RUNTIME_GATEWAY_TOKEN?.trim()) {
     throw new Error('EMP002_CRM_CALENDAR_READ_TRANSPORT_MISSING');
   }
 
   const crm = createCrmCapabilityReadOnlyTransport({
     service: crmCapability,
-    runtimeToken: (env.CRM_AGENT_API_KEY ?? env.RUNTIME_GATEWAY_TOKEN)!,
+    runtimeToken: env.RUNTIME_GATEWAY_TOKEN!,
     tenantId: scopedTenant,
     baseUrl: 'https://internal',
   });
@@ -121,12 +121,12 @@ export function buildEMP002CalendarReadTransport(env: EMP002OperationsTransportE
 export function buildEMP002CalendarTransport(env: EMP002OperationsTransportEnv, tenantId: string): CalendarTransport {
   const scopedTenant = assertTenantScope(env, tenantId);
   const crmCapability = env.CRM_CAPABILITY ?? env.AG002_GATEWAY;
-  if (!crmCapability || !(env.CRM_AGENT_API_KEY ?? env.RUNTIME_GATEWAY_TOKEN)?.trim()) {
+  if (!crmCapability || !env.RUNTIME_GATEWAY_TOKEN?.trim()) {
     throw new Error('EMP002_CALENDAR_WRITE_TRANSPORT_MISSING');
   }
   const crm = createCrmCapabilityControlledWriteTransport({
     service: crmCapability,
-    runtimeToken: (env.CRM_AGENT_API_KEY ?? env.RUNTIME_GATEWAY_TOKEN)!,
+    runtimeToken: env.RUNTIME_GATEWAY_TOKEN!,
     tenantId: scopedTenant,
     baseUrl: 'https://internal',
   });
