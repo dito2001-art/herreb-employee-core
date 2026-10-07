@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { generateEMP002WhatsAppReply } from './emp002-whatsapp-ai';
+import { generateEMP002WhatsAppReply, parseEMP002OwnerCalendarCommand } from './emp002-whatsapp-ai';
 
 describe('EMP-002 general WhatsApp AI', () => {
   it('passes persisted conversation history to Workers AI and returns legacy response text', async () => {
@@ -68,5 +68,20 @@ describe('EMP-002 general WhatsApp AI', () => {
       () => generateEMP002WhatsAppReply({ async run() { return {}; } }, { tenantId: 'tenant-a', whatsapp: '595981000000', updatedAt: '', messages: [] }),
       /EMP002_AI_TEXT_MISSING/,
     );
+  });
+
+  it('parses an explicit owner CREATE deterministically without Workers AI', async () => {
+    const command = await parseEMP002OwnerCalendarCommand(
+      undefined,
+      'Agendá una reunión temporal llamada "[TEMP] EMP-002 Owner Operations Certification" para mañana a las 16:00, duración 30 minutos.',
+      '2026-10-07T17:20:00.000Z',
+    );
+    assert.deepEqual(command, {
+      operation: 'create',
+      title: '[TEMP] EMP-002 Owner Operations Certification',
+      startTime: '2026-10-08T16:00:00',
+      endTime: '2026-10-08T16:30:00',
+      timezone: 'America/Asuncion',
+    });
   });
 });

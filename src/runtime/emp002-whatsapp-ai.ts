@@ -1,5 +1,6 @@
 import type { EMP002WorkersAI } from './emp002-operations-transports';
 import type { EMP002WhatsAppConversation } from './emp002-whatsapp-conversation-store';
+import { resolveEMP002CalendarQueryWindow } from './emp002-calendar-query';
 
 const MODEL = '@cf/zai-org/glm-4.7-flash';
 
@@ -98,6 +99,25 @@ function normalizeCalendarDateTime(value: string): string | undefined {
   return dateOnly ? undefined : undefined;
 }
 
+function parseDeterministicOwnerCreate(text: string, nowIso: string, timezone: string): EMP002OwnerCalendarCommand | undefined {
+  const value = text.trim();
+  if (!/\b(agend|cre|program|reserv)[a-záéíóúñ]*/i.test(value)) return undefined;
+  const time = value.match(/\b(?:a\s+las?|a\s+la|las?)\s+(\d{1,2})(?::(\d{2}))?/i);
+  if (!time) return undefined;
+  const hour = Number(time[1]); const minute = Number(time[2] ?? '0');
+  if (hour > 23 || minute > 59) return undefined;
+  const title = value.match(/["“”']([^"“”']+)["“”']/)?.[1]?.trim();
+  if (!title) return undefined;
+  const date = resolveEMP002CalendarQueryWindow(value, new Date(nowIso)).timeMin.slice(0, 10);
+  const duration = Number(value.match(/\bduraci[oó]n\s+(\d+)\s*min/i)?.[1] ?? '60');
+  if (!Number.isFinite(duration) || duration <= 0 || duration > 1440) return undefined;
+  const start = new Date(`${date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00-03:00`);
+  const end = new Date(start.getTime() + duration * 60_000);
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(end);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
+  return { operation: 'create', title, startTime: `${date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`, endTime: `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:00`, timezone };
+}
+
 function jsonObjectFromText(text: string): Record<string, unknown> {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1] ?? text;
   const start = fenced.indexOf('{');
@@ -114,6 +134,8 @@ export async function parseEMP002OwnerCalendarCommand(
   nowIso: string,
   timezone = 'America/Asuncion',
 ): Promise<EMP002OwnerCalendarCommand> {
+  const deterministic = parseDeterministicOwnerCreate(text, nowIso, timezone);
+  if (deterministic) return deterministic;
   if (!ai) throw new Error('EMP002_WORKERS_AI_MISSING');
   const messages = [
     {
