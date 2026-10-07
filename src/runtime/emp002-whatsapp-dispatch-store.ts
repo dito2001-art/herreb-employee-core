@@ -1,5 +1,6 @@
 import type { AutonomousSchedulingState } from './emp002-autonomous-scheduling';
 import type { WaitlistRequest } from './emp002-scheduling';
+import type { ConfirmSlotExecution } from './emp002-confirm-slot-executor';
 
 export interface WhatsAppSchedulingDispatchRecord {
   tenantId: string;
@@ -11,6 +12,12 @@ export interface WhatsAppSchedulingDispatchRecord {
   timezone: string;
   state: AutonomousSchedulingState;
   requests: WaitlistRequest[];
+  lastConfirmation?: {
+    recordedAt: string;
+    verified: boolean;
+    executions: ConfirmSlotExecution[];
+    notifications: Array<{ audience: 'EXTERNAL_CONTACT' | 'OWNER'; ok: boolean; messageId: string | null }>;
+  };
 }
 
 export interface WhatsAppSchedulingDispatchStore {
