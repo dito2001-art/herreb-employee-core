@@ -5,7 +5,7 @@ import {
   executeCapability,
   parseTenantContext
 } from "../core";
-import { createCrmAdapter } from "./crm";
+import { createCrmAdapter, createMarketingCrmAdapter } from "./crm";
 import { createSalesOpsAdapter } from "./sales-ops";
 
 const salesContext = parseTenantContext({
@@ -129,4 +129,16 @@ test("CRM write requires policy approval idempotency and verified authorization"
   });
   assert.equal(approved.ok, true);
   assert.equal(calls, 1);
+});
+
+
+test("EMP-003 marketing.write is restricted to marketing entities", async () => {
+  let calls=0; const registry=createAdapterRegistry();
+  registry.register(createMarketingCrmAdapter({async execute(){calls+=1;return {ok:true};}}));
+  const context=parseTenantContext({tenantId:"tenant-a",employeeId:"EMP-003",workspaceId:"marketing",actorId:"fernando",channel:"test",correlationId:"corr-mkt"});
+  const options={controlledWriteAuthorization:{authorized:true,assurance:"OWNER_VERIFIED",subjectId:"fernando",tenantId:"tenant-a",source:"trusted-authenticator"}};
+  const blocked=await executeCapability(registry,{context,capabilityId:"marketing.write",input:{operation:"update",entity:"contacts",payload:{id:1}},idempotencyKey:"mkt-contact-1"},options);
+  assert.equal(blocked.ok,false); assert.equal(blocked.error?.code,"CRM_WRITE_ENTITY_BLOCKED"); assert.equal(calls,0);
+  const allowed=await executeCapability(registry,{context,capabilityId:"marketing.write",input:{operation:"update",entity:"marketingCampaigns",payload:{id:1}},idempotencyKey:"mkt-campaign-1"},options);
+  assert.equal(allowed.ok,true); assert.equal(calls,1);
 });

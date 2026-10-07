@@ -34,12 +34,15 @@ const COMMERCIAL_ENTITIES = new Set([
   "billingMilestones"
 ]);
 
+const MARKETING_WRITE_ENTITIES = new Set(["marketingCampaigns", "clientInteractions"]);
+
 function buildAdapter(
   transport: CrmTransport,
   options: {
     id: string;
     employees: readonly EmployeeId[];
     capabilities: readonly string[];
+    writeEntities?: ReadonlySet<string>;
   }
 ): CapabilityAdapter<CrmCapabilityInput, unknown> {
   return {
@@ -82,6 +85,16 @@ function buildAdapter(
         };
       }
 
+      if (!isRead && options.writeEntities && !options.writeEntities.has(entity)) {
+        return {
+          ok: false,
+          error: {
+            code: "CRM_WRITE_ENTITY_BLOCKED",
+            message: `CRM entity is outside this adapter write allowlist: ${entity}`
+          }
+        };
+      }
+
       return transport.execute({
         tenantId: request.context.tenantId,
         operation,
@@ -110,6 +123,7 @@ export function createMarketingCrmAdapter(
   return buildAdapter(transport, {
     id: "herreb-marketing-crm-capability-v1",
     employees: ["EMP-003"],
-    capabilities: ["crm.read", "marketing.read", "marketing.write"]
+    capabilities: ["crm.read", "marketing.read", "marketing.write"],
+    writeEntities: MARKETING_WRITE_ENTITIES
   });
 }
