@@ -24,10 +24,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function shouldAutoPaginatePendingTasks(entity: string, payload: Record<string, unknown> | undefined): boolean {
-  if (entity !== "tasks" || payload?.completed !== false) return false;
+function shouldAutoPaginateTasks(entity: string, payload: Record<string, unknown> | undefined): boolean {
+  if (entity !== "tasks") return false;
   const offset = Number(payload?.offset ?? 0);
   return Number.isFinite(offset) && offset === 0;
+}
+
+function appendReadFilters(url: URL, payload: Record<string, unknown> | undefined, limit: number | undefined, offset: number | undefined) {
+  if (!payload) return;
+  for (const key of ["from", "to", "completed", "status", "priority"] as const) {
+    const value = payload[key];
+    if (value !== undefined && value !== null && String(value).trim() !== "") url.searchParams.set(key, String(value));
+  }
+  if (limit !== undefined) url.searchParams.set("limit", String(limit));
+  if (offset !== undefined) url.searchParams.set("offset", String(offset));
 }
 
 export function createCrmCapabilityReadOnlyTransport(options: CrmCapabilityTransportOptions): CrmTransport {
@@ -38,8 +48,9 @@ export function createCrmCapabilityReadOnlyTransport(options: CrmCapabilityTrans
       if (tenantMismatch(options, input.tenantId)) return { ok: false, error: { code: "CRM_CAPABILITY_TENANT_SCOPE_MISMATCH", message: "CRM capability binding is not authorized for this tenant" }, evidence: { ...baseEvidence, executed: false } };
       if (input.operation !== "read") return { ok: false, error: { code: "CRM_CAPABILITY_READ_ONLY", message: "CRM capability read transport accepts reads only" }, evidence: { ...baseEvidence, executed: false } };
 
-      const autoPaginate = shouldAutoPaginatePendingTasks(input.entity, input.payload);
-      const pageSize = autoPaginate ? 100 : undefined;
+      const autoPaginate = shouldAutoPaginateTasks(input.entity, input.payload);
+      const requestedLimit = Number(input.payload?.limit ?? 100);
+      const pageSize = autoPaginate ? Math.min(100, Math.max(1, Number.isFinite(requestedLimit) ? requestedLimit : 100)) : undefined;
       const maxPages = 100;
       let offset = autoPaginate ? 0 : undefined;
       let pageCount = 0;
@@ -51,12 +62,10 @@ export function createCrmCapabilityReadOnlyTransport(options: CrmCapabilityTrans
         while (true) {
           const url = new URL("/api/agent", baseUrl);
           url.searchParams.set("entity", input.entity);
-          // Direct CRM reads return the tenant-scoped collection. Keep only
-          // the entity selector here; filtering is applied by the calendar facade.
-          if (autoPaginate) {
-            url.searchParams.set("limit", String(pageSize));
-            url.searchParams.set("offset", String(offset));
-          }
+          // Forward only the CRM read filters explicitly supported by /api/agent.
+          // Calendar reads therefore filter server-side and task reads paginate
+          // deterministically until the complete filtered result set is consumed.
+          appendReadFilters(url, input.payload, pageSize, offset);
 
           safeGatewayDiagnostic("CRM_CAPABILITY_READ_REQUEST", {
             ...baseEvidence,
