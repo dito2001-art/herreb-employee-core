@@ -1,4 +1,4 @@
-import { createAdapterRegistry, type CapabilityAdapter, type CapabilityResult } from "./adapters";
+import { createAdapterRegistry, type CapabilityAdapter } from "./adapters";
 import type { TenantContext } from "./contracts";
 import { executeCapability, type ControlledWriteAuthorization, type ExecutionResult } from "./executor";
 import type { ControlledContent } from "./marketing-content-approval";
