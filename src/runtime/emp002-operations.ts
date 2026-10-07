@@ -131,6 +131,16 @@ export class EMP002Operations implements DurableObject {
           console.log(JSON.stringify({ event: 'EMP002_ROUTING_DECISION', correlationId, tenantId: message.tenantId, calendarIntent, ownerConfigured, ownerVerified, route: calendarIntent ? (ownerVerified ? 'calendar-read' : 'owner-verification-failed') : 'general-conversation' }));
           if (calendarIntent && !ownerVerified) return Response.json({ ok: false, handled: false, mode: 'owner-verification-failed', error: 'EMP002_OWNER_VERIFICATION_FAILED', correlationId, routing: { calendarIntent, ownerConfigured, ownerVerified } }, { status: 403 });
           let reply: string; let mode = 'general-conversation';
+          // Calendar reads are deterministic and must not wait for the AI mutation
+          // parser. Route verified owner READ intents directly to CRM first.
+          if (calendarIntent && ownerVerified) {
+            const calendar = buildEMP002CalendarReadTransport(this.env, message.tenantId);
+            const window = resolveEMP002CalendarQueryWindow(message.body, new Date());
+            const calendarResult = await calendar.execute({ tenantId: message.tenantId, request: { operation: 'search', timeMin: window.timeMin, timeMax: window.timeMax }, correlationId });
+            if (!calendarResult.ok) throw new Error(`EMP002_CALENDAR_READ_FAILED:${calendarResult.error?.code ?? 'EMP002_CALENDAR_READ_FAILED'}`);
+            reply = await generateEMP002CalendarReply(this.env.AI, message.body, calendarResult.output);
+            mode = 'calendar-read';
+          } else {
           const ownerCommand = ownerVerified ? await parseEMP002OwnerCalendarCommand(this.env.AI, message.body, new Date().toISOString()) : { operation: 'none' as const };
           if (ownerCommand.operation !== 'none') {
             const readCalendar = buildEMP002CalendarReadTransport(this.env, message.tenantId);
@@ -173,13 +183,8 @@ export class EMP002Operations implements DurableObject {
                 mode = ownerCommand.operation === 'delete' ? 'calendar-delete' : 'calendar-update';
               }
             }
-          } else if (calendarIntent && ownerVerified) {
-            const calendar = buildEMP002CalendarReadTransport(this.env, message.tenantId);
-            const window = resolveEMP002CalendarQueryWindow(message.body, new Date());
-            const calendarResult = await calendar.execute({ tenantId: message.tenantId, request: { operation: 'search', timeMin: window.timeMin, timeMax: window.timeMax }, correlationId });
-            if (!calendarResult.ok) throw new Error(`EMP002_CALENDAR_READ_FAILED:${calendarResult.error?.code ?? 'EMP002_CALENDAR_READ_FAILED'}`);
-            reply = await generateEMP002CalendarReply(this.env.AI, message.body, calendarResult.output); mode = 'calendar-read';
           } else reply = await generateEMP002WhatsAppReply(this.env.AI, conversation);
+          }
           const outbound = await whatsapp.sendText({ tenantId: message.tenantId, to: message.from, body: reply, audience: 'EXTERNAL_CONTACT', correlationId, idempotencyKey: `emp002-${mode}:${message.messageId}` });
           const saved = await this.conversationStore.append(message.tenantId, message.from, { role: 'assistant', content: reply, at: new Date().toISOString(), messageId: outbound.messageId ?? undefined });
           return Response.json({ ok: true, handled: true, mode, provider: outbound.provider, outboundMessageId: outbound.messageId, correlationId, historyLength: saved.messages.length });
