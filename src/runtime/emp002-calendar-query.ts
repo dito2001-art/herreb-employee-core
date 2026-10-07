@@ -21,7 +21,7 @@ export function isEMP002CalendarReadIntent(text: string): boolean {
   const timeTerms = /\b(hoy|ma[ñn]ana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo|semana|fin\s+de\s+semana)\b/i;
   // Mutation verbs must be handled by the owner command parser, even when the
   // message also contains calendar nouns/time terms (for example: "Agendá una reunión mañana").
-  const mutationTerms = /\b(agend[aá]|cre[aá]|program[aá]|reserv[aá]|mov[eé]|reprogram[aá]|cambi[aá]|modific[aá]|actualiz[aá]|cancel[aá]|elimin[aá]|borr[aá])\b/i;
+  const mutationTerms = /\b(agend|cre|program|reserv|mov|reprogram|cambi|modific|actualiz|cancel|elimin|borr)[a-záéíóúñ]*/i;
   if (mutationTerms.test(value)) return false;
   return calendarTerms.test(value) || (possession.test(value) && timeTerms.test(value));
 }
