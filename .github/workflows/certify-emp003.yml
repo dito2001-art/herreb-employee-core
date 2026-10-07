@@ -19,8 +19,8 @@ jobs:
           set -euo pipefail
           test -n "$WORKFORCE_ADMIN_M2M_TOKEN"
           response_file="$(mktemp)"
-          status="$(curl --location --silent --show-error --output "$response_file" --write-out '%{http_code}' \
-            --request POST 'https://employee.herreb.com/api/internal/emp003/certification' \
+          status="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' \
+            --request POST 'https://herreb-employee-core.dito2001.workers.dev/api/internal/emp003/certification' \
             --header "x-herreb-workforce-admin-token: $WORKFORCE_ADMIN_M2M_TOKEN" \
             --header 'Content-Type: application/json' \
             --data '{"tenantId":"herreb-client-0","correlationId":"github-actions-emp003-production-certification","brief":{"objective":"Certify HerreB Client0 EMP-003 draft generation","audience":"HerreB prospective clients","offering":"HerreB AI Workforce","channel":"internal-certification","instruction":"Create one concise draft sentence. Do not invent facts or imply publication."}}')"
