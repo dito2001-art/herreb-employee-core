@@ -79,6 +79,8 @@ test("Client 0 EMP-003 reuses tenant offerings standalone but cannot sell or use
   const { runtime } = client0Runtime(["EMP-003"]);
   const marketer = await start(runtime, "EMP-003");
   const result = await marketer.execute("offering.read", {});
+  assert.equal((await marketer.execute("crm.read", { operation: "read", entity: "companies", payload: { limit: 1, offset: 0 } })).ok, true);
+  assert.equal((await marketer.execute("marketing.read", { operation: "read", entity: "marketingCampaigns", payload: { limit: 1, offset: 0 } })).ok, true);
   assert.equal(result.ok, true);
   const offerings = (result.output as { offerings: Array<{ tenantId: string; id: string }> }).offerings;
   assert.deepEqual(offerings.map(({ tenantId, id }) => ({ tenantId, id })), [{ tenantId: "herreb-client-0", id: "consulting" }, { tenantId: "herreb-client-0", id: "workforce" }]);
