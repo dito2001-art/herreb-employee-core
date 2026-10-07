@@ -58,3 +58,11 @@ test("unknown tenant cannot inherit Client0 shared connector scope", () => {
   assert.equal(current.connectedCapabilities.has("calendar.read"), false);
   assert.equal(current.connectedCapabilities.has("email.read"), false);
 });
+
+
+test("tenant runtime propagates explicit EMP-003 content provider only", () => {
+  const current = buildTenantReadOnlyRuntime({ MARKETING_CONTENT_PROVIDER: { async createDraft() { return { draft: { text: "draft" } }; } } }, "herreb-client-0", []);
+  assert.equal(current.connectedCapabilities.has("content.create"), true);
+  assert.equal(current.connectedCapabilities.has("research.web"), false);
+  assert.equal(current.connectedCapabilities.has("content.publish"), false);
+});
