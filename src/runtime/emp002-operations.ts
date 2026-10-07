@@ -157,7 +157,13 @@ export class EMP002Operations implements DurableObject {
               const readBack = await readCalendar.execute({ tenantId: message.tenantId, request: { operation: 'search', timeMin: ownerCommand.startTime, timeMax: ownerCommand.endTime }, correlationId: `${correlationId}:readback` });
               if (!readBack.ok) throw new Error('EMP002_OWNER_CALENDAR_READBACK_FAILED');
               const readBackRecords = (readBack.output as { data?: Array<Record<string, unknown>> })?.data ?? [];
-              if (!readBackRecords.some((item) => String(item.id ?? '') === String(id))) throw new Error('EMP002_OWNER_CALENDAR_CREATE_READBACK_NOT_CONFIRMED');
+              if (!readBackRecords.some((item) => String(item.id ?? '') === String(id))) {
+                const date = ownerCommand.startTime.slice(0, 10);
+                const exactReadBack = await readCalendar.execute({ tenantId: message.tenantId, request: { operation: 'search', timeMin: `${date}T00:00:00-03:00`, timeMax: `${date}T23:59:59-03:00` }, correlationId: `${correlationId}:readback-date` });
+                if (!exactReadBack.ok) throw new Error('EMP002_OWNER_CALENDAR_READBACK_FAILED');
+                const exactRecords = (exactReadBack.output as { data?: Array<Record<string, unknown>> })?.data ?? [];
+                if (!exactRecords.some((item) => String(item.id ?? '') === String(id))) throw new Error('EMP002_OWNER_CALENDAR_CREATE_READBACK_NOT_CONFIRMED');
+              }
               reply = `Hecho. Creé "${ownerCommand.title}" y confirmé su persistencia en el CRM.`;
               mode = 'calendar-create';
             } else {
