@@ -6,6 +6,8 @@ import {
   createCalendarReadOnlyTransport,
   createCrmAdapter,
   createMarketingCrmAdapter,
+  createMarketingContentAdapter,
+  type MarketingContentProvider,
   createCrmCalendarReadTransport,
   createEmailAdapter,
   createEmailReadOnlyTransport,
@@ -35,6 +37,7 @@ export interface ReadOnlyRuntimeEnv {
   EMAIL_READ?: ServiceFetcher;
   EMAIL_READ_TOKEN?: string;
   EMAIL_TENANT_ID?: string;
+  MARKETING_CONTENT_PROVIDER?: MarketingContentProvider;
 }
 
 type ConnectionState = "CONNECTED" | "MISSING_BINDING" | "MISSING_TOKEN" | "MISSING_TENANT_SCOPE";
@@ -104,6 +107,10 @@ export function buildReadOnlyRuntime(env: ReadOnlyRuntimeEnv): ReadOnlyRuntimeBo
     adapters.push(projectReadOnlyAdapter(createCalendarAdapter(createCalendarReadOnlyTransport(readOnlyService(env.CALENDAR_READ, calendarToken, calendarTenantId))), ["calendar.read"]));
   } else if (!legacyCalendarConfigured && crmReadTransport) {
     adapters.push(projectReadOnlyAdapter(createCalendarAdapter(createCrmCalendarReadTransport(crmReadTransport)), ["calendar.read"]));
+  }
+
+  if (env.MARKETING_CONTENT_PROVIDER) {
+    adapters.push(createMarketingContentAdapter(env.MARKETING_CONTENT_PROVIDER));
   }
 
   if (env.EMAIL_READ && emailToken && emailTenantId) {
