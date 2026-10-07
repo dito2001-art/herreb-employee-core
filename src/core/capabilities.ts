@@ -134,6 +134,12 @@ const definitions: CapabilityDefinition[] = [
     description: "Schedule campaign execution",
     risk: "YELLOW",
     allowedEmployees: ["EMP-003"]
+  },
+  {
+    id: "content.publish",
+    description: "Publish approved marketing content through a controlled channel",
+    risk: "YELLOW",
+    allowedEmployees: ["EMP-003"]
   }
 ];
 

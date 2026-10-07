@@ -51,7 +51,8 @@ const manifests = {
       "marketing.write",
       "research.web",
       "content.create",
-      "campaign.schedule"
+      "campaign.schedule",
+      "content.publish"
     ]
   }
 } as const satisfies Record<EmployeeId, EmployeeManifest>;
