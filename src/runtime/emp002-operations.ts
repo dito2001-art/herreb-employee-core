@@ -138,7 +138,10 @@ export class EMP002Operations implements DurableObject {
             const window = resolveEMP002CalendarQueryWindow(message.body, new Date());
             const calendarResult = await calendar.execute({ tenantId: message.tenantId, request: { operation: 'search', timeMin: window.timeMin, timeMax: window.timeMax }, correlationId });
             if (!calendarResult.ok) throw new Error(`EMP002_CALENDAR_READ_FAILED:${calendarResult.error?.code ?? 'EMP002_CALENDAR_READ_FAILED'}`);
-            reply = await generateEMP002CalendarReply(this.env.AI, message.body, calendarResult.output);
+            // Ground the natural-language reply with the exact resolved window.
+            // The model must not infer "today/tomorrow" from its own clock.
+            const groundedQuestion = `${message.body}\nResolved calendar period: ${window.timeMin} to ${window.timeMax} (exclusive).`;
+            reply = await generateEMP002CalendarReply(this.env.AI, groundedQuestion, calendarResult.output);
             mode = 'calendar-read';
           } else {
           const ownerCommand = ownerVerified ? await parseEMP002OwnerCalendarCommand(this.env.AI, message.body, new Date().toISOString()) : { operation: 'none' as const };
