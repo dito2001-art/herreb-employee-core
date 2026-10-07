@@ -91,6 +91,13 @@ export class EMP002Operations implements DurableObject {
       await this.dispatchStore.save(record); return Response.json({ ok: true });
     }
 
+    if (request.method === 'POST' && url.pathname === '/dispatch/read') {
+      const body = await request.json<{ tenantId?: string; whatsapp?: string }>();
+      if (!body?.tenantId || !body?.whatsapp) return Response.json({ ok: false, error: 'TENANT_AND_WHATSAPP_REQUIRED' }, { status: 400 });
+      const record = await this.dispatchStore.findByWhatsapp(body.tenantId, body.whatsapp);
+      return Response.json({ ok: true, record: record ?? null });
+    }
+
     if (request.method === 'POST' && url.pathname === '/dispatch/lookup') {
       const body = await request.json<{ tenantId?: string; whatsapp?: string }>();
       if (!body?.tenantId || !body?.whatsapp) return Response.json({ ok: false, error: 'TENANT_AND_WHATSAPP_REQUIRED' }, { status: 400 });
