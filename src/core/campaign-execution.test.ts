@@ -5,7 +5,7 @@ import { scheduleCampaignAction } from "./campaign-execution";
 
 const action:CampaignAction={id:"a1",tenantId:"t1",campaignId:"c1",channel:"SOCIAL",kind:"CONTENT",status:"READY",idempotencyKey:"idem1",correlationId:"corr"};
 const campaign:MarketingCampaign={id:"c1",tenantId:"t1",objectiveId:"o1",name:"C",audienceIds:[],offeringIds:[],status:"APPROVED",startsAt:"s",endsAt:"e",actions:[action],results:[],createdAt:"c",updatedAt:"u"};
-const context={tenantId:"t1",employeeId:"EMP-003" as const,actorId:"owner",correlationId:"corr"};
+const context={tenantId:"t1",employeeId:"EMP-003" as const,workspaceId:"w1",actorId:"owner",channel:"TEST",correlationId:"corr"};
 
 test("approved ready action becomes approval-required durable job",async()=>{
  let captured:unknown; const dispatcher={dispatch:async(job:unknown)=>{captured=job;return {accepted:true,mode:"SCHEDULE" as const,executionId:"x",reason:"queued"}}};
