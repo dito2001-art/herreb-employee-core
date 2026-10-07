@@ -32,3 +32,4 @@ export * from "./marketing-attribution-persistent";
 export * from "./marketing-crm-readback";
 export * from "./marketing-content";
 export * from "./marketing-content-approval";
+export * from "./marketing-write-orchestrator";
