@@ -25,3 +25,4 @@ export * from "./sales-cognitive-state";
 export * from "./adapters";
 export * from "./executor";
 export * from "./durable";
+export * from "./marketing-handoff";
