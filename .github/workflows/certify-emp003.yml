@@ -1,0 +1,49 @@
+name: Certify EMP-003 Production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Execute protected Client0 certification
+        env:
+          WORKFORCE_ADMIN_M2M_TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$WORKFORCE_ADMIN_M2M_TOKEN"
+          response_file="$(mktemp)"
+          status="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' \
+            --request POST 'https://employee.herreb.com/api/internal/emp003/certification' \
+            --header "Authorization: Bearer $WORKFORCE_ADMIN_M2M_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data '{"tenantId":"herreb-client-0","correlationId":"github-actions-emp003-production-certification","brief":{"objective":"Certify HerreB Client0 EMP-003 draft generation","audience":"HerreB prospective clients","offering":"HerreB AI Workforce","channel":"internal-certification","instruction":"Create one concise draft sentence. Do not invent facts or imply publication."}}')"
+          cat "$response_file"
+          echo
+          test "$status" = "200"
+          node - "$response_file" <<'NODE'
+          const fs = require('fs');
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const failures = [];
+          if (body.ok !== true) failures.push('ok');
+          if (body.tenantId !== 'herreb-client-0') failures.push('tenantId');
+          if (body.employeeId !== 'EMP-003') failures.push('employeeId');
+          if (body.contentCreateConnected !== true) failures.push('contentCreateConnected');
+          if (body.researchWebConnected !== false) failures.push('researchWebConnected');
+          if (body.contentPublishConnected !== false) failures.push('contentPublishConnected');
+          if (body.status !== 'DRAFT') failures.push('status');
+          if (body.publishExecuted !== false) failures.push('publishExecuted');
+          const text = body?.draft?.text;
+          if (typeof text !== 'string' || !text.trim()) failures.push('draft.text');
+          if (failures.length) {
+            console.error('EMP003_CERTIFICATION_ASSERTION_FAILED:' + failures.join(','));
+            process.exit(1);
+          }
+          console.log('EMP003_PRODUCTION_CERTIFICATION_PASS');
+          NODE
