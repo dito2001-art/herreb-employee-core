@@ -35,7 +35,7 @@ test("configured bootstrap exposes reads plus tenant-scoped controlled crm.write
     CALENDAR_READ: service(() => Response.json({ ok: true, data: [] })), CALENDAR_READ_TOKEN: "calendar-token", CALENDAR_TENANT_ID: "herreb",
     EMAIL_READ: service(() => Response.json({ ok: true, data: [] })), EMAIL_READ_TOKEN: "email-token", EMAIL_TENANT_ID: "herreb"
   });
-  assert.deepEqual([...current.connectedCapabilities].sort(), ["calendar.read", "crm.read", "crm.write", "email.read", "offering.read", "offering.recommend"].sort());
+  assert.deepEqual([...current.connectedCapabilities].sort(), ["calendar.read", "crm.read", "crm.write", "email.read", "marketing.read", "marketing.write", "offering.read", "offering.recommend"].sort());
   assert.deepEqual(current.diagnostics, { salesOps: "CONNECTED", crm: "CONNECTED", calendar: "CONNECTED", email: "CONNECTED" });
 });
 
