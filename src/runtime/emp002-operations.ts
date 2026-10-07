@@ -158,11 +158,13 @@ export class EMP002Operations implements DurableObject {
               if (!readBack.ok) throw new Error('EMP002_OWNER_CALENDAR_READBACK_FAILED');
               const readBackRecords = (readBack.output as { data?: Array<Record<string, unknown>> })?.data ?? [];
               if (!readBackRecords.some((item) => String(item.id ?? '') === String(id))) {
-                const date = ownerCommand.startTime.slice(0, 10);
-                const exactReadBack = await readCalendar.execute({ tenantId: message.tenantId, request: { operation: 'search', timeMin: `${date}T00:00:00-03:00`, timeMax: `${date}T23:59:59-03:00` }, correlationId: `${correlationId}:readback-date` });
-                if (!exactReadBack.ok) throw new Error('EMP002_OWNER_CALENDAR_READBACK_FAILED');
-                const exactRecords = (exactReadBack.output as { data?: Array<Record<string, unknown>> })?.data ?? [];
-                if (!exactRecords.some((item) => String(item.id ?? '') === String(id))) throw new Error('EMP002_OWNER_CALENDAR_CREATE_READBACK_NOT_CONFIRMED');
+                // A create can land beyond the first CRM collection page. The read
+                // capability intentionally does not forward arbitrary filters, so
+                // verify against the complete task collection before failing closed.
+                const allTasks = await readCalendar.execute({ tenantId: message.tenantId, request: { operation: 'search', timeMin: '1970-01-01T00:00:00-03:00', timeMax: '2999-12-31T23:59:59-03:00' }, correlationId: `${correlationId}:readback-all` });
+                if (!allTasks.ok) throw new Error('EMP002_OWNER_CALENDAR_READBACK_FAILED');
+                const allRecords = (allTasks.output as { data?: Array<Record<string, unknown>> })?.data ?? [];
+                if (!allRecords.some((item) => String(item.id ?? '') === String(id))) throw new Error('EMP002_OWNER_CALENDAR_CREATE_READBACK_NOT_CONFIRMED');
               }
               reply = `Hecho. Creé "${ownerCommand.title}" y confirmé su persistencia en el CRM.`;
               mode = 'calendar-create';
