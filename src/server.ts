@@ -7,7 +7,7 @@ import {
   streamText
 } from "ai";
 import { createWorkersAI } from "workers-ai-provider";
-import type { ServiceFetcher } from "./adapters";
+import type { MarketingContentProvider, ServiceFetcher } from "./adapters";
 import { buildEmployeeTools } from "./agent/tools";
 import { StaticModelRouter } from "./core";
 import {
@@ -143,8 +143,20 @@ export class ChatAgent extends AIChatAgent<Env, Record<string, unknown>, AgentPr
       return new Response(JSON.stringify({ ok: false, error: "ACCESS_IDENTITY_CONTEXT_MISMATCH" }), { status: 403, headers: { "content-type": "application/json" } });
     }
 
+    const workersai = createWorkersAI({ binding: this.env.AI });
+    const marketingContentProvider: MarketingContentProvider = {
+      async createDraft(input) {
+        const result = await streamText({
+          model: workersai(DEFAULT_MODEL, { sessionAffinity: `emp003-content:${input.tenantId}` }),
+          system: "You are the draft-generation component of HerreB EMP-003. Create marketing copy only from the structured brief supplied. Do not invent research, citations, customer facts, performance claims, prices, guarantees, or approvals. Return a concise draft. This output is DRAFT only and must never imply publication.",
+          prompt: JSON.stringify({ tenantId: input.tenantId, correlationId: input.correlationId, brief: input.brief })
+        });
+        return { draft: { text: await result.text }, evidenceRefs: [] };
+      }
+    };
+
     const modelRouter = new StaticModelRouter({ provider: "workers-ai", model: DEFAULT_MODEL, reason: "employee-runtime-v0.1 tool-calling route" });
-    const bootstrap = buildTenantReadOnlyRuntime(runtimeEnv, tenantId, tenantCapabilityBindings(runtimeEnv));
+    const bootstrap = buildTenantReadOnlyRuntime({ ...runtimeEnv, MARKETING_CONTENT_PROVIDER: marketingContentProvider }, tenantId, tenantCapabilityBindings(runtimeEnv));
     console.log(JSON.stringify({ event: "EMP002_RUNTIME_DIAGNOSTIC", tenantId, calendarDiagnostic: bootstrap.diagnostics.calendar, calendarCapabilityConnected: bootstrap.connectedCapabilities.has("calendar.read"), crmWriteConnected: bootstrap.connectedCapabilities.has("crm.write"), accessIdentityVerified: Boolean(verifiedIdentity) }));
     const runtime = new HerreBEmployeeRuntime({
       modelRouter,
@@ -154,7 +166,6 @@ export class ChatAgent extends AIChatAgent<Env, Record<string, unknown>, AgentPr
     });
     const session = await runtime.start({ tenantId, employeeId, workspaceId, actorId, channel });
 
-    const workersai = createWorkersAI({ binding: this.env.AI });
     const model = workersai(session.modelRoute.model, { sessionAffinity: this.sessionAffinity });
     const systemPrompt = session.manifest.id === "EMP-002"
       ? buildEMP002ConversationSystemPrompt({ context: session.context, manifest: session.manifest })

@@ -1,4 +1,4 @@
-import type { ServiceFetcher } from "../adapters";
+import type { MarketingContentProvider, ServiceFetcher } from "../adapters";
 import { buildReadOnlyRuntime, type ReadOnlyRuntimeBootstrap } from "./bootstrap";
 import { createTenantCrmRegistry, resolveTenantCrm, type TenantCrmBinding } from "./tenant-crm";
 
@@ -24,6 +24,7 @@ export interface TenantCapabilityEnv {
   EMAIL_READ?: ServiceFetcher;
   EMAIL_READ_TOKEN?: string;
   EMAIL_TENANT_ID?: string;
+  MARKETING_CONTENT_PROVIDER?: MarketingContentProvider;
 }
 
 function scopedFallback<T>(value: T | undefined, authorizedTenantId: string | undefined, requestedTenantId: string): T | undefined {
@@ -59,6 +60,7 @@ export function buildTenantReadOnlyRuntime(env: TenantCapabilityEnv, tenantId: s
     CALENDAR_TENANT_ID: calendarTenantId,
     EMAIL_READ: emailService,
     EMAIL_READ_TOKEN: emailToken,
-    EMAIL_TENANT_ID: emailTenantId
+    EMAIL_TENANT_ID: emailTenantId,
+    MARKETING_CONTENT_PROVIDER: env.MARKETING_CONTENT_PROVIDER
   });
 }
