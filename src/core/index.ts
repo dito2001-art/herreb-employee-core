@@ -28,3 +28,4 @@ export * from "./durable";
 export * from "./marketing-handoff";
 export * from "./marketing-learning";
 export * from "./campaign-execution";
+export * from "./marketing-attribution-persistent";
