@@ -135,3 +135,27 @@ test("EMP-003 bootstrap marketing write stays restricted to marketing-owned CRM 
   assert.equal(blocked.error?.code, "CRM_WRITE_ENTITY_BLOCKED");
   assert.equal(calls, 0);
 });
+
+
+test("EMP-003 content.create is connected only when an explicit content provider is supplied", async () => {
+  const disconnected = buildReadOnlyRuntime({});
+  assert.equal(disconnected.connectedCapabilities.has("content.create"), false);
+
+  let observedTenant = "";
+  const connected = buildReadOnlyRuntime({
+    MARKETING_CONTENT_PROVIDER: {
+      async createDraft(input) {
+        observedTenant = input.tenantId;
+        return { draft: { headline: "AI Workforce" }, evidenceRefs: ["claim:client0"] };
+      }
+    }
+  });
+  assert.equal(connected.connectedCapabilities.has("content.create"), true);
+  const runtime = new HerreBEmployeeRuntime({ modelRouter: router, adapters: connected.adapters });
+  const session = await runtime.start({ tenantId: "herreb-client-0", employeeId: "EMP-003", workspaceId: "marketing", actorId: "fernando", channel: "test", correlationId: "corr-emp003-content" });
+  const result = await session.execute("content.create", { brief: { objective: "qualified demand" } });
+  assert.equal(result.ok, true);
+  assert.equal(observedTenant, "herreb-client-0");
+  assert.equal((result.output as { status: string }).status, "DRAFT");
+  assert.equal(result.evidence?.publishExecuted, false);
+});
