@@ -31,7 +31,12 @@ export async function finalizeSlotConfirmation(input: FinalizeConfirmationInput)
   const reduced = reduceAutonomousScheduling(input.state, event);
   const notifications: ConfirmationFinalization['notifications'] = [];
 
-  if (!successful) return { state: reduced.state, verified: false, notifications };
+  if (!successful) {
+    const retryableState: AutonomousSchedulingState = reduced.state.recovery
+      ? { ...reduced.state, recovery: { ...reduced.state.recovery, status: 'OFFER_PENDING' } }
+      : reduced.state;
+    return { state: retryableState, verified: false, notifications };
+  }
 
   const slot = reduced.state.recovery?.slot;
   if (!slot) return { state: reduced.state, verified: true, notifications };
