@@ -13,6 +13,8 @@ export * from "./knowledge";
 export * from "./marketing";
 export * from "./marketing-brain";
 export * from "./campaign";
+export * from "./campaign-planner";
+export * from "./campaign-persistent";
 export * from "./proactive-sales";
 export * from "./sales-loop";
 export * from "./sales-loop-executor";
