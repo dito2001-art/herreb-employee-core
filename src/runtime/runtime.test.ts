@@ -285,3 +285,20 @@ test("manifest-driven prompt carries tenant and evidence rules", async () => {
   assert.match(prompt, /Tenant: tenant-a/);
   assert.match(prompt, /Do not claim a side effect happened/);
 });
+
+
+test("EMP-003 prompt is marketer-specific and does not inherit EMP-002 scheduling policy", async () => {
+  const runtime = new HerreBEmployeeRuntime({ modelRouter });
+  const session = await runtime.start({
+    tenantId: "tenant-a",
+    employeeId: "EMP-003",
+    workspaceId: "marketing",
+    actorId: "owner",
+    channel: "test"
+  });
+  const prompt = buildEmployeeSystemPrompt(session.context, session.manifest);
+  assert.match(prompt, /Behave as a marketer/);
+  assert.match(prompt, /campaign strategy and content/);
+  assert.match(prompt, /approved, scheduled or published/);
+  assert.doesNotMatch(prompt, /preserve scheduling constraints across turns/);
+});
