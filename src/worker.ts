@@ -6,6 +6,9 @@ import { runEMP002LifecycleE2EHarness } from './runtime/emp002-lifecycle-e2e-har
 import { runEMP002CalendarProductionCertification } from './runtime/emp002-calendar-production-certification';
 import { createWaitlistGoal } from './runtime/emp002-cognitive-scheduling';
 import { reduceAutonomousScheduling } from './runtime/emp002-autonomous-scheduling';
+import { runEMP003ProductionCertification } from './runtime/emp003-production-certification';
+import { createWorkersAI } from 'workers-ai-provider';
+import { streamText } from 'ai';
 
 interface OperationsNamespace { idFromName(name: string): DurableObjectId; get(id: DurableObjectId): DurableObjectStub; }
 interface ServiceFetcher { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>; }
@@ -25,6 +28,19 @@ export { ChatAgent } from './server'; export { EMP002Operations } from './runtim
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url); const runtimeEnv = env as WorkerEnv;
+    if (url.pathname === '/api/internal/emp003/certification') {
+      if (request.method !== 'POST') return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405, headers: { allow: 'POST' } });
+      if (!isValidM2M(request, runtimeEnv)) return Response.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
+      const body: { tenantId?: string; correlationId?: string; brief?: Record<string, unknown> } = await request.json<{ tenantId?: string; correlationId?: string; brief?: Record<string, unknown> }>().catch(() => ({}));
+      const tenantId = body.tenantId?.trim(); const owner = resolveTenantOwner(request, runtimeEnv, tenantId);
+      if (!owner || owner.actorId !== 'fernando' || !body.correlationId || !body.brief || typeof body.brief !== 'object' || Array.isArray(body.brief)) return Response.json({ ok: false, error: 'EMP003_CERT_SCOPE_REJECTED' }, { status: 403 });
+      try {
+        const workersai = createWorkersAI({ binding: runtimeEnv.AI });
+        const provider = { async createDraft(input: { tenantId: string; brief: Record<string, unknown>; correlationId: string }) { const result = await streamText({ model: workersai('@cf/zai-org/glm-4.7-flash', { sessionAffinity: `emp003-cert:${input.tenantId}` }), system: 'You are the draft-generation component of HerreB EMP-003. Create marketing copy only from the structured brief supplied. Do not invent research, citations, customer facts, performance claims, prices, guarantees, or approvals. Return a concise draft. This output is DRAFT only and must never imply publication.', prompt: JSON.stringify({ tenantId: input.tenantId, correlationId: input.correlationId, brief: input.brief }) }); return { draft: { text: await result.text }, evidenceRefs: [] }; } };
+        const result = await runEMP003ProductionCertification(runtimeEnv, { tenantId: owner.tenantId, actorId: owner.actorId, correlationId: body.correlationId, brief: body.brief }, provider);
+        return Response.json(result, { status: result.ok ? 200 : 503 });
+      } catch (error) { return Response.json({ ok: false, error: error instanceof Error ? error.message : 'EMP003_CERT_FAILED' }, { status: 503 }); }
+    }
     if (url.pathname === '/api/internal/emp002/calendar-certification') {
       if (request.method !== 'POST') return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405, headers: { allow: 'POST' } });
       if (!isValidM2M(request, runtimeEnv)) return Response.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
