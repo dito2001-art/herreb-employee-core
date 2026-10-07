@@ -16,7 +16,7 @@ export class SqliteWhatsAppSchedulingDispatchStore implements WhatsAppScheduling
     )`);
   }
 
-  async findActiveByWhatsapp(
+  async findByWhatsapp(
     tenantId: string,
     whatsapp: string
   ): Promise<WhatsAppSchedulingDispatchRecord | undefined> {
@@ -35,7 +35,15 @@ export class SqliteWhatsAppSchedulingDispatchStore implements WhatsAppScheduling
     const record = JSON.parse(payload) as WhatsAppSchedulingDispatchRecord;
     if (record.tenantId !== tenantId || normalizeDispatchWhatsapp(record.whatsapp) !== normalized)
       throw new Error("EMP002_WHATSAPP_DISPATCH_TENANT_MISMATCH");
-    return record.state.recovery?.status === "OFFER_PENDING" ? record : undefined;
+    return record;
+  }
+
+  async findActiveByWhatsapp(
+    tenantId: string,
+    whatsapp: string
+  ): Promise<WhatsAppSchedulingDispatchRecord | undefined> {
+    const record = await this.findByWhatsapp(tenantId, whatsapp);
+    return record?.state.recovery?.status === "OFFER_PENDING" ? record : undefined;
   }
 
   async save(record: WhatsAppSchedulingDispatchRecord): Promise<void> {
