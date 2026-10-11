@@ -59,6 +59,11 @@ export class SqliteEMP002WhatsAppConversationStore {
     message: EMP002WhatsAppConversationMessage,
   ): Promise<EMP002WhatsAppConversation> {
     const current = await this.get(tenantId, whatsapp);
+    // Meta may redeliver a message after a retryable upstream failure.
+    // Keep conversation history idempotent independently of delivery state.
+    if (message.messageId && current.messages.some((item) => item.role === message.role && item.messageId === message.messageId)) {
+      return current;
+    }
     const normalized = normalizeDispatchWhatsapp(whatsapp);
     const next: EMP002WhatsAppConversation = {
       tenantId,
