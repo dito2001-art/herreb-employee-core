@@ -106,6 +106,11 @@ describe('EMP-002 calendar reply grounded in CRM', () => {
     assert.match(reply, /Reunión comercial/);
     assert.doesNotMatch(reply, /Llamar a cliente/);
   });
+  it('labels a multi-day window without claiming all meetings are on day one', async () => {
+    const rangeQuestion = 'Mi agenda semanal\\nResolved calendar period: 2026-10-12T00:00:00-03:00 to 2026-10-19T00:00:00-03:00 (exclusive).'.replace('\\n', '\n');
+    const reply = await generateEMP002CalendarReply(undefined, rangeQuestion, { data: [{ title: 'Reunión de equipo', activityType: 'Reunión' }] });
+    assert.match(reply, /2026-10-12 al 2026-10-19/);
+  });
   it('rejects malformed CRM data', async () => {
     await assert.rejects(() => generateEMP002CalendarReply(undefined, question, {}), /EMP002_CALENDAR_DATA_INVALID/);
   });
