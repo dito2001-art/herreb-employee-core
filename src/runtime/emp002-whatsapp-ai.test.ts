@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { generateEMP002WhatsAppReply, parseEMP002OwnerCalendarCommand } from './emp002-whatsapp-ai';
+import { generateEMP002WhatsAppReply, generateEMP002CalendarReply, parseEMP002OwnerCalendarCommand } from './emp002-whatsapp-ai';
 
 describe('EMP-002 general WhatsApp AI', () => {
   it('passes persisted conversation history to Workers AI and returns legacy response text', async () => {
@@ -83,5 +83,18 @@ describe('EMP-002 general WhatsApp AI', () => {
       endTime: '2026-10-08T16:30:00',
       timezone: 'America/Asuncion',
     });
+  });
+});
+
+describe('EMP-002 calendar reply grounded in CRM', () => {
+  const question = 'Reuniones de mañana\nResolved calendar period: 2026-10-12T00:00:00-03:00 to 2026-10-13T00:00:00-03:00 (exclusive).';
+  it('uses the CRM record and exact date without calling AI', async () => {
+    const ai = { async run(): Promise<never> { throw new Error('AI called'); } };
+    const reply = await generateEMP002CalendarReply(ai, question, { data: [{ title: 'Reunión comercial', activityType: 'Reunión', startTime: '10:30' }] });
+    assert.match(reply, /2026-10-12/);
+    assert.match(reply, /Reunión comercial/);
+  });
+  it('rejects malformed CRM data', async () => {
+    await assert.rejects(() => generateEMP002CalendarReply(undefined, question, {}), /EMP002_CALENDAR_DATA_INVALID/);
   });
 });
