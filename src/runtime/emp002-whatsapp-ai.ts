@@ -63,13 +63,13 @@ export async function generateEMP002CalendarReply(
 ): Promise<string> {
   // Calendar reads are factual operations. Never ask a language model to
   // reinterpret dates, invent meetings, or delay an otherwise completed read.
-  const period = question.match(/Resolved calendar period:\\s*(\\d{4}-\\d{2}-\\d{2})T[^\\s]+\\s+to\\s+(\\d{4}-\\d{2}-\\d{2})T/i);
+  const period = question.match(/Resolved calendar period:\s*(\d{4}-\d{2}-\d{2})T[^\s]+\s+to\s+(\d{4}-\d{2}-\d{2})T/i);
   if (!period) throw new Error('EMP002_CALENDAR_PERIOD_MISSING');
   const payload = calendarOutput && typeof calendarOutput === 'object' && !Array.isArray(calendarOutput)
     ? calendarOutput as Record<string, unknown> : null;
   if (!payload || !Array.isArray(payload.data)) throw new Error('EMP002_CALENDAR_DATA_INVALID');
-  const onlyMeetings = /\\b(reuni[oó]n(?:es)?|cita(?:s)?|eventos?)\\b/i.test(question) && !/\\b(agenda|tareas|pendientes)\\b/i.test(question);
-  const onlyTasks = /\\b(tareas|pendientes)\\b/i.test(question) && !/\\b(agenda|reuni[oó]n(?:es)?)\\b/i.test(question);
+  const onlyMeetings = /\b(reuni[oó]n(?:es)?|cita(?:s)?|eventos?)\b/i.test(question) && !/\b(agenda|tareas|pendientes)\b/i.test(question);
+  const onlyTasks = /\b(tareas|pendientes)\b/i.test(question) && !/\b(agenda|reuni[oó]n(?:es)?)\b/i.test(question);
   const records = payload.data.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object' && !Array.isArray(item));
   const selected = records.filter((record) => {
     const type = String(record.activityType ?? '').toLocaleLowerCase('es');
@@ -84,10 +84,10 @@ export async function generateEMP002CalendarReply(
     const title = String(record.title ?? record.name ?? 'Sin título').trim();
     const type = String(record.activityType ?? 'Actividad');
     const rawTime = String(record.startTime ?? '');
-    const time = rawTime.match(/(?:T|^)(\\d{2}:\\d{2})/)?.[1];
+    const time = rawTime.match(/(?:T|^)(\d{2}:\d{2})/)?.[1];
     return `• ${title} (${type})${time ? ` — ${time}` : ''}`;
   });
-  return `Para el ${date}, encontré ${selected.length} ${label} en el CRM HerreB:\\n${lines.join('\\n')}`;
+  return `Para el ${date}, encontré ${selected.length} ${label} en el CRM HerreB:\n${lines.join('\n')}`;
 }
 
 export type EMP002OwnerCalendarCommand =
