@@ -94,6 +94,18 @@ describe('EMP-002 calendar reply grounded in CRM', () => {
     assert.match(reply, /2026-10-12/);
     assert.match(reply, /Reunión comercial/);
   });
+  it('reports no meetings for the resolved date when CRM returns none', async () => {
+    const reply = await generateEMP002CalendarReply(undefined, question, { data: [] });
+    assert.equal(reply, 'No encontré reuniones para el 2026-10-12 en el CRM HerreB.');
+  });
+  it('does not mislabel CRM tasks as meetings', async () => {
+    const reply = await generateEMP002CalendarReply(undefined, question, { data: [
+      { title: 'Llamar a cliente', activityType: 'Tarea', startTime: '09:00' },
+      { title: 'Reunión comercial', activityType: 'Reunión', startTime: '10:00' },
+    ] });
+    assert.match(reply, /Reunión comercial/);
+    assert.doesNotMatch(reply, /Llamar a cliente/);
+  });
   it('rejects malformed CRM data', async () => {
     await assert.rejects(() => generateEMP002CalendarReply(undefined, question, {}), /EMP002_CALENDAR_DATA_INVALID/);
   });
