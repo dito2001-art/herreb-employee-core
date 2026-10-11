@@ -82,15 +82,6 @@ export class SqliteEMP002WhatsAppConversationStore {
     return next;
   }
 
-  async getInboundStatus(tenantId: string, messageId: string): Promise<'UNSEEN' | 'CLAIMED'> {
-    const rows = Array.from(this.sql.exec(
-      `SELECT message_id FROM emp002_whatsapp_inbound_seen WHERE tenant_id = ? AND message_id = ?`,
-      tenantId,
-      messageId,
-    ));
-    return rows.length ? 'CLAIMED' : 'UNSEEN';
-  }
-
   async releaseInboundForRetry(tenantId: string, messageId: string): Promise<void> {
     this.sql.exec(
       `DELETE FROM emp002_whatsapp_inbound_seen WHERE tenant_id = ? AND message_id = ?`,
