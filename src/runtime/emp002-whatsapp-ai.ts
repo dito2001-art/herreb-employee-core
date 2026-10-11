@@ -77,8 +77,12 @@ export async function generateEMP002CalendarReply(
     return onlyMeetings ? meeting : onlyTasks ? !meeting : true;
   });
   const date = period[1];
+  const endDate = period[2];
+  const nextDay = new Date(`${date}T12:00:00Z`);
+  nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+  const dateLabel = endDate === nextDay.toISOString().slice(0, 10) ? `el ${date}` : `del ${date} al ${endDate} (fin exclusivo)`;
   const label = onlyMeetings ? 'reuniones' : onlyTasks ? 'tareas' : 'actividades';
-  if (!selected.length) return `No encontré ${label} para el ${date} en el CRM HerreB.`;
+  if (!selected.length) return `No encontré ${label} para ${dateLabel} en el CRM HerreB.`;
   const ordered = selected.sort((a, b) => String(a.startTime ?? '').localeCompare(String(b.startTime ?? '')));
   const lines = ordered.map((record) => {
     const title = String(record.title ?? record.name ?? 'Sin título').trim();
@@ -87,7 +91,7 @@ export async function generateEMP002CalendarReply(
     const time = rawTime.match(/(?:T|^)(\d{2}:\d{2})/)?.[1];
     return `• ${title} (${type})${time ? ` — ${time}` : ''}`;
   });
-  return `Para el ${date}, encontré ${selected.length} ${label} en el CRM HerreB:\n${lines.join('\n')}`;
+  return `Para ${dateLabel}, encontré ${selected.length} ${label} en el CRM HerreB:\n${lines.join('\n')}`;
 }
 
 export type EMP002OwnerCalendarCommand =
