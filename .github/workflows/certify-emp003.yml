@@ -15,12 +15,18 @@ jobs:
       - name: Execute protected Client0 certification
         env:
           WORKFORCE_ADMIN_M2M_TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
+          CLOUDFLARE_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
+          CLOUDFLARE_ACCESS_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
         run: |
           set -euo pipefail
           test -n "$WORKFORCE_ADMIN_M2M_TOKEN"
+          test -n "$CLOUDFLARE_ACCESS_CLIENT_ID"
+          test -n "$CLOUDFLARE_ACCESS_CLIENT_SECRET"
           response_file="$(mktemp)"
           status="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' \
-            --request POST 'https://herreb-employee-core.dito2001.workers.dev/api/internal/emp003/certification' \
+            --request POST 'https://employee.herreb.com/api/internal/emp003/certification' \
+            --header "CF-Access-Client-Id: $CLOUDFLARE_ACCESS_CLIENT_ID" \
+            --header "CF-Access-Client-Secret: $CLOUDFLARE_ACCESS_CLIENT_SECRET" \
             --header "x-herreb-workforce-admin-token: $WORKFORCE_ADMIN_M2M_TOKEN" \
             --header 'Content-Type: application/json' \
             --data '{"tenantId":"herreb-client-0","correlationId":"github-actions-emp003-production-certification","brief":{"objective":"Certify HerreB Client0 EMP-003 draft generation","audience":"HerreB prospective clients","offering":"HerreB AI Workforce","channel":"internal-certification","instruction":"Create one concise draft sentence. Do not invent facts or imply publication."}}')"
