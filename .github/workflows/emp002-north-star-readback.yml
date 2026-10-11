@@ -16,11 +16,15 @@ jobs:
         shell: bash
         env:
           TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           URL: https://employee.herreb.com/api/internal/emp002/north-star/readback
 
         run: |
           set -euo pipefail
           test -n "$TOKEN"
+          test -n "$CF_ACCESS_CLIENT_ID"
+          test -n "$CF_ACCESS_CLIENT_SECRET"
 
           RESPONSE_FILE="$(mktemp)"
           trap 'rm -f "$RESPONSE_FILE"' EXIT
@@ -33,6 +37,8 @@ jobs:
             -X POST "$URL" \
             -H 'content-type: application/json' \
             -H "x-herreb-workforce-admin-token: $TOKEN" \
+            -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+            -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
             --data '{"tenantId":"herreb-client-0","whatsapp":"595981538641"}')"
 
           RESPONSE="$(cat "$RESPONSE_FILE")"
