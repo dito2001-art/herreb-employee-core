@@ -23,16 +23,30 @@ jobs:
           test -n "$CLOUDFLARE_ACCESS_CLIENT_ID"
           test -n "$CLOUDFLARE_ACCESS_CLIENT_SECRET"
           response_file="$(mktemp)"
-          status="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' \
+          headers_file="$(mktemp)"
+          status="$(curl --silent --show-error --max-time 60 --dump-header "$headers_file" --output "$response_file" --write-out '%{http_code}' \
             --request POST 'https://employee.herreb.com/api/internal/emp003/certification' \
             --header "CF-Access-Client-Id: $CLOUDFLARE_ACCESS_CLIENT_ID" \
             --header "CF-Access-Client-Secret: $CLOUDFLARE_ACCESS_CLIENT_SECRET" \
             --header "x-herreb-workforce-admin-token: $WORKFORCE_ADMIN_M2M_TOKEN" \
             --header 'Content-Type: application/json' \
             --data '{"tenantId":"herreb-client-0","correlationId":"github-actions-emp003-production-certification","brief":{"objective":"Certify HerreB Client0 EMP-003 draft generation","audience":"HerreB prospective clients","offering":"HerreB AI Workforce","channel":"internal-certification","instruction":"Create one concise draft sentence. Do not invent facts or imply publication."}}')"
-          cat "$response_file"
-          echo
-          test "$status" = "200"
+          echo "HTTP_STATUS=$status"
+          if [ "$status" != "200" ]; then
+            node - "$headers_file" <<'NODE_HEADERS'
+          const fs = require("fs");
+          const raw = fs.readFileSync(process.argv[2], "utf8");
+          for (const line of raw.split(/\r?\n/)) {
+            const match = line.match(/^(location|server|cf-ray|cf-mitigated):\s*(.*)$/i);
+            if (!match) continue;
+            if (match[1].toLowerCase() === "location") {
+              try { const url = new URL(match[2]); console.log("REDIRECT_LOCATION_ORIGIN=" + url.origin); console.log("REDIRECT_LOCATION_PATH=" + url.pathname); }
+              catch { console.log("REDIRECT_LOCATION_INVALID"); }
+            } else console.log(match[1].toUpperCase() + "=" + match[2].slice(0, 180));
+          }
+          NODE_HEADERS
+            exit 1
+          fi
           node - "$response_file" <<'NODE'
           const fs = require('fs');
           const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
