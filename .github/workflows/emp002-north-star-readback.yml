@@ -16,7 +16,7 @@ jobs:
         shell: bash
         env:
           TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
-          URL: https://herreb-employee-core.dito2001.workers.dev/api/internal/emp002/north-star/readback
+          URL: https://employee.herreb.com/api/internal/emp002/north-star/readback
 
         run: |
           set -euo pipefail
