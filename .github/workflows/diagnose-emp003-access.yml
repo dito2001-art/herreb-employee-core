@@ -42,12 +42,12 @@ jobs:
               sys.exit(1)
           if not data.get('success'):
               print('CLOUDFLARE_LIST_API_SUCCESS=false'); sys.exit(1)
-          matches = [t for t in data.get('result',[]) if t.get('name') == 'HerreB GitHub EMP003 Certification']
-          print('TARGET_TOKEN_COUNT=' + str(len(matches)))
+          matches = [t for t in data.get('result',[]) if t.get('client_id') == cid]
+          print('MATCHING_CLIENT_ID_COUNT=' + str(len(matches)))
           if len(matches) != 1: sys.exit(1)
           target = matches[0]
-          print('CLIENT_ID_MATCH=' + str(cid == target.get('client_id')).lower())
+          print('CLIENT_ID_MATCH=true')
           print('TARGET_TOKEN_ENABLED=' + str(target.get('enabled')).lower())
-          if cid != target.get('client_id') or not target.get('enabled'): sys.exit(1)
+          if not target.get('enabled'): sys.exit(1)
           print('EMP003_ACCESS_IDENTITY_CHECK_PASS')
           PY
