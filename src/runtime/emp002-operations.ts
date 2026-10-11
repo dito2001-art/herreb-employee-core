@@ -183,6 +183,7 @@ export class EMP002Operations implements DurableObject {
                 const id = String(records[0].id ?? '');
                 if (!id) throw new Error('EMP002_OWNER_CALENDAR_TARGET_ID_MISSING');
                 const request = ownerCommand.operation === 'delete' ? { operation: 'delete' as const, eventId: id } : { operation: 'update' as const, eventId: id, changes: ownerCommand.changes };
+                sideEffectAttempted = true;
                 const write = await writeCalendar.execute({ tenantId: message.tenantId, request, correlationId, idempotencyKey: `emp002-owner:${ownerCommand.operation}:${message.messageId}` });
                 if (!write.ok) throw new Error(`EMP002_OWNER_CALENDAR_WRITE_FAILED:${write.error?.code ?? ownerCommand.operation.toUpperCase() + '_FAILED'}`);
                 const verify = await readCalendar.execute({ tenantId: message.tenantId, request: { operation: 'search', timeMin: window.timeMin, timeMax: window.timeMax }, correlationId: `${correlationId}:readback` });
