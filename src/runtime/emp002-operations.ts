@@ -117,7 +117,7 @@ export class EMP002Operations implements DurableObject {
           const correlationId = `wa:${message.messageId}`;
           const whatsapp = buildEMP002WhatsAppTransport(this.env, message.tenantId);
           const calendarIntent = isEMP002CalendarReadIntent(message.body);
-          const normalizeWhatsApp = (value: string) => value.replace(/\\D/g, '');
+          const normalizeWhatsApp = (value: string) => value.replace(/\D/g, '');
           const manifests = (() => {
             try {
               return JSON.parse(this.env.TENANT_MANIFESTS_JSON ?? '[]') as Array<{ tenantId?: string; whatsappOwners?: string[] }>;
