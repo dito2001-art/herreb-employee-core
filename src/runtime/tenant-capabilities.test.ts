@@ -66,3 +66,18 @@ test("tenant runtime propagates explicit EMP-003 content provider only", () => {
   assert.equal(current.connectedCapabilities.has("research.web"), false);
   assert.equal(current.connectedCapabilities.has("content.publish"), false);
 });
+
+
+test("EMP-003 research provider is explicit, tenant-scoped, and absent for other tenants", async () => {
+  const seen: string[] = [];
+  const provider = { async research(input: { tenantId: string; query: string; correlationId: string }) {
+    seen.push(input.tenantId);
+    return { findings: [{ summary: "verified" }], sourceRefs: ["https://example.test/source"] };
+  } };
+  const enabled = buildTenantReadOnlyRuntime({ MARKETING_RESEARCH_PROVIDER: provider }, "herreb-client-0", []);
+  const disabled = buildTenantReadOnlyRuntime({}, "client-b", []);
+  assert.equal(enabled.connectedCapabilities.has("research.web"), true);
+  assert.equal(disabled.connectedCapabilities.has("research.web"), false);
+  assert.equal(enabled.connectedCapabilities.has("content.publish"), false);
+  assert.deepEqual(seen, []);
+});
