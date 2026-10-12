@@ -31,7 +31,7 @@ jobs:
           print('CLIENT_SECRET_TRIM_OK=' + str(secret == secret.strip()).lower())
           print('CLIENT_ID_SUFFIX_OK=' + str(cid.endswith('.access')).lower())
           print('CLIENT_SECRET_FORMAT=' + ('CFAST' if secret.startswith('cfast_') else 'LEGACY_OR_OTHER'))
-          url = 'https://api.cloudflare.com/client/v4/accounts/' + os.environ['CLOUDFLARE_ACCOUNT_ID'] + '/access/service_tokens?per_page=100'
+          url = 'https://api.cloudflare.com/client/v4/accounts/' + os.environ['CLOUDFLARE_ACCOUNT_ID'] + '/access/service_tokens?per_page=1000'
           req = urllib.request.Request(url,headers={'Authorization':'Bearer '+os.environ['CLOUDFLARE_API_TOKEN']})
           try:
               with urllib.request.urlopen(req, timeout=20) as resp:
