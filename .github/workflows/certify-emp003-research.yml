@@ -2,6 +2,13 @@ name: Certify EMP-003 Cloudflare Browser Research
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/certify-emp003-research.yml'
+      - 'src/worker.ts'
+      - 'src/adapters/emp003-cloudflare-browser.ts'
+      - 'wrangler.jsonc'
 
 permissions:
   contents: read
