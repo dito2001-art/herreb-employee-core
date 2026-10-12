@@ -31,7 +31,7 @@ jobs:
           print('CLIENT_SECRET_TRIM_OK=' + str(secret == secret.strip()).lower())
           print('CLIENT_ID_SUFFIX_OK=' + str(cid.endswith('.access')).lower())
           print('CLIENT_SECRET_FORMAT=' + ('CFAST' if secret.startswith('cfast_') else 'LEGACY_OR_OTHER'))
-          url = 'https://api.cloudflare.com/client/v4/accounts/' + os.environ['CLOUDFLARE_ACCOUNT_ID'] + '/access/service_tokens?per_page=100'
+          url = 'https://api.cloudflare.com/client/v4/accounts/' + os.environ['CLOUDFLARE_ACCOUNT_ID'] + '/access/service_tokens?per_page=1000'
           req = urllib.request.Request(url,headers={'Authorization':'Bearer '+os.environ['CLOUDFLARE_API_TOKEN']})
           try:
               with urllib.request.urlopen(req, timeout=20) as resp:
@@ -42,12 +42,26 @@ jobs:
               sys.exit(1)
           if not data.get('success'):
               print('CLOUDFLARE_LIST_API_SUCCESS=false'); sys.exit(1)
-          matches = [t for t in data.get('result',[]) if t.get('name') == 'HerreB GitHub EMP003 Certification']
-          print('TARGET_TOKEN_COUNT=' + str(len(matches)))
+          info = data.get('result_info') or {}
+          if info.get('total_pages', 1) != 1:
+              print('PAGINATION_INCOMPLETE'); sys.exit(1)
+          matches = [t for t in data.get('result',[]) if t.get('client_id') == cid]
+          print('MATCHING_CLIENT_ID_COUNT=' + str(len(matches)))
           if len(matches) != 1: sys.exit(1)
           target = matches[0]
-          print('CLIENT_ID_MATCH=' + str(cid == target.get('client_id')).lower())
+          print('CLIENT_ID_MATCH=true')
           print('TARGET_TOKEN_ENABLED=' + str(target.get('enabled')).lower())
-          if cid != target.get('client_id') or not target.get('enabled'): sys.exit(1)
+          if target.get('enabled') is not True: sys.exit(1)
+          from datetime import datetime, timezone
+          expiry = target.get('expires_at')
+          if not isinstance(expiry, str) or not expiry:
+              print('TOKEN_EXPIRY_UNKNOWN'); sys.exit(1)
+          try:
+              expiry_dt = datetime.fromisoformat(expiry.replace('Z', '+00:00'))
+              valid = expiry_dt.tzinfo is not None and expiry_dt > datetime.now(timezone.utc)
+          except ValueError:
+              valid = False
+          print('TOKEN_NOT_EXPIRED=' + str(valid).lower())
+          if not valid: sys.exit(1)
           print('EMP003_ACCESS_IDENTITY_CHECK_PASS')
           PY
