@@ -1,0 +1,53 @@
+name: Certify EMP-003 Research-to-Draft
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/certify-emp003-research-draft.yml'
+      - 'src/worker.ts'
+      - 'src/adapters/emp003-grounded-brief.ts'
+      - 'src/adapters/emp003-cloudflare-browser.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify tenant isolation and real evidence-backed draft
+        env:
+          WORKFORCE_ADMIN_M2M_TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
+          CLOUDFLARE_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
+          CLOUDFLARE_ACCESS_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$WORKFORCE_ADMIN_M2M_TOKEN"
+          test -n "$CLOUDFLARE_ACCESS_CLIENT_ID"
+          test -n "$CLOUDFLARE_ACCESS_CLIENT_SECRET"
+          endpoint='https://employee.herreb.com/api/internal/emp003/research-draft'
+          payload='{"tenantId":"herreb-client-0","correlationId":"github-actions-emp003-research-draft","topic":"Cloudflare Workers","objective":"Create a factual draft overview","sourceRefs":["https://developers.cloudflare.com/"]}'
+          auth_args=(--header "CF-Access-Client-Id: $CLOUDFLARE_ACCESS_CLIENT_ID" --header "CF-Access-Client-Secret: $CLOUDFLARE_ACCESS_CLIENT_SECRET")
+          no_m2m="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' --request POST "$endpoint" "${auth_args[@]}" --header 'Content-Type: application/json' --data "$payload")"
+          echo "EMP003_DRAFT_NO_M2M_HTTP=$no_m2m"
+          test "$no_m2m" = 401
+          cross_tenant="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' --request POST "$endpoint" "${auth_args[@]}" --header "x-herreb-workforce-admin-token: $WORKFORCE_ADMIN_M2M_TOKEN" --header 'Content-Type: application/json' --data '{"tenantId":"other-tenant","correlationId":"test","topic":"test","objective":"test","sourceRefs":["https://developers.cloudflare.com/"]}')"
+          echo "EMP003_DRAFT_CROSS_TENANT_HTTP=$cross_tenant"
+          test "$cross_tenant" = 403
+          response_file="$(mktemp)"
+          status="$(curl --silent --show-error --max-time 100 --output "$response_file" --write-out '%{http_code}' --request POST "$endpoint" "${auth_args[@]}" --header "x-herreb-workforce-admin-token: $WORKFORCE_ADMIN_M2M_TOKEN" --header 'Content-Type: application/json' --data "$payload")"
+          echo "EMP003_DRAFT_CLIENT0_HTTP=$status"
+          node - "$response_file" "$status" <<'NODE'
+          const fs = require('fs');
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (process.argv[3] !== '200') { console.error('EMP003_DRAFT_NOT_CERTIFIED:' + String(body.error ?? 'UNKNOWN')); process.exit(1); }
+          if (body.ok !== true || body.tenantId !== 'herreb-client-0' || body.employeeId !== 'EMP-003' || body.status !== 'DRAFT' || body.publishExecuted !== false) process.exit(1);
+          if (typeof body.draft !== 'string' || !body.draft.trim()) process.exit(1);
+          if (!Array.isArray(body.evidenceRefs) || !body.evidenceRefs.length || !Array.isArray(body.brief?.findings) || !body.brief.findings.length) process.exit(1);
+          if (body.brief.publishApproved !== false || body.brief.status !== 'RESEARCHED_DRAFT_INPUT') process.exit(1);
+          console.log('EMP003_RESEARCH_TO_DRAFT_PRODUCTION_CERTIFIED');
+          NODE
