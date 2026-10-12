@@ -74,10 +74,14 @@ test("EMP-003 research provider is explicit, tenant-scoped, and absent for other
     seen.push(input.tenantId);
     return { findings: [{ summary: "verified" }], sourceRefs: ["https://example.test/source"] };
   } };
-  const enabled = buildTenantReadOnlyRuntime({ MARKETING_RESEARCH_PROVIDER: provider }, "herreb-client-0", []);
+  const enabled = buildTenantReadOnlyRuntime({ MARKETING_RESEARCH_PROVIDER: provider, MARKETING_RESEARCH_TENANT_ID: "herreb-client-0" }, "herreb-client-0", []);
   const disabled = buildTenantReadOnlyRuntime({}, "client-b", []);
   assert.equal(enabled.connectedCapabilities.has("research.web"), true);
   assert.equal(disabled.connectedCapabilities.has("research.web"), false);
   assert.equal(enabled.connectedCapabilities.has("content.publish"), false);
   assert.deepEqual(seen, []);
+  const unscoped = buildTenantReadOnlyRuntime({ MARKETING_RESEARCH_PROVIDER: provider }, "herreb-client-0", []);
+  const otherTenant = buildTenantReadOnlyRuntime({ MARKETING_RESEARCH_PROVIDER: provider, MARKETING_RESEARCH_TENANT_ID: "herreb-client-0" }, "client-b", []);
+  assert.equal(unscoped.connectedCapabilities.has("research.web"), false);
+  assert.equal(otherTenant.connectedCapabilities.has("research.web"), false);
 });

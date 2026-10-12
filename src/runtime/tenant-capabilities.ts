@@ -26,6 +26,7 @@ export interface TenantCapabilityEnv {
   EMAIL_TENANT_ID?: string;
   MARKETING_CONTENT_PROVIDER?: MarketingContentProvider;
   MARKETING_RESEARCH_PROVIDER?: MarketingResearchProvider;
+  MARKETING_RESEARCH_TENANT_ID?: string;
 }
 
 function scopedFallback<T>(value: T | undefined, authorizedTenantId: string | undefined, requestedTenantId: string): T | undefined {
@@ -63,6 +64,6 @@ export function buildTenantReadOnlyRuntime(env: TenantCapabilityEnv, tenantId: s
     EMAIL_READ_TOKEN: emailToken,
     EMAIL_TENANT_ID: emailTenantId,
     MARKETING_CONTENT_PROVIDER: env.MARKETING_CONTENT_PROVIDER,
-    MARKETING_RESEARCH_PROVIDER: env.MARKETING_RESEARCH_PROVIDER
+    MARKETING_RESEARCH_PROVIDER: scopedFallback(env.MARKETING_RESEARCH_PROVIDER, env.MARKETING_RESEARCH_TENANT_ID, tenantId)
   });
 }
