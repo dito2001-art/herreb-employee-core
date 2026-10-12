@@ -15,3 +15,5 @@ export * from "./controlled-write-http";
 export * from "./emp003-marketing";
 
 export * from "./emp003-brave-search";
+
+export * from "./emp003-cloudflare-browser";
