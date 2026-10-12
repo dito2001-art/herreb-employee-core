@@ -45,7 +45,9 @@ export default {
         return Response.json({ ok: true, tenantId: owner.tenantId, employeeId: 'EMP-003', findings: result.findings, sourceRefs: result.sourceRefs, publishExecuted: false });
       } catch (error) {
         const code = error instanceof Error ? error.message : 'EMP003_RESEARCH_UPSTREAM_FAILED';
-        return Response.json({ ok: false, error: ['RESEARCH_SOURCE_NOT_ALLOWED','RESEARCH_SOURCES_REQUIRED','RESEARCH_TENANT_SCOPE_MISMATCH','RESEARCH_INPUT_REQUIRED'].includes(code) ? code : 'EMP003_RESEARCH_UPSTREAM_FAILED' }, { status: 400 });
+        const inputError = ['RESEARCH_SOURCE_NOT_ALLOWED','RESEARCH_SOURCES_REQUIRED','RESEARCH_TENANT_SCOPE_MISMATCH','RESEARCH_INPUT_REQUIRED'].includes(code);
+        console.error('EMP003_RESEARCH_FAILURE', { correlationId: body.correlationId?.trim() ?? '', code: inputError ? 'RESEARCH_INPUT_REJECTED' : code });
+        return Response.json({ ok: false, error: inputError ? code : 'EMP003_RESEARCH_UPSTREAM_FAILED' }, { status: inputError ? 400 : 503 });
       }
     }
     if (url.pathname === '/api/internal/emp003/certification') {
