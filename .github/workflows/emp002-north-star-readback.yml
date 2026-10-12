@@ -27,12 +27,17 @@ jobs:
           test -n "$CF_ACCESS_CLIENT_SECRET"
 
           RESPONSE_FILE="$(mktemp)"
-          trap 'rm -f "$RESPONSE_FILE"' EXIT
+          HEADERS_FILE="$(mktemp)"
+          trap 'rm -f "$RESPONSE_FILE" "$HEADERS_FILE"' EXIT
 
           HTTP_STATUS="$(curl \
             --silent \
             --show-error \
             --output "$RESPONSE_FILE" \
+            --dump-header "$HEADERS_FILE" \
+            --max-redirs 0 \
+            --connect-timeout 10 \
+            --max-time 30 \
             --write-out '%{http_code}' \
             -X POST "$URL" \
             -H 'content-type: application/json' \
@@ -41,12 +46,35 @@ jobs:
             -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
             --data '{"tenantId":"herreb-client-0","whatsapp":"595981538641"}')"
 
+          # Do not print raw Location: Access URLs may contain signed query strings.
+          node - "$HEADERS_FILE" <<'NODE'
+          const fs = require("fs");
+          const raw = fs.readFileSync(process.argv[2], "utf8");
+          const lines = raw.split(/\r?\n/);
+          const get = name => {
+            const line = lines.find(x => x.toLowerCase().startsWith(name + ":"));
+            return line ? line.slice(name.length + 1).trim() : "";
+          };
+          const location = get("location");
+          if (location) {
+            try {
+              const u = new URL(location);
+              console.log("Redirect host: " + u.hostname);
+              console.log("Redirect path: " + u.pathname);
+            } catch { console.log("Redirect: unparseable"); }
+          }
+          console.log("CF-Ray present: " + Boolean(get("cf-ray")));
+          console.log("WWW-Authenticate present: " + Boolean(get("www-authenticate")));
+          NODE
+
           RESPONSE="$(cat "$RESPONSE_FILE")"
 
           echo "HTTP status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" != '200' ]; then
+            echo "::error::HTTP $HTTP_STATUS; response body suppressed for credential safety"
+            exit 1
+          fi
           printf '%s\n' "$RESPONSE"
-
-          test "$HTTP_STATUS" = '200'
 
           node -e '
             const r = JSON.parse(process.argv[1]);
