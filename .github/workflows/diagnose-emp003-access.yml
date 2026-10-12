@@ -48,15 +48,21 @@ jobs:
                   sys.exit(1)
               if not data.get('success'):
                   print('CLOUDFLARE_LIST_API_SUCCESS=false'); sys.exit(1)
-              info = data.get('result_info') or {}
-              total_pages = info.get('total_pages')
-              if not isinstance(total_pages, int) or total_pages < 1 or page > total_pages:
-                  print('PAGINATION_METADATA_INVALID'); sys.exit(1)
               results = data.get('result')
-              if not isinstance(results, list):
+              if not isinstance(results, list) or len(results) > 100:
                   print('TOKEN_LIST_INVALID'); sys.exit(1)
-              matches.extend(t for t in results if t.get('client_id') == cid)
-              if page == total_pages:
+              info = data.get('result_info') or {}
+              reported_page = info.get('page')
+              if reported_page is not None and reported_page != page:
+                  print('PAGINATION_PAGE_MISMATCH'); sys.exit(1)
+              matches.extend(t for t in results if isinstance(t, dict) and t.get('client_id') == cid)
+              total_pages = info.get('total_pages')
+              if total_pages is not None:
+                  if not isinstance(total_pages, int) or total_pages < page:
+                      print('PAGINATION_METADATA_INVALID'); sys.exit(1)
+                  if page == total_pages:
+                      break
+              elif len(results) < 100:
                   break
               page += 1
           print('PAGES_CHECKED=' + str(page))
