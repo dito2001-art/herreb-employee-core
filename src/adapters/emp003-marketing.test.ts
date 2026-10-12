@@ -47,3 +47,13 @@ test("EMP-003 content adapter creates drafts only and never implies publication"
   assert.equal((result.output as { status: string }).status, "DRAFT");
   assert.equal(result.evidence?.publishExecuted, false);
 });
+
+for (const sourceRefs of [["not-a-url"], ["http://example.com/source"], ["https://localhost/private"], ["https://example.com/valid", "javascript:alert(1)"], ["https://user:pass@example.com/private"]]) {
+  test(`EMP-003 research rejects invalid evidence references: ${sourceRefs.join(", ")}`, async () => {
+    const registry = createAdapterRegistry();
+    registry.register(createMarketingResearchAdapter({ async research() { return { findings: [{ summary: "unverified" }], sourceRefs }; } }));
+    const result = await executeCapability(registry, { context, capabilityId: "research.web", input: { query: "market" } });
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "RESEARCH_EVIDENCE_REQUIRED");
+  });
+}
