@@ -33,9 +33,14 @@ jobs:
       - name: Run guarded CRM agenda certification
         env:
           CERT_TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
-          CERT_URL: https://herreb-employee-core.dito2001.workers.dev/api/internal/emp002/calendar-certification
+          CERT_URL: https://employee.herreb.com/api/internal/emp002/calendar-certification
+          CF_ACCESS_CLIENT_ID: ${{ secrets.EMP002_CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.EMP002_CF_ACCESS_CLIENT_SECRET }}
         run: |
           set -euo pipefail
+          test -n "$CERT_TOKEN"
+          test -n "$CF_ACCESS_CLIENT_ID"
+          test -n "$CF_ACCESS_CLIENT_SECRET"
           NOW="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
           STARTS_AT="$(date -u -d '+14 days' +%Y-%m-%dT%H:%M:%S.000Z)"
           ENDS_AT="$(date -u -d '+14 days +30 minutes' +%Y-%m-%dT%H:%M:%S.000Z)"
@@ -43,9 +48,9 @@ jobs:
           BODY="$(printf '{"tenantId":"herreb-client-0","correlationId":"%s","idempotencyKey":"%s","startsAt":"%s","endsAt":"%s","now":"%s"}' "$KEY" "$KEY" "$STARTS_AT" "$ENDS_AT" "$NOW")"
           RESPONSE_FILE="$(mktemp)"
           trap 'rm -f "$RESPONSE_FILE"' EXIT
-          STATUS="$(curl --silent --show-error --output "$RESPONSE_FILE" --write-out '%{http_code}' -X POST "$CERT_URL" -H 'content-type: application/json' -H "x-herreb-workforce-admin-token: $CERT_TOKEN" --data "$BODY")"
+          STATUS="$(curl --silent --show-error --max-redirs 0 --connect-timeout 10 --max-time 30 --output "$RESPONSE_FILE" --write-out '%{http_code}' -X POST "$CERT_URL" -H 'content-type: application/json' -H "x-herreb-workforce-admin-token: $CERT_TOKEN" -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" --data "$BODY")"
           RESPONSE="$(cat "$RESPONSE_FILE")"
           echo "HTTP status: $STATUS"
+          if [ "$STATUS" != "200" ]; then echo "::error::HTTP $STATUS; response body suppressed for credential safety"; exit 1; fi
           printf '%s\n' "$RESPONSE"
-          test "$STATUS" = "200"
           node -e 'const r=JSON.parse(process.argv[1]); if(!r.ok||!r.verified||!r.persistenceConfirmed||r.externalCalendarRequired!==false||!r.cleanupOk) process.exit(1); console.log("CERTIFIED CRM agenda record="+r.id)' "$RESPONSE"
