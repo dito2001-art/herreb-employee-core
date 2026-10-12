@@ -67,3 +67,16 @@ test("Browser Run discovers relevant links only within allowlisted hosts", async
   assert.deepEqual(result.sourceRefs, calls);
   assert.equal(result.findings.length, 2);
 });
+
+test("Browser Run preserves seed evidence when discovered page fails", async () => {
+  const provider = createCloudflareBrowserResearchProvider({
+    tenantId: "herreb-client-0", allowedHosts: ["example.com"],
+    browser: { async quickAction(_action, options) {
+      if (options.url === "https://example.com/") return Response.json({ success: true, result: "[Marketing](https://example.com/marketing)" });
+      return new Response("upstream unavailable", { status: 503 });
+    } }
+  });
+  const result = await provider.research({ ...request, sourceRefs: ["https://example.com/"] });
+  assert.deepEqual(result.sourceRefs, ["https://example.com/"]);
+  assert.equal(result.findings.length, 1);
+});
