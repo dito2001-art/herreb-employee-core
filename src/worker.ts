@@ -7,6 +7,7 @@ import { runEMP002CalendarProductionCertification } from './runtime/emp002-calen
 import { createWaitlistGoal } from './runtime/emp002-cognitive-scheduling';
 import { reduceAutonomousScheduling } from './runtime/emp002-autonomous-scheduling';
 import { runEMP003ProductionCertification } from './runtime/emp003-production-certification';
+import { createBraveSearchResearchProvider } from './adapters/emp003-brave-search';
 import { createWorkersAI } from 'workers-ai-provider';
 import { streamText } from 'ai';
 
@@ -16,7 +17,7 @@ type WorkforceAdminResolvedActor = { email?: string; actorId: string; tenantId: 
 type EMP002E2ERequest = { tenantId?: string; whatsapp?: string; appointmentId?: string; now?: string; startsAt?: string };
 type EMP002CalendarCertRequest = { tenantId?: string; correlationId?: string; idempotencyKey?: string; startsAt?: string; endsAt?: string };
 type EMP002NorthStarPrepareRequest = { tenantId?: string; whatsapp?: string; contactId?: string; displayName?: string; email?: string; ownerWhatsapp?: string; now?: string; startsAt?: string; endsAt?: string; resourceId?: string };
-type WorkerEnv = Env & { AG002_GATEWAY?: ServiceFetcher; RUNTIME_GATEWAY_TOKEN?: string; HERREB_RUNTIME_TOKEN?: string; AG002_TENANT_ID?: string; META_VERIFY_TOKEN?: string; WHATSAPP_TENANT_ROUTES_JSON?: string; EMP002_OPERATIONS?: OperationsNamespace; EMP001_WHATSAPP?: ServiceFetcher; WORKFORCE_ADMIN_STATE?: OperationsNamespace; WORKFORCE_ADMIN_M2M_TOKEN?: string; WORKFORCE_ADMIN_M2M_ACTOR_ID?: string; WORKFORCE_ADMIN_M2M_TENANT_ID?: string; TENANT_MANIFESTS_JSON?: string; ACCESS_IDENTITY_MAP_JSON?: string; };
+type WorkerEnv = Env & { AG002_GATEWAY?: ServiceFetcher; RUNTIME_GATEWAY_TOKEN?: string; HERREB_RUNTIME_TOKEN?: string; AG002_TENANT_ID?: string; META_VERIFY_TOKEN?: string; WHATSAPP_TENANT_ROUTES_JSON?: string; EMP002_OPERATIONS?: OperationsNamespace; EMP001_WHATSAPP?: ServiceFetcher; WORKFORCE_ADMIN_STATE?: OperationsNamespace; WORKFORCE_ADMIN_M2M_TOKEN?: string; WORKFORCE_ADMIN_M2M_ACTOR_ID?: string; WORKFORCE_ADMIN_M2M_TENANT_ID?: string; TENANT_MANIFESTS_JSON?: string; ACCESS_IDENTITY_MAP_JSON?: string; EMP003_BRAVE_SEARCH_API_KEY?: string; EMP003_BRAVE_SEARCH_TENANT_ID?: string; };
 const WORKFORCE_ADMIN_RUNTIME_MARKER = 'runtime-probe-v1';
 function normalizeWhatsAppNumber(value?: string): string { return String(value ?? '').replace(/\D/g, ''); }
 function constantTimeEqual(left: string, right: string): boolean { const encoder = new TextEncoder(); const a = encoder.encode(left); const b = encoder.encode(right); const length = Math.max(a.length, b.length); let diff = a.length ^ b.length; for (let index = 0; index < length; index += 1) diff |= (a[index] ?? 0) ^ (b[index] ?? 0); return diff === 0; }
@@ -28,6 +29,22 @@ export { ChatAgent } from './server'; export { EMP002Operations } from './runtim
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url); const runtimeEnv = env as WorkerEnv;
+    if (url.pathname === '/api/internal/emp003/research') {
+      if (request.method !== 'POST') return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405, headers: { allow: 'POST' } });
+      if (!isValidM2M(request, runtimeEnv)) return Response.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
+      const body: { tenantId?: string; correlationId?: string; query?: string } = await request.json<{ tenantId?: string; correlationId?: string; query?: string }>().catch(() => ({}));
+      const tenantId = body.tenantId?.trim();
+      const owner = resolveTenantOwner(request, runtimeEnv, tenantId);
+      if (!owner || owner.actorId !== 'fernando' || !body.correlationId?.trim() || !body.query?.trim()) return Response.json({ ok: false, error: 'EMP003_RESEARCH_SCOPE_REJECTED' }, { status: 403 });
+      if (!runtimeEnv.EMP003_BRAVE_SEARCH_API_KEY?.trim() || runtimeEnv.EMP003_BRAVE_SEARCH_TENANT_ID?.trim() !== owner.tenantId) return Response.json({ ok: false, error: 'EMP003_RESEARCH_NOT_CONFIGURED' }, { status: 503 });
+      try {
+        const provider = createBraveSearchResearchProvider({ apiKey: runtimeEnv.EMP003_BRAVE_SEARCH_API_KEY, tenantId: owner.tenantId });
+        const result = await provider.research({ tenantId: owner.tenantId, correlationId: body.correlationId.trim(), query: body.query.trim() });
+        return Response.json({ ok: true, tenantId: owner.tenantId, employeeId: 'EMP-003', findings: result.findings, sourceRefs: result.sourceRefs, publishExecuted: false });
+      } catch {
+        return Response.json({ ok: false, error: 'EMP003_RESEARCH_UPSTREAM_FAILED' }, { status: 503 });
+      }
+    }
     if (url.pathname === '/api/internal/emp003/certification') {
       if (request.method !== 'POST') return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405, headers: { allow: 'POST' } });
       if (!isValidM2M(request, runtimeEnv)) return Response.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
