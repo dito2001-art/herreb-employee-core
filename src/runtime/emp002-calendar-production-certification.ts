@@ -66,7 +66,7 @@ export async function runEMP002CalendarProductionCertification(
       tenantId: input.tenantId, operation: "read", entity: "tasks", payload: { id },
       correlationId: input.correlationId + ":readback"
     });
-    readBackStatus = readBack.evidence?.upstreamStatus;
+    readBackStatus = typeof readBack.evidence?.upstreamStatus === "number" ? readBack.evidence.upstreamStatus : undefined;
     const readBody = readBack.output as Record<string, unknown> | undefined;
     const readRows = Array.isArray(readBody?.data) ? readBody.data : Array.isArray(readBody?.tasks) ? readBody.tasks : [];
     const persistedRecord = readRows.find((item) => item && typeof item === "object" && String((item as Record<string, unknown>).id ?? "") === id);
@@ -87,7 +87,7 @@ export async function runEMP002CalendarProductionCertification(
       request: { operation: "delete", eventId: id }
     });
     cleanupOk = cleanup.ok;
-    cleanupStatus = cleanup.evidence?.upstreamStatus;
+    cleanupStatus = typeof cleanup.evidence?.upstreamStatus === "number" ? cleanup.evidence.upstreamStatus : undefined;
   } catch {
     cleanupError = "CRM_CLEANUP_EXCEPTION";
   }
