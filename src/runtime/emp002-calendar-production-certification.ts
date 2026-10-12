@@ -56,32 +56,51 @@ export async function runEMP002CalendarProductionCertification(
   const id = String(createdBody?.id ?? createdRecord?.id ?? "");
   if (!id) return { ok: false, stage: "create-id", created };
 
-  const readBack = await readCrm.execute({
-    tenantId: input.tenantId, operation: "read", entity: "tasks", payload: { id },
-    correlationId: input.correlationId + ":readback"
-  });
+  // Always attempt cleanup after a record ID is known, including failed reads.
+  let verified = false;
+  let persistenceConfirmed = false;
+  let readBackStatus: number | undefined;
+  let readError: string | undefined;
+  try {
+    const readBack = await readCrm.execute({
+      tenantId: input.tenantId, operation: "read", entity: "tasks", payload: { id },
+      correlationId: input.correlationId + ":readback"
+    });
+    readBackStatus = readBack.evidence?.upstreamStatus;
+    const readBody = readBack.output as Record<string, unknown> | undefined;
+    const readRows = Array.isArray(readBody?.data) ? readBody.data : Array.isArray(readBody?.tasks) ? readBody.tasks : [];
+    const persistedRecord = readRows.find((item) => item && typeof item === "object" && String((item as Record<string, unknown>).id ?? "") === id);
+    persistenceConfirmed = Boolean(readBack.ok && persistedRecord);
+    verified = persistenceConfirmed;
+  } catch {
+    readError = "CRM_READBACK_EXCEPTION";
+  }
 
-  const readBody = readBack.output as Record<string, unknown> | undefined;
-  const readRows = Array.isArray(readBody?.data) ? readBody.data : Array.isArray(readBody?.tasks) ? readBody.tasks : [];
-  const persistedRecord = readRows.find((item) => item && typeof item === "object" && String((item as Record<string, unknown>).id ?? "") === id) as Record<string, unknown> | undefined;
-  const record = persistedRecord ?? recordFrom(readBack.output);
-  const persistenceConfirmed = Boolean(readBack.ok && persistedRecord);
-  const verified = Boolean(readBack.ok && record && persistenceConfirmed);
-
-  const cleanup = await calendar.execute({
-    tenantId: input.tenantId,
-    correlationId: input.correlationId + ":cleanup",
-    idempotencyKey: input.idempotencyKey + ":cleanup",
-    request: { operation: "delete", eventId: id }
-  });
+  let cleanupOk = false;
+  let cleanupStatus: number | undefined;
+  let cleanupError: string | undefined;
+  try {
+    const cleanup = await calendar.execute({
+      tenantId: input.tenantId,
+      correlationId: input.correlationId + ":cleanup",
+      idempotencyKey: input.idempotencyKey + ":cleanup",
+      request: { operation: "delete", eventId: id }
+    });
+    cleanupOk = cleanup.ok;
+    cleanupStatus = cleanup.evidence?.upstreamStatus;
+  } catch {
+    cleanupError = "CRM_CLEANUP_EXCEPTION";
+  }
 
   return {
-    ok: verified && cleanup.ok, verified, id,
+    ok: verified && cleanupOk, verified, id,
     createStatus: created.evidence?.upstreamStatus,
-    readBackStatus: readBack.evidence?.upstreamStatus,
+    readBackStatus,
     persistenceConfirmed,
     externalCalendarRequired: false,
-    cleanupOk: cleanup.ok,
-    cleanupStatus: cleanup.evidence?.upstreamStatus
+    cleanupOk,
+    cleanupStatus,
+    ...(readError ? { readError } : {}),
+    ...(cleanupError ? { cleanupError } : {})
   };
 }
