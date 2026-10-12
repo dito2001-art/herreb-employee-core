@@ -79,8 +79,13 @@ export function createCloudflareBrowserResearchProvider(options: BrowserResearch
         .sort((a, b) => b.score - a.score || a.url.toString().localeCompare(b.url.toString()))
         .slice(0, Math.max(0, 3 - collected.size));
       for (const candidate of candidates) {
-        const content = await readMarkdown(options.browser, candidate.url);
-        collected.set(candidate.url.toString(), { url: candidate.url.toString(), content });
+        try {
+          const content = await readMarkdown(options.browser, candidate.url);
+          collected.set(candidate.url.toString(), { url: candidate.url.toString(), content });
+        } catch {
+          // Optional discovered pages may be unavailable. Preserve verified seed evidence.
+          // Explicit seed failures above still fail closed.
+        }
       }
       return { findings: [...collected.values()], sourceRefs: [...collected.keys()] };
     }
