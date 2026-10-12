@@ -31,21 +31,35 @@ jobs:
           print('CLIENT_SECRET_TRIM_OK=' + str(secret == secret.strip()).lower())
           print('CLIENT_ID_SUFFIX_OK=' + str(cid.endswith('.access')).lower())
           print('CLIENT_SECRET_FORMAT=' + ('CFAST' if secret.startswith('cfast_') else 'LEGACY_OR_OTHER'))
-          url = 'https://api.cloudflare.com/client/v4/accounts/' + os.environ['CLOUDFLARE_ACCOUNT_ID'] + '/access/service_tokens?per_page=1000'
-          req = urllib.request.Request(url,headers={'Authorization':'Bearer '+os.environ['CLOUDFLARE_API_TOKEN']})
-          try:
-              with urllib.request.urlopen(req, timeout=20) as resp:
-                  data = json.load(resp)
-          except urllib.error.HTTPError as exc:
-              print('CLOUDFLARE_LIST_HTTP=' + str(exc.code))
-              print('CLOUDFLARE_API_PERMISSION_OR_REQUEST_FAILURE')
-              sys.exit(1)
-          if not data.get('success'):
-              print('CLOUDFLARE_LIST_API_SUCCESS=false'); sys.exit(1)
-          info = data.get('result_info') or {}
-          if info.get('total_pages', 1) != 1:
-              print('PAGINATION_INCOMPLETE'); sys.exit(1)
-          matches = [t for t in data.get('result',[]) if t.get('client_id') == cid]
+          base_url = 'https://api.cloudflare.com/client/v4/accounts/' + os.environ['CLOUDFLARE_ACCOUNT_ID'] + '/access/service_tokens'
+          matches = []
+          page = 1
+          while True:
+              if page > 100:
+                  print('PAGINATION_SAFETY_LIMIT'); sys.exit(1)
+              url = base_url + '?per_page=100&page=' + str(page)
+              req = urllib.request.Request(url, headers={'Authorization':'Bearer '+os.environ['CLOUDFLARE_API_TOKEN']})
+              try:
+                  with urllib.request.urlopen(req, timeout=20) as resp:
+                      data = json.load(resp)
+              except urllib.error.HTTPError as exc:
+                  print('CLOUDFLARE_LIST_HTTP=' + str(exc.code))
+                  print('CLOUDFLARE_API_PERMISSION_OR_REQUEST_FAILURE')
+                  sys.exit(1)
+              if not data.get('success'):
+                  print('CLOUDFLARE_LIST_API_SUCCESS=false'); sys.exit(1)
+              info = data.get('result_info') or {}
+              total_pages = info.get('total_pages')
+              if not isinstance(total_pages, int) or total_pages < 1 or page > total_pages:
+                  print('PAGINATION_METADATA_INVALID'); sys.exit(1)
+              results = data.get('result')
+              if not isinstance(results, list):
+                  print('TOKEN_LIST_INVALID'); sys.exit(1)
+              matches.extend(t for t in results if t.get('client_id') == cid)
+              if page == total_pages:
+                  break
+              page += 1
+          print('PAGES_CHECKED=' + str(page))
           print('MATCHING_CLIENT_ID_COUNT=' + str(len(matches)))
           if len(matches) != 1: sys.exit(1)
           target = matches[0]
