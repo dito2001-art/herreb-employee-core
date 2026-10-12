@@ -51,6 +51,17 @@ jobs:
           target = matches[0]
           print('CLIENT_ID_MATCH=true')
           print('TARGET_TOKEN_ENABLED=' + str(target.get('enabled')).lower())
-          if not target.get('enabled'): sys.exit(1)
+          if target.get('enabled') is not True: sys.exit(1)
+          from datetime import datetime, timezone
+          expiry = target.get('expires_at')
+          if not isinstance(expiry, str) or not expiry:
+              print('TOKEN_EXPIRY_UNKNOWN'); sys.exit(1)
+          try:
+              expiry_dt = datetime.fromisoformat(expiry.replace('Z', '+00:00'))
+              valid = expiry_dt.tzinfo is not None and expiry_dt > datetime.now(timezone.utc)
+          except ValueError:
+              valid = False
+          print('TOKEN_NOT_EXPIRED=' + str(valid).lower())
+          if not valid: sys.exit(1)
           print('EMP003_ACCESS_IDENTITY_CHECK_PASS')
           PY
