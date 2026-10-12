@@ -41,8 +41,9 @@ function relevance(url: URL, query: string): number {
 
 async function readMarkdown(browser: BrowserMarkdownBinding, url: URL): Promise<string> {
   const response = await browser.quickAction("markdown", { url: url.toString() });
-  if (!response.ok) throw new Error("RESEARCH_BROWSER_UPSTREAM_FAILED");
-  const body: unknown = await response.json();
+  if (!response.ok) throw new Error("RESEARCH_BROWSER_HTTP_" + response.status);
+  let body: unknown;
+  try { body = await response.json(); } catch { throw new Error("RESEARCH_BROWSER_INVALID_JSON"); }
   const data = body as { success?: unknown; result?: unknown } | null;
   if (!data || data.success !== true || typeof data.result !== "string" || !data.result.trim()) {
     throw new Error("RESEARCH_BROWSER_EMPTY_CONTENT");
