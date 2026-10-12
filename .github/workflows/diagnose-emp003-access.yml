@@ -57,6 +57,9 @@ jobs:
                   print('PAGINATION_PAGE_MISMATCH'); sys.exit(1)
               matches.extend(t for t in results if isinstance(t, dict) and t.get('client_id') == cid)
               total_pages = info.get('total_pages')
+              if total_pages == 0 and page == 1 and len(results) == 0:
+                  print('EMPTY_SERVICE_TOKEN_LIST=true')
+                  break
               if total_pages is not None:
                   metadata_type = type(total_pages).__name__
                   metadata_value = total_pages if type(total_pages) is int and 0 <= total_pages <= 10000 else 'REDACTED_OR_INVALID'
