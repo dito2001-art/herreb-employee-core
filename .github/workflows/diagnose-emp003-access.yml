@@ -42,6 +42,9 @@ jobs:
               sys.exit(1)
           if not data.get('success'):
               print('CLOUDFLARE_LIST_API_SUCCESS=false'); sys.exit(1)
+          info = data.get('result_info') or {}
+          if info.get('total_pages', 1) != 1:
+              print('PAGINATION_INCOMPLETE'); sys.exit(1)
           matches = [t for t in data.get('result',[]) if t.get('client_id') == cid]
           print('MATCHING_CLIENT_ID_COUNT=' + str(len(matches)))
           if len(matches) != 1: sys.exit(1)
