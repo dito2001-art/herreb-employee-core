@@ -1,4 +1,4 @@
-name: Certify EMP-003 Brave Research
+name: Certify EMP-003 Cloudflare Browser Research
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Verify protected research endpoint and optional live search
+      - name: Verify protected Browser Run extraction with real allowlisted source
         env:
           WORKFORCE_ADMIN_M2M_TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
           CLOUDFLARE_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
@@ -23,7 +23,7 @@ jobs:
           test -n "$CLOUDFLARE_ACCESS_CLIENT_ID"
           test -n "$CLOUDFLARE_ACCESS_CLIENT_SECRET"
           endpoint='https://employee.herreb.com/api/internal/emp003/research'
-          payload='{"tenantId":"herreb-client-0","correlationId":"github-actions-emp003-brave-research","query":"HerreB marketing automation"}'
+          payload='{"tenantId":"herreb-client-0","correlationId":"github-actions-emp003-browser-research","query":"Cloudflare Workers documentation","sourceRefs":["https://developers.cloudflare.com/"]}'
           auth_args=(
             --header "CF-Access-Client-Id: $CLOUDFLARE_ACCESS_CLIENT_ID"
             --header "CF-Access-Client-Secret: $CLOUDFLARE_ACCESS_CLIENT_SECRET"
@@ -41,8 +41,9 @@ jobs:
             node - "$response_file" <<'NODE'
           const fs = require('fs');
           const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-          if (body.ok !== false || !['EMP003_RESEARCH_NOT_CONFIGURED', 'EMP003_RESEARCH_UPSTREAM_FAILED'].includes(body.error)) process.exit(1);
-          console.log('EMP003_RESEARCH_UNAVAILABLE_NOT_CERTIFIED:' + body.error);
+          if (body.ok !== false) process.exit(1);
+          console.error('EMP003_BROWSER_RESEARCH_NOT_CERTIFIED:' + body.error);
+          process.exit(1);
           NODE
             exit 0
           fi
@@ -55,5 +56,5 @@ jobs:
           for (const ref of body.sourceRefs) {
             if (typeof ref !== 'string' || !ref.startsWith('https://') || !URL.canParse(ref)) process.exit(1);
           }
-          console.log('EMP003_BRAVE_RESEARCH_PRODUCTION_CERTIFIED');
+          console.log('EMP003_CLOUDFLARE_BROWSER_RESEARCH_PRODUCTION_CERTIFIED');
           NODE
