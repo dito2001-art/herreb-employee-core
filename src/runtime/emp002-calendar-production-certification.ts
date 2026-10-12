@@ -54,7 +54,7 @@ export async function runEMP002CalendarProductionCertification(
   const createdBody = created.output as Record<string, unknown> | undefined;
   const createdRecord = recordFrom(created.output);
   const id = String(createdBody?.id ?? createdRecord?.id ?? "");
-  if (!id) return { ok: false, stage: "create-id", created };
+  if (!id) return { ok: false, stage: "create-id", error: "CRM_CREATED_RECORD_ID_MISSING", correlationId: input.correlationId, idempotencyKey: input.idempotencyKey, cleanupOk: false, manualReconciliationRequired: true };
 
   // Always attempt cleanup after a record ID is known, including failed reads.
   let verified = false;
