@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirm:
-        description: "Type PREPARE_EMP002_NORTH_STAR to authorize one real certification scenario"
+        description: "Type PREPARE_EMP002_NORTH_STAR to prepare, or READBACK_EMP002_NORTH_STAR to read existing state"
         required: true
         type: string
 
