@@ -37,20 +37,24 @@ jobs:
           info = payload.get('result_info') or {}
           if len(results) >= 100 or (isinstance(info.get('total_pages'), (int, float)) and info['total_pages'] > 1):
               print('RESULT=FILTER_NOT_UNIQUE_ENOUGH'); sys.exit(1)
-          matches = [t for t in results if isinstance(t, dict) and t.get('name') == 'HerreB EMP002 Readback V2' and t.get('client_id') == client_id]
-          print('MATCH_COUNT=' + str(len(matches)))
-          if len(matches) != 1:
-              print('RESULT=CLIENT_ID_NOT_UNIQUELY_MATCHED'); sys.exit(1)
-          token = matches[0]
           expected_id = 'f7b41ac4-e246-4e9c-8778-7754b9b36415'
-          print('MATCHES_V2=' + str(token.get('id') == expected_id).lower())
+          by_id = [t for t in results if isinstance(t, dict) and t.get('id') == expected_id]
+          by_name = [t for t in results if isinstance(t, dict) and t.get('name') == 'HerreB EMP002 Readback V2']
+          print('FILTER_RESULT_COUNT=' + str(len(results)))
+          print('V2_ID_PRESENT=' + str(len(by_id) == 1).lower())
+          print('V2_NAME_PRESENT=' + str(len(by_name) == 1).lower())
+          if len(by_id) != 1:
+              print('RESULT=V2_TOKEN_NOT_RETURNED'); sys.exit(1)
+          token = by_id[0]
+          print('V2_NAME_MATCH=' + str(token.get('name') == 'HerreB EMP002 Readback V2').lower())
+          print('GITHUB_CLIENT_ID_MATCH=' + str(token.get('client_id') == client_id).lower())
           print('TOKEN_ENABLED=' + str(token.get('enabled') is True).lower())
           try:
               valid = datetime.fromisoformat(token['expires_at'].replace('Z','+00:00')) > datetime.now(timezone.utc)
           except (KeyError,TypeError,ValueError):
               valid = False
           print('TOKEN_NOT_EXPIRED=' + str(valid).lower())
-          if token.get('id') != expected_id or token.get('enabled') is not True or not valid:
+          if token.get('name') != 'HerreB EMP002 Readback V2' or token.get('client_id') != client_id or token.get('enabled') is not True or not valid:
               print('RESULT=FAILED'); sys.exit(1)
           print('RESULT=EMP002_CLIENT_ID_MATCH_VERIFIED')
           PY
