@@ -33,7 +33,7 @@ export function createMarketingResearchAdapter(provider: MarketingResearchProvid
         sourceRefs: Array.isArray(input.sourceRefs) ? input.sourceRefs.filter((value): value is string => typeof value === "string" && Boolean(value.trim())) : undefined,
         correlationId: request.context.correlationId
       });
-      if (!Array.isArray(result.sourceRefs) || result.sourceRefs.length === 0) {
+      if (!Array.isArray(result.sourceRefs) || result.sourceRefs.length === 0 || result.sourceRefs.some((ref) => typeof ref !== "string" || !/^https:\/\/[^\s/?#]+(?:[/?#][^\s]*)?$/i.test(ref) || !URL.canParse(ref) || new URL(ref).username || new URL(ref).password || ["localhost", "127.0.0.1", "::1"].includes(new URL(ref).hostname.toLowerCase()))) {
         return { ok: false, error: { code: "RESEARCH_EVIDENCE_REQUIRED", message: "Research results require source references" } };
       }
       return { ok: true, output: result, evidence: { sourceRefs: result.sourceRefs } };
