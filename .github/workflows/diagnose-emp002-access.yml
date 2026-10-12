@@ -1,0 +1,51 @@
+name: EMP-002 Access Client ID Audit
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check GitHub Client ID against Cloudflare token V2
+        env:
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          EMP002_CLIENT_ID: ${{ secrets.EMP002_CF_ACCESS_CLIENT_ID }}
+        run: |
+          python3 - <<'PY'
+          import json, os, sys, urllib.request, urllib.error
+          from datetime import datetime, timezone
+          if not all(os.environ.get(k) for k in ('CF_ACCOUNT','CF_API_TOKEN','EMP002_CLIENT_ID')):
+              print('RESULT=MISSING_REQUIRED_SECRET'); sys.exit(1)
+          client_id = os.environ['EMP002_CLIENT_ID']
+          url = 'https://api.cloudflare.com/client/v4/accounts/' + os.environ['CF_ACCOUNT'] + '/access/service_tokens?per_page=100'
+          req = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + os.environ['CF_API_TOKEN']})
+          try:
+              with urllib.request.urlopen(req, timeout=20) as response:
+                  payload = json.load(response)
+          except urllib.error.HTTPError as error:
+              print('RESULT=CLOUDFLARE_API_HTTP_' + str(error.code)); sys.exit(1)
+          if not payload.get('success') or not isinstance(payload.get('result'), list):
+              print('RESULT=CLOUDFLARE_API_INVALID'); sys.exit(1)
+          info = payload.get('result_info') or {}
+          if info.get('total_pages',1) != 1:
+              print('RESULT=PAGINATION_REQUIRED'); sys.exit(1)
+          matches = [t for t in payload['result'] if t.get('client_id') == client_id]
+          print('MATCH_COUNT=' + str(len(matches)))
+          if len(matches) != 1:
+              print('RESULT=CLIENT_ID_NOT_UNIQUELY_MATCHED'); sys.exit(1)
+          token = matches[0]
+          expected_id = 'f7b41ac4-e246-4e9c-8778-7754b9b36415'
+          print('MATCHES_V2=' + str(token.get('id') == expected_id).lower())
+          print('TOKEN_ENABLED=' + str(token.get('enabled') is True).lower())
+          try:
+              valid = datetime.fromisoformat(token['expires_at'].replace('Z','+00:00')) > datetime.now(timezone.utc)
+          except (KeyError,TypeError,ValueError):
+              valid = False
+          print('TOKEN_NOT_EXPIRED=' + str(valid).lower())
+          if token.get('id') != expected_id or token.get('enabled') is not True or not valid:
+              print('RESULT=FAILED'); sys.exit(1)
+          print('RESULT=EMP002_CLIENT_ID_MATCH_VERIFIED')
+          PY
