@@ -44,6 +44,10 @@ jobs:
           response_file="$(mktemp)"
           status="$(curl --silent --show-error --max-time 45 --output "$response_file" --write-out '%{http_code}' --request POST "$endpoint" "${auth_args[@]}" --header "x-herreb-workforce-admin-token: $WORKFORCE_ADMIN_M2M_TOKEN" --header 'Content-Type: application/json' --data "$payload")"
           echo "RESEARCH_CLIENT0_HTTP=$status"
+          node - "$response_file" <<'NODE'
+          const fs = require('fs');
+          try { const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8')); console.log('RESEARCH_RESPONSE_ERROR_CODE=' + String(body.error ?? 'none')); } catch { console.log('RESEARCH_RESPONSE_ERROR_CODE=INVALID_JSON'); }
+          NODE
           if [ "$status" = 503 ]; then
             node - "$response_file" <<'NODE'
           const fs = require('fs');
