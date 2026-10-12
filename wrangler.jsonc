@@ -3,10 +3,21 @@
   "name": "herreb-employee-core",
   "main": "src/worker.ts",
   "compatibility_date": "2026-06-11",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "keep_vars": true,
-  "ai": { "binding": "AI", "remote": true },
-  "routes": [{ "pattern": "employee.herreb.com", "zone_name": "herreb.com", "custom_domain": true }],
+  "ai": {
+    "binding": "AI",
+    "remote": true
+  },
+  "routes": [
+    {
+      "pattern": "employee.herreb.com",
+      "zone_name": "herreb.com",
+      "custom_domain": true
+    }
+  ],
   "vars": {
     "EMP002_TEST_CONSOLE": "client0",
     "CRM_TENANT_ID": "herreb-client-0",
@@ -17,32 +28,87 @@
     "META_PHONE_NUMBER_ID": "1292296713970881",
     "ACCESS_IDENTITY_MAP_JSON": "[{\"email\":\"dito2001@gmail.com\",\"tenantId\":\"herreb-client-0\",\"actorId\":\"fernando\",\"role\":\"owner\"}]",
     "TENANT_MANIFESTS_JSON": "[{\"tenantId\":\"herreb-client-0\",\"name\":\"HerreB Client 0\",\"enabledEmployees\":[\"EMP-001\",\"EMP-002\",\"EMP-003\"],\"knowledgeNamespace\":\"herreb-client-0:knowledge\",\"offeringNamespace\":\"herreb-client-0:offerings\",\"whatsappOwners\":[\"595981538641\"]}]",
-    "WHATSAPP_TENANT_ROUTES_JSON": "[{\"phoneNumberId\":\"1292296713970881\",\"tenantId\":\"herreb-client-0\"}]"
+    "WHATSAPP_TENANT_ROUTES_JSON": "[{\"phoneNumberId\":\"1292296713970881\",\"tenantId\":\"herreb-client-0\"}]",
+    "EMP003_RESEARCH_TENANT_ID": "herreb-client-0",
+    "EMP003_RESEARCH_ALLOWED_HOSTS_JSON": "[\"developers.cloudflare.com\",\"www.cloudflare.com\",\"openai.com\",\"www.openai.com\"]"
   },
   "services": [
-    { "binding": "EMP001_WHATSAPP", "service": "herreb-emp001-meta-whatsapp-adapter" },
-    { "binding": "SALES_OPS", "service": "herreb-emp001-sales-ops-sandbox" },
-    { "binding": "CRM_CAPABILITY", "service": "herreb-crm-staging" },
-    { "binding": "CALENDAR_READ", "service": "herreb-calendar-read" }
+    {
+      "binding": "EMP001_WHATSAPP",
+      "service": "herreb-emp001-meta-whatsapp-adapter"
+    },
+    {
+      "binding": "SALES_OPS",
+      "service": "herreb-emp001-sales-ops-sandbox"
+    },
+    {
+      "binding": "CRM_CAPABILITY",
+      "service": "herreb-crm-staging"
+    },
+    {
+      "binding": "CALENDAR_READ",
+      "service": "herreb-calendar-read"
+    }
   ],
   "assets": {
     "directory": "./dist/client",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/agents/*", "/oauth/*", "/webhooks/*", "/api/admin/*", "/api/internal/*"]
+    "run_worker_first": [
+      "/agents/*",
+      "/oauth/*",
+      "/webhooks/*",
+      "/api/admin/*",
+      "/api/internal/*"
+    ]
   },
-  "build": { "command": "npm run build:console" },
+  "build": {
+    "command": "npm run build:console"
+  },
   "durable_objects": {
     "bindings": [
-      { "class_name": "ChatAgent", "name": "ChatAgent" },
-      { "class_name": "EMP002Operations", "name": "EMP002_OPERATIONS" },
-      { "class_name": "WorkforceAdminState", "name": "WORKFORCE_ADMIN_STATE" }
+      {
+        "class_name": "ChatAgent",
+        "name": "ChatAgent"
+      },
+      {
+        "class_name": "EMP002Operations",
+        "name": "EMP002_OPERATIONS"
+      },
+      {
+        "class_name": "WorkforceAdminState",
+        "name": "WORKFORCE_ADMIN_STATE"
+      }
     ]
   },
   "migrations": [
-    { "new_sqlite_classes": ["ChatAgent"], "tag": "v1" },
-    { "new_sqlite_classes": ["EMP002Operations"], "tag": "v2" },
-    { "new_sqlite_classes": ["WorkforceAdminState"], "tag": "v3" }
+    {
+      "new_sqlite_classes": [
+        "ChatAgent"
+      ],
+      "tag": "v1"
+    },
+    {
+      "new_sqlite_classes": [
+        "EMP002Operations"
+      ],
+      "tag": "v2"
+    },
+    {
+      "new_sqlite_classes": [
+        "WorkforceAdminState"
+      ],
+      "tag": "v3"
+    }
   ],
-  "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": true } }
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    }
+  },
+  "browser": {
+    "binding": "BROWSER"
+  }
 }
