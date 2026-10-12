@@ -62,6 +62,7 @@ export function buildTenantReadOnlyRuntime(env: TenantCapabilityEnv, tenantId: s
     EMAIL_READ: emailService,
     EMAIL_READ_TOKEN: emailToken,
     EMAIL_TENANT_ID: emailTenantId,
-    MARKETING_CONTENT_PROVIDER: env.MARKETING_CONTENT_PROVIDER
+    MARKETING_CONTENT_PROVIDER: env.MARKETING_CONTENT_PROVIDER,
+    MARKETING_RESEARCH_PROVIDER: env.MARKETING_RESEARCH_PROVIDER
   });
 }
