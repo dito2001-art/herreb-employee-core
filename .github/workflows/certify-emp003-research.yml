@@ -1,0 +1,59 @@
+name: Certify EMP-003 Brave Research
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify protected research endpoint and optional live search
+        env:
+          WORKFORCE_ADMIN_M2M_TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
+          CLOUDFLARE_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
+          CLOUDFLARE_ACCESS_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$WORKFORCE_ADMIN_M2M_TOKEN"
+          test -n "$CLOUDFLARE_ACCESS_CLIENT_ID"
+          test -n "$CLOUDFLARE_ACCESS_CLIENT_SECRET"
+          endpoint='https://employee.herreb.com/api/internal/emp003/research'
+          payload='{"tenantId":"herreb-client-0","correlationId":"github-actions-emp003-brave-research","query":"HerreB marketing automation"}'
+          auth_args=(
+            --header "CF-Access-Client-Id: $CLOUDFLARE_ACCESS_CLIENT_ID"
+            --header "CF-Access-Client-Secret: $CLOUDFLARE_ACCESS_CLIENT_SECRET"
+          )
+          no_m2m_status="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' --request POST "$endpoint" "${auth_args[@]}" --header 'Content-Type: application/json' --data "$payload")"
+          echo "RESEARCH_NO_M2M_HTTP=$no_m2m_status"
+          test "$no_m2m_status" = 401
+          cross_tenant_status="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' --request POST "$endpoint" "${auth_args[@]}" --header "x-herreb-workforce-admin-token: $WORKFORCE_ADMIN_M2M_TOKEN" --header 'Content-Type: application/json' --data '{"tenantId":"not-client0","correlationId":"github-actions-emp003-cross-tenant","query":"test"}')"
+          echo "RESEARCH_CROSS_TENANT_HTTP=$cross_tenant_status"
+          test "$cross_tenant_status" = 403
+          response_file="$(mktemp)"
+          status="$(curl --silent --show-error --max-time 45 --output "$response_file" --write-out '%{http_code}' --request POST "$endpoint" "${auth_args[@]}" --header "x-herreb-workforce-admin-token: $WORKFORCE_ADMIN_M2M_TOKEN" --header 'Content-Type: application/json' --data "$payload")"
+          echo "RESEARCH_CLIENT0_HTTP=$status"
+          if [ "$status" = 503 ]; then
+            node - "$response_file" <<'NODE'
+          const fs = require('fs');
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (body.ok !== false || !['EMP003_RESEARCH_NOT_CONFIGURED', 'EMP003_RESEARCH_UPSTREAM_FAILED'].includes(body.error)) process.exit(1);
+          console.log('EMP003_RESEARCH_UNAVAILABLE_NOT_CERTIFIED:' + body.error);
+          NODE
+            exit 0
+          fi
+          test "$status" = 200
+          node - "$response_file" <<'NODE'
+          const fs = require('fs');
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (body.ok !== true || body.tenantId !== 'herreb-client-0' || body.employeeId !== 'EMP-003' || body.publishExecuted !== false) process.exit(1);
+          if (!Array.isArray(body.findings) || !body.findings.length || !Array.isArray(body.sourceRefs) || !body.sourceRefs.length) process.exit(1);
+          for (const ref of body.sourceRefs) {
+            if (typeof ref !== 'string' || !ref.startsWith('https://') || !URL.canParse(ref)) process.exit(1);
+          }
+          console.log('EMP003_BRAVE_RESEARCH_PRODUCTION_CERTIFIED');
+          NODE
