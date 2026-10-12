@@ -58,7 +58,12 @@ jobs:
               matches.extend(t for t in results if isinstance(t, dict) and t.get('client_id') == cid)
               total_pages = info.get('total_pages')
               if total_pages is not None:
-                  if not isinstance(total_pages, int) or total_pages < page:
+                  metadata_type = type(total_pages).__name__
+                  metadata_value = total_pages if type(total_pages) is int and 0 <= total_pages <= 10000 else 'REDACTED_OR_INVALID'
+                  print('PAGINATION_TOTAL_PAGES_TYPE=' + metadata_type)
+                  print('PAGINATION_TOTAL_PAGES_SAFE_VALUE=' + str(metadata_value))
+                  print('PAGINATION_REQUESTED_PAGE=' + str(page))
+                  if type(total_pages) is not int or total_pages < page:
                       print('PAGINATION_METADATA_INVALID'); sys.exit(1)
                   if page == total_pages:
                       break
