@@ -16,8 +16,8 @@ jobs:
         shell: bash
         env:
           TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
-          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
-          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.EMP002_CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.EMP002_CF_ACCESS_CLIENT_SECRET }}
           URL: https://employee.herreb.com/api/internal/emp002/north-star/readback
 
         run: |
