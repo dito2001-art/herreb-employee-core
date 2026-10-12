@@ -7,7 +7,6 @@ import { runEMP002CalendarProductionCertification } from './runtime/emp002-calen
 import { createWaitlistGoal } from './runtime/emp002-cognitive-scheduling';
 import { reduceAutonomousScheduling } from './runtime/emp002-autonomous-scheduling';
 import { runEMP003ProductionCertification } from './runtime/emp003-production-certification';
-import { createBraveSearchResearchProvider } from './adapters/emp003-brave-search';
 import { createCloudflareBrowserResearchProvider, type BrowserMarkdownBinding } from './adapters/emp003-cloudflare-browser';
 import { createWorkersAI } from 'workers-ai-provider';
 import { streamText } from 'ai';
