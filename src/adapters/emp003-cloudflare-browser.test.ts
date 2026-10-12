@@ -49,3 +49,21 @@ test("Browser Run fails closed on empty source content", async () => {
   });
   await assert.rejects(provider.research(request), /RESEARCH_BROWSER_EMPTY_CONTENT/);
 });
+
+test("Browser Run discovers relevant links only within allowlisted hosts", async () => {
+  const calls: string[] = [];
+  const provider = createCloudflareBrowserResearchProvider({
+    tenantId: "herreb-client-0", allowedHosts: ["example.com"],
+    browser: { async quickAction(_action, options) {
+      calls.push(options.url);
+      if (options.url === "https://example.com/") {
+        return Response.json({ success: true, result: "[Marketing strategy](https://example.com/marketing-strategy) [External](https://other.example/marketing-strategy) [HTTP](http://example.com/marketing)" });
+      }
+      return Response.json({ success: true, result: "# Marketing strategy detail" });
+    } }
+  });
+  const result = await provider.research({ ...request, sourceRefs: ["https://example.com/"] });
+  assert.deepEqual(calls, ["https://example.com/", "https://example.com/marketing-strategy"]);
+  assert.deepEqual(result.sourceRefs, calls);
+  assert.equal(result.findings.length, 2);
+});
