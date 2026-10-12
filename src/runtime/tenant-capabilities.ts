@@ -1,4 +1,4 @@
-import type { MarketingContentProvider, ServiceFetcher } from "../adapters";
+import type { MarketingContentProvider, MarketingResearchProvider, ServiceFetcher } from "../adapters";
 import { buildReadOnlyRuntime, type ReadOnlyRuntimeBootstrap } from "./bootstrap";
 import { createTenantCrmRegistry, resolveTenantCrm, type TenantCrmBinding } from "./tenant-crm";
 
@@ -25,6 +25,7 @@ export interface TenantCapabilityEnv {
   EMAIL_READ_TOKEN?: string;
   EMAIL_TENANT_ID?: string;
   MARKETING_CONTENT_PROVIDER?: MarketingContentProvider;
+  MARKETING_RESEARCH_PROVIDER?: MarketingResearchProvider;
 }
 
 function scopedFallback<T>(value: T | undefined, authorizedTenantId: string | undefined, requestedTenantId: string): T | undefined {
