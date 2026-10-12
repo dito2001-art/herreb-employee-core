@@ -37,6 +37,7 @@ jobs:
               matches.extend(t for t in results if isinstance(t, dict) and t.get('client_id') == client_id)
               info = payload.get('result_info') or {}
               total_pages = info.get('total_pages')
+              print('PAGINATION_META=' + json.dumps({'page_requested': page, 'results_count': len(results), 'result_info_keys': sorted(info.keys()), 'total_pages_type': type(info.get('total_pages')).__name__, 'total_pages_valid_integer': type(info.get('total_pages')) is int, 'total_pages_over_limit': type(info.get('total_pages')) is int and info.get('total_pages') > 100, 'total_pages_less_than_page': type(info.get('total_pages')) is int and info.get('total_pages') < page}, sort_keys=True))
               if total_pages is not None:
                   if type(total_pages) is not int or total_pages < page or total_pages > 100:
                       print('RESULT=PAGINATION_INVALID'); sys.exit(1)
