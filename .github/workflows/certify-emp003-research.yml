@@ -53,7 +53,7 @@ jobs:
           const fs = require('fs');
           const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
           if (body.ok !== false) process.exit(1);
-          console.error('EMP003_BROWSER_RESEARCH_NOT_CERTIFIED:' + body.error);
+          console.error('EMP003_BROWSER_RESEARCH_NOT_CERTIFIED:' + body.error + ':CLASS=' + String(body.failureClass ?? 'NOT_AVAILABLE'));
           process.exit(1);
           NODE
             exit 0
