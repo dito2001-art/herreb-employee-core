@@ -33,7 +33,8 @@ export interface WorkforceAdminPolicy {
 export class OwnerScopedAdminPolicy implements WorkforceAdminPolicy {
   evaluate(actor: WorkforceAdminWriteActor, mutation: WorkforceAdminMutation): AdminWriteDecision {
     if (actor.role !== "owner") return "RED";
-    if (mutation.type === "tenant.create") return "YELLOW";
+    // Tenant owners cannot provision other tenants or delete identities by email without a tenant-bound lookup.
+    if (mutation.type === "tenant.create" || mutation.type === "identity.delete") return "RED";
     if (mutation.type === "tenant.employees.set" && mutation.tenantId !== actor.tenantId) return "RED";
     if (mutation.type === "identity.upsert" && mutation.identity.tenantId !== actor.tenantId) return "RED";
     return "GREEN";
