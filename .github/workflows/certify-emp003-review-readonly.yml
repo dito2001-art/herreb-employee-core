@@ -1,0 +1,47 @@
+name: Certify EMP-003 Review Read-only
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify review authentication and tenant isolation without writes
+        env:
+          WORKFORCE_ADMIN_M2M_TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
+          CLOUDFLARE_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
+          CLOUDFLARE_ACCESS_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$WORKFORCE_ADMIN_M2M_TOKEN"
+          test -n "$CLOUDFLARE_ACCESS_CLIENT_ID"
+          test -n "$CLOUDFLARE_ACCESS_CLIENT_SECRET"
+          endpoint='https://employee.herreb.com/api/internal/emp003/review'
+          auth_args=(--header "CF-Access-Client-Id: $CLOUDFLARE_ACCESS_CLIENT_ID" --header "CF-Access-Client-Secret: $CLOUDFLARE_ACCESS_CLIENT_SECRET")
+          scope='tenantId=herreb-client-0&campaignId=emp003-cert-readonly'
+          no_auth="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' "${auth_args[@]}" "$endpoint?$scope")"
+          echo "EMP003_REVIEW_NO_M2M_HTTP=$no_auth"
+          test "$no_auth" = 401
+          cross_tenant="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' "${auth_args[@]}" --header "x-herreb-workforce-admin-token: $WORKFORCE_ADMIN_M2M_TOKEN" "$endpoint?tenantId=other-tenant&campaignId=emp003-cert-readonly")"
+          echo "EMP003_REVIEW_CROSS_TENANT_HTTP=$cross_tenant"
+          test "$cross_tenant" = 403
+          for view in review audit; do
+            response="$(mktemp)"
+            status="$(curl --silent --show-error --max-time 20 --output "$response" --write-out '%{http_code}' "${auth_args[@]}" --header "x-herreb-workforce-admin-token: $WORKFORCE_ADMIN_M2M_TOKEN" "$endpoint?$scope&view=$view")"
+            echo "EMP003_REVIEW_${view}_HTTP=$status"
+            test "$status" = 200
+            node - "$response" "$view" <<'NODE'
+          const fs = require('fs');
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (body.ok !== true) process.exit(1);
+          if (process.argv[3] === 'review' && (typeof body.found !== 'boolean' || !('state' in body))) process.exit(1);
+          if (process.argv[3] === 'audit' && !Array.isArray(body.events)) process.exit(1);
+          NODE
+          done
+          echo 'EMP003_REVIEW_READONLY_PRODUCTION_CERTIFIED'
