@@ -41,7 +41,12 @@ function relevance(url: URL, query: string): number {
 
 async function readMarkdown(browser: BrowserMarkdownBinding, url: URL): Promise<string> {
   const response = await browser.quickAction("markdown", { url: url.toString() });
-  if (!response.ok) throw new Error("RESEARCH_BROWSER_HTTP_" + response.status);
+  if (!response.ok) {
+    // Never log page content, tokens, or response bodies. Preserve only status and safe diagnostic metadata.
+    const diagnostic = response.headers.get("cf-ray")?.replace(/[^a-zA-Z0-9-]/g, "").slice(0, 80);
+    console.error("EMP003_BROWSER_MARKDOWN_HTTP_FAILURE", { status: response.status, cfRay: diagnostic ?? null });
+    throw new Error("RESEARCH_BROWSER_HTTP_" + response.status);
+  }
   let body: unknown;
   try { body = await response.json(); } catch { throw new Error("RESEARCH_BROWSER_INVALID_JSON"); }
   const data = body as { success?: unknown; result?: unknown } | null;
