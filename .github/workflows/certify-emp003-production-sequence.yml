@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/certify-emp003-production-sequence.yml'
+      - '.github/workflows/certify-emp003-research.yml'
+      - '.github/workflows/certify-emp003-research-draft.yml'
+      - '.github/workflows/certify-emp003-campaign.yml'
   workflow_dispatch:
   workflow_run:
     workflows: ['Deploy Employee Core']
