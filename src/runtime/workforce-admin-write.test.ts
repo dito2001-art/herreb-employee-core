@@ -87,7 +87,7 @@ test("RED mutation never writes but is audited", async () => {
   assert.equal(h.audits.length, 1);
 });
 
-test("YELLOW tenant creation requires explicit approval", async () => {
+test("tenant owner cannot create tenants even with approval", async () => {
   const h = harness();
   const mutation = {
     type: "tenant.create" as const,
@@ -115,6 +115,25 @@ test("YELLOW tenant creation requires explicit approval", async () => {
     approveYellow: true,
     randomId: () => "audit-4"
   });
-  assert.equal(approved.persisted, true);
-  assert.equal(h.getState().manifests.length, 2);
+  assert.equal(blocked.decision, "RED");
+  assert.equal(approved.decision, "RED");
+  assert.equal(approved.persisted, false);
+  assert.equal(h.getState().manifests.length, 1);
+});
+
+
+test("tenant owner cannot delete an identity without tenant-scoped lookup", async () => {
+  const h = harness();
+  const result = await executeWorkforceAdminMutation({
+    actor: owner,
+    mutation: { type: "identity.delete", email: "owner@herreb.test" },
+    store: h.store,
+    audit: h.audit,
+    approveYellow: true,
+    randomId: () => "audit-delete"
+  });
+  assert.equal(result.decision, "RED");
+  assert.equal(result.persisted, false);
+  assert.equal(h.getState().identities.length, 1);
+  assert.equal(h.audits.length, 1);
 });
