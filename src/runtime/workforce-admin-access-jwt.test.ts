@@ -25,11 +25,15 @@ test("rejects signature tampering, invalid audience and expiry", async () => {
  const f = await fixture();
  const jwt = await f.sign(f.claims);
  await assert.rejects(() => verifyWorkforceAccessJwt({ ...f.input, jwt: jwt.slice(0, -2) + "xx" }));
- await assert.rejects(() => verifyWorkforceAccessJwt({ ...f.input, jwt: await f.sign({ ...f.claims, aud: "other" }) }));
- await assert.rejects(() => verifyWorkforceAccessJwt({ ...f.input, jwt: await f.sign({ ...f.claims, exp: 1000 }) }));
+ const wrongAudience = await f.sign({ ...f.claims, aud: "other" });
+ await assert.rejects(() => verifyWorkforceAccessJwt({ ...f.input, jwt: wrongAudience }));
+ const expired = await f.sign({ ...f.claims, exp: 1000 });
+ await assert.rejects(() => verifyWorkforceAccessJwt({ ...f.input, jwt: expired }));
 });
 test("rejects algorithm substitution and unknown kid", async () => {
  const f = await fixture();
- await assert.rejects(() => verifyWorkforceAccessJwt({ ...f.input, jwt: await f.sign(f.claims, { alg: "none", kid: "key1" }) }));
- await assert.rejects(() => verifyWorkforceAccessJwt({ ...f.input, jwt: await f.sign(f.claims, { alg: "RS256", kid: "missing" }) }));
+ const wrongAlgorithm = await f.sign(f.claims, { alg: "none", kid: "key1" });
+ await assert.rejects(() => verifyWorkforceAccessJwt({ ...f.input, jwt: wrongAlgorithm }));
+ const unknownKid = await f.sign(f.claims, { alg: "RS256", kid: "missing" });
+ await assert.rejects(() => verifyWorkforceAccessJwt({ ...f.input, jwt: unknownKid }));
 });
