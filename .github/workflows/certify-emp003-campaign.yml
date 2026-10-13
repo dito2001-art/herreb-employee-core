@@ -1,0 +1,59 @@
+name: Certify EMP-003 AI Campaign
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/certify-emp003-campaign.yml'
+      - 'src/worker.ts'
+      - 'src/core/marketing-blueprint-generation.ts'
+      - 'src/core/marketing-campaign-blueprint.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Verify production AI campaign, tenant scope and draft-only status
+        env:
+          WORKFORCE_ADMIN_M2M_TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
+          CLOUDFLARE_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
+          CLOUDFLARE_ACCESS_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$WORKFORCE_ADMIN_M2M_TOKEN"
+          test -n "$CLOUDFLARE_ACCESS_CLIENT_ID"
+          test -n "$CLOUDFLARE_ACCESS_CLIENT_SECRET"
+          endpoint='https://employee.herreb.com/api/internal/emp003/generate-campaign'
+          payload='{"tenantId":"herreb-client-0","correlationId":"github-actions-emp003-campaign","topic":"Cloudflare Workers","objective":"Create a grounded B2B awareness campaign draft","sourceRefs":["https://developers.cloudflare.com/"]}'
+          auth_args=(--header "CF-Access-Client-Id: $CLOUDFLARE_ACCESS_CLIENT_ID" --header "CF-Access-Client-Secret: $CLOUDFLARE_ACCESS_CLIENT_SECRET")
+          no_m2m="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' --request POST "$endpoint" "${auth_args[@]}" --header 'Content-Type: application/json' --data "$payload")"
+          echo "EMP003_CAMPAIGN_NO_M2M_HTTP=$no_m2m"
+          test "$no_m2m" = 401
+          cross_tenant="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' --request POST "$endpoint" "${auth_args[@]}" --header "x-herreb-workforce-admin-token: $WORKFORCE_ADMIN_M2M_TOKEN" --header 'Content-Type: application/json' --data '{"tenantId":"other-tenant","correlationId":"test","topic":"test","objective":"test","sourceRefs":["https://developers.cloudflare.com/"]}')"
+          echo "EMP003_CAMPAIGN_CROSS_TENANT_HTTP=$cross_tenant"
+          test "$cross_tenant" = 403
+          response_file="$(mktemp)"
+          status="$(curl --silent --show-error --max-time 110 --output "$response_file" --write-out '%{http_code}' --request POST "$endpoint" "${auth_args[@]}" --header "x-herreb-workforce-admin-token: $WORKFORCE_ADMIN_M2M_TOKEN" --header 'Content-Type: application/json' --data "$payload")"
+          echo "EMP003_CAMPAIGN_CLIENT0_HTTP=$status"
+          node - "$response_file" "$status" <<'NODE'
+          const fs = require('fs');
+          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (process.argv[3] !== '200') {
+            console.error('EMP003_CAMPAIGN_NOT_CERTIFIED:' + String(body.error ?? 'UNKNOWN'));
+            process.exit(1);
+          }
+          const b = body.blueprint;
+          if (body.ok !== true || body.tenantId !== 'herreb-client-0' || body.employeeId !== 'EMP-003' || body.publishExecuted !== false) process.exit(1);
+          if (!b || b.tenantId !== 'herreb-client-0' || b.status !== 'DRAFT' || b.publishApproved !== false) process.exit(1);
+          if (!Array.isArray(b.audiences) || !b.audiences.length || !Array.isArray(b.keyMessages) || !b.keyMessages.length) process.exit(1);
+          if (!Array.isArray(b.channels) || !b.channels.length || !b.channels.every(c => c.name && Array.isArray(c.actions) && c.actions.length)) process.exit(1);
+          if (!Array.isArray(b.kpis) || !b.kpis.length || !b.kpis.every(k => k.metric && k.target && k.measurement)) process.exit(1);
+          if (!Array.isArray(b.evidenceRefs) || !b.evidenceRefs.length || !b.evidenceRefs.every(s => typeof s === 'string' && s.startsWith('https://'))) process.exit(1);
+          console.log('EMP003_AI_CAMPAIGN_PRODUCTION_CERTIFIED');
+          NODE
