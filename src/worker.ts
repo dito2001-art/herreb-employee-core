@@ -139,8 +139,9 @@ export default {
         try {
           brief = await buildGroundedMarketingBrief(provider, { tenantId: owner.tenantId, correlationId: body.correlationId.trim(), topic: body.topic.trim(), objective: body.objective.trim(), sourceRefs: body.sourceRefs });
         } catch (error) {
-          console.error('EMP003_RESEARCH_DRAFT_STAGE_FAILURE', { stage: 'EVIDENCE', correlationId: body.correlationId.trim(), code: error instanceof Error ? error.name : 'UNKNOWN' });
-          return Response.json({ ok: false, error: 'EMP003_RESEARCH_DRAFT_FAILED', failureStage: 'EVIDENCE' }, { status: 503 });
+          const evidenceCode = error instanceof Error && /^(RESEARCH_[A-Z0-9_]+|EMP003_GROUNDED_BRIEF_[A-Z0-9_]+)$/.test(error.message) ? error.message : 'EVIDENCE_UNKNOWN';
+          console.error('EMP003_RESEARCH_DRAFT_STAGE_FAILURE', { stage: 'EVIDENCE', correlationId: body.correlationId.trim(), code: evidenceCode });
+          return Response.json({ ok: false, error: 'EMP003_RESEARCH_DRAFT_FAILED', failureStage: 'EVIDENCE', failureCode: evidenceCode }, { status: 503 });
         }
         let draft: string;
         try {
