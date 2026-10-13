@@ -1,13 +1,6 @@
 name: Certify EMP-003 Production Sequence
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/certify-emp003-production-sequence.yml'
-      - '.github/workflows/certify-emp003-research.yml'
-      - '.github/workflows/certify-emp003-research-draft.yml'
-      - '.github/workflows/certify-emp003-campaign.yml'
   workflow_dispatch:
   workflow_run:
     workflows: ['Deploy Employee Core']
@@ -23,7 +16,7 @@ concurrency:
 
 jobs:
   browser:
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
     uses: ./.github/workflows/certify-emp003-research.yml
     secrets: inherit
 
