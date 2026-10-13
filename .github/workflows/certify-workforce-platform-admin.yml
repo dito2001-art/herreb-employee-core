@@ -1,0 +1,25 @@
+name: Certify Workforce Platform Admin
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    name: Non-destructive platform credential certification
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Certify platform credential and YELLOW approval gate
+        run: node scripts/certify-workforce-platform-admin.mjs
+        env:
+          WORKFORCE_ADMIN_BASE_URL: ${{ vars.WORKFORCE_ADMIN_BASE_URL }}
+          WORKFORCE_PLATFORM_ADMIN_TOKEN: ${{ secrets.WORKFORCE_PLATFORM_ADMIN_TOKEN }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.WORKFORCE_ADMIN_CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.WORKFORCE_ADMIN_CF_ACCESS_CLIENT_SECRET }}
