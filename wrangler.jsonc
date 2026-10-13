@@ -78,6 +78,10 @@
       {
         "class_name": "WorkforceAdminState",
         "name": "WORKFORCE_ADMIN_STATE"
+      },
+      {
+        "class_name": "EMP003CampaignState",
+        "name": "EMP003_CAMPAIGN_STATE"
       }
     ]
   },
@@ -99,6 +103,12 @@
         "WorkforceAdminState"
       ],
       "tag": "v3"
+    },
+    {
+      "new_sqlite_classes": [
+        "EMP003CampaignState"
+      ],
+      "tag": "v4"
     }
   ],
   "observability": {
