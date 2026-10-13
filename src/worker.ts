@@ -134,7 +134,13 @@ export default {
       try { allowedHosts = JSON.parse(runtimeEnv.EMP003_RESEARCH_ALLOWED_HOSTS_JSON ?? '[]') as string[]; } catch { return Response.json({ ok: false, error: 'EMP003_RESEARCH_POLICY_INVALID' }, { status: 503 }); }
       try {
         const provider = createCloudflareBrowserResearchProvider({ browser: runtimeEnv.BROWSER, tenantId: owner.tenantId, allowedHosts });
-        const brief = await buildGroundedMarketingBrief(provider, { tenantId: owner.tenantId, correlationId: body.correlationId.trim(), topic: body.topic.trim(), objective: body.objective.trim(), sourceRefs: body.sourceRefs });
+        let brief;
+        try {
+          brief = await buildGroundedMarketingBrief(provider, { tenantId: owner.tenantId, correlationId: body.correlationId.trim(), topic: body.topic.trim(), objective: body.objective.trim(), sourceRefs: body.sourceRefs });
+        } catch (error) {
+          console.error('EMP003_RESEARCH_DRAFT_STAGE_FAILURE', { stage: 'EVIDENCE', correlationId: body.correlationId.trim(), code: error instanceof Error ? error.name : 'UNKNOWN' });
+          return Response.json({ ok: false, error: 'EMP003_RESEARCH_DRAFT_FAILED', failureStage: 'EVIDENCE' }, { status: 503 });
+        }
         let draft: string;
         try {
           const workersai = createWorkersAI({ binding: runtimeEnv.AI });
