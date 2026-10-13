@@ -40,7 +40,9 @@ export default {
       const tenantId = request.method === 'POST' ? body?.tenantId : url.searchParams.get('tenantId');
       const campaignId = request.method === 'POST' ? body?.campaignId : url.searchParams.get('campaignId');
       if (typeof tenantId !== 'string' || typeof campaignId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(tenantId) || !/^[a-zA-Z0-9_-]{1,100}$/.test(campaignId)) return Response.json({ ok: false, error: 'EMP003_REVIEW_INVALID_SCOPE' }, { status: 400 });
-      const actor = resolveWorkforceAdminActor(request, runtimeEnv);
+      const configuredActorId = runtimeEnv.WORKFORCE_ADMIN_M2M_ACTOR_ID?.trim();
+      const configuredTenantId = runtimeEnv.WORKFORCE_ADMIN_M2M_TENANT_ID?.trim();
+      const actor = configuredActorId && configuredTenantId === tenantId ? { actorId: configuredActorId, tenantId, role: 'owner' as const } : undefined;
       if (!actor || actor.tenantId !== tenantId || actor.role !== 'owner') return Response.json({ ok: false, error: 'EMP003_REVIEW_FORBIDDEN' }, { status: 403 });
       if (!runtimeEnv.EMP003_CAMPAIGN_STATE) return Response.json({ ok: false, error: 'EMP003_REVIEW_STORAGE_UNAVAILABLE' }, { status: 503 });
       const action = request.method === 'POST' ? 'transition' : url.searchParams.get('view') === 'audit' ? 'audit' : 'review';
