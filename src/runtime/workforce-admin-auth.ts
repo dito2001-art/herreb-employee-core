@@ -9,7 +9,7 @@ export function resolveWorkforceAdminActor(input: {
   const internalTenantId = input.request.headers.get("x-herreb-internal-tenant-id")?.trim();
   const internalRole = input.request.headers.get("x-herreb-internal-role")?.trim();
 
-  if (internalActorId && internalTenantId && (internalRole === "owner" || internalRole === "user")) {
+  if (internalActorId && internalTenantId && (internalRole === "owner" || internalRole === "user" || (internalRole === "platform_admin" && internalTenantId === "platform"))) {
     return {
       actorId: internalActorId,
       tenantId: internalTenantId,
