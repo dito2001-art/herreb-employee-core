@@ -9,6 +9,7 @@ import { reduceAutonomousScheduling } from './runtime/emp002-autonomous-scheduli
 import { runEMP003ProductionCertification } from './runtime/emp003-production-certification';
 import { createCloudflareBrowserResearchProvider, type BrowserMarkdownBinding } from './adapters/emp003-cloudflare-browser';
 import { buildGroundedMarketingBrief } from './adapters/emp003-grounded-brief';
+import { createMarketingCampaignBlueprint } from './core/marketing-campaign-blueprint';
 import { createWorkersAI } from 'workers-ai-provider';
 import { streamText } from 'ai';
 
@@ -30,6 +31,23 @@ export { ChatAgent } from './server'; export { EMP002Operations } from './runtim
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url); const runtimeEnv = env as WorkerEnv;
+    if (url.pathname === '/api/internal/emp003/campaign-blueprint') {
+      if (request.method !== 'POST') return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405, headers: { allow: 'POST' } });
+      if (!isValidM2M(request, runtimeEnv)) return Response.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
+      const body: { tenantId?: string; correlationId?: string; objective?: string; audiences?: string[]; positioning?: string; keyMessages?: string[]; channels?: Array<{ name: string; actions: string[] }>; kpis?: Array<{ metric: string; target: string; measurement: string }>; assumptions?: string[]; evidenceRefs?: string[] } = await request.json<typeof body>().catch(() => ({}));
+      const owner = resolveTenantOwner(request, runtimeEnv, body.tenantId?.trim());
+      if (!owner || owner.actorId !== 'fernando') return Response.json({ ok: false, error: 'EMP003_BLUEPRINT_SCOPE_REJECTED' }, { status: 403 });
+      try {
+        const blueprint = createMarketingCampaignBlueprint({
+          tenantId: owner.tenantId, correlationId: body.correlationId ?? '', objective: body.objective ?? '',
+          audiences: body.audiences ?? [], positioning: body.positioning ?? '', keyMessages: body.keyMessages ?? [],
+          channels: body.channels ?? [], kpis: body.kpis ?? [], assumptions: body.assumptions ?? [], evidenceRefs: body.evidenceRefs ?? []
+        });
+        return Response.json({ ok: true, employeeId: 'EMP-003', blueprint, publishExecuted: false });
+      } catch {
+        return Response.json({ ok: false, error: 'EMP003_BLUEPRINT_INVALID' }, { status: 400 });
+      }
+    }
     if (url.pathname === '/api/internal/emp003/research-draft') {
       if (request.method !== 'POST') return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405, headers: { allow: 'POST' } });
       if (!isValidM2M(request, runtimeEnv)) return Response.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
