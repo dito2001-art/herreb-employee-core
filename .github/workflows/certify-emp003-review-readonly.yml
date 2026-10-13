@@ -1,6 +1,7 @@
 name: Certify EMP-003 Review Read-only
 
 on:
+  workflow_call:
   workflow_dispatch:
 
 permissions:
