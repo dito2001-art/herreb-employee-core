@@ -1,0 +1,52 @@
+name: Certify EMP-003 Draft Persistence
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Verify authenticated production persistence, readback, tenant isolation
+        env:
+          WORKFORCE_ADMIN_M2M_TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
+          CLOUDFLARE_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
+          CLOUDFLARE_ACCESS_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$WORKFORCE_ADMIN_M2M_TOKEN"
+          test -n "$CLOUDFLARE_ACCESS_CLIENT_ID"
+          test -n "$CLOUDFLARE_ACCESS_CLIENT_SECRET"
+          endpoint='https://employee.herreb.com/api/internal/emp003/drafts'
+          id="ci-emp003-${GITHUB_RUN_ID}"
+          access=(--header "CF-Access-Client-Id: $CLOUDFLARE_ACCESS_CLIENT_ID" --header "CF-Access-Client-Secret: $CLOUDFLARE_ACCESS_CLIENT_SECRET")
+          auth=(--header "x-herreb-workforce-admin-token: $WORKFORCE_ADMIN_M2M_TOKEN")
+          no_token="$(curl -sS --max-time 25 -o /dev/null -w '%{http_code}' "$endpoint?tenantId=herreb-client-0" "${access[@]}")"
+          echo "EMP003_DRAFT_NO_M2M_HTTP=$no_token"
+          test "$no_token" = 401
+          cross="$(curl -sS --max-time 25 -o /dev/null -w '%{http_code}' "$endpoint?tenantId=other-tenant" "${access[@]}" "${auth[@]}")"
+          echo "EMP003_DRAFT_CROSS_TENANT_HTTP=$cross"
+          test "$cross" = 403
+          payload="$(node -e 'console.log(JSON.stringify({tenantId:"herreb-client-0",campaignId:process.argv[1],blueprint:{tenantId:"herreb-client-0",correlationId:"ci-draft-readback",objective:"Draft only",audiences:["B2B"],positioning:"Reliable",keyMessages:["Evidence based"],channels:[{name:"Email",actions:["Prepare copy"]}],kpis:[{metric:"Leads",target:"TBD",measurement:"CRM"}],assumptions:[],evidenceRefs:["https://developers.cloudflare.com/"],status:"DRAFT",publishApproved:false}}))' "$id")"
+          write_file="$(mktemp)"
+          write_status="$(curl -sS --max-time 40 -o "$write_file" -w '%{http_code}' -X POST "$endpoint" "${access[@]}" "${auth[@]}" -H 'Content-Type: application/json' --data "$payload")"
+          echo "EMP003_DRAFT_WRITE_HTTP=$write_status"
+          test "$write_status" = 200
+          node - "$write_file" <<'NODE'
+          const fs=require('fs'); const body=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(body.ok!==true || body.persisted!==true || body.campaign?.status!=='DRAFT' || body.campaign?.publishApproved!==false) process.exit(1);
+          NODE
+          read_file="$(mktemp)"
+          read_status="$(curl -sS --max-time 40 -o "$read_file" -w '%{http_code}' "$endpoint?tenantId=herreb-client-0&campaignId=$id" "${access[@]}" "${auth[@]}")"
+          echo "EMP003_DRAFT_READBACK_HTTP=$read_status"
+          test "$read_status" = 200
+          node - "$read_file" <<'NODE'
+          const fs=require('fs');const b=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+          if(b.ok!==true||b.found!==true||b.campaign?.tenantId!=='herreb-client-0'||b.campaign?.status!=='DRAFT'||b.campaign?.publishApproved!==false) process.exit(1);
+          console.log('EMP003_DRAFT_PERSISTENCE_PRODUCTION_CERTIFIED');
+          NODE
