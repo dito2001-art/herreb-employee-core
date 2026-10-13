@@ -137,3 +137,28 @@ test("tenant owner cannot delete an identity without tenant-scoped lookup", asyn
   assert.equal(h.getState().identities.length, 1);
   assert.equal(h.audits.length, 1);
 });
+
+test("platform administrator requires YELLOW approval to create a tenant", async () => {
+  const h = harness();
+  const actor = { actorId: "platform", tenantId: "platform", role: "platform_admin" as const };
+  const mutation = {
+    type: "tenant.create" as const,
+    tenant: { tenantId: "pilot", name: "Pilot", enabledEmployees: ["EMP-002" as const], knowledgeNamespace: "pilot:k", offeringNamespace: "pilot:o" }
+  };
+  const blocked = await executeWorkforceAdminMutation({ actor, mutation, store: h.store, audit: h.audit, randomId: () => "platform-1" });
+  assert.equal(blocked.decision, "YELLOW");
+  assert.equal(blocked.persisted, false);
+  const approved = await executeWorkforceAdminMutation({ actor, mutation, store: h.store, audit: h.audit, approveYellow: true, randomId: () => "platform-2" });
+  assert.equal(approved.decision, "YELLOW");
+  assert.equal(approved.persisted, true);
+  assert.equal(h.getState().manifests.length, 2);
+});
+
+test("tenant owner cannot modify another tenant while platform administrator can", async () => {
+  const h = harness();
+  const mutation = { type: "tenant.employees.set" as const, tenantId: "other", enabledEmployees: ["EMP-001" as const] };
+  const denied = await executeWorkforceAdminMutation({ actor: owner, mutation, store: h.store, audit: h.audit, randomId: () => "scope-1" });
+  assert.equal(denied.decision, "RED");
+  const platform = new (await import("./workforce-admin-write")).OwnerScopedAdminPolicy();
+  assert.equal(platform.evaluate({ actorId: "platform", tenantId: "platform", role: "platform_admin" }, mutation), "GREEN");
+});
