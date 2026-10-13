@@ -33,6 +33,25 @@ export { EMP003CampaignState } from './runtime/emp003-campaign-state';
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url); const runtimeEnv = env as WorkerEnv;
+    if (url.pathname === '/api/internal/emp003/review') {
+      if (!['GET', 'POST'].includes(request.method)) return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405 });
+      if (!isValidM2M(request, runtimeEnv)) return Response.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
+      const body = request.method === 'POST' ? await request.json().catch(() => undefined) as Record<string, unknown> | undefined : undefined;
+      const tenantId = request.method === 'POST' ? body?.tenantId : url.searchParams.get('tenantId');
+      const campaignId = request.method === 'POST' ? body?.campaignId : url.searchParams.get('campaignId');
+      if (typeof tenantId !== 'string' || typeof campaignId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(tenantId) || !/^[a-zA-Z0-9_-]{1,100}$/.test(campaignId)) return Response.json({ ok: false, error: 'EMP003_REVIEW_INVALID_SCOPE' }, { status: 400 });
+      const actor = resolveWorkforceAdminActor(request, runtimeEnv);
+      if (!actor || actor.tenantId !== tenantId || actor.role !== 'owner') return Response.json({ ok: false, error: 'EMP003_REVIEW_FORBIDDEN' }, { status: 403 });
+      if (!runtimeEnv.EMP003_CAMPAIGN_STATE) return Response.json({ ok: false, error: 'EMP003_REVIEW_STORAGE_UNAVAILABLE' }, { status: 503 });
+      const action = request.method === 'POST' ? 'transition' : url.searchParams.get('view') === 'audit' ? 'audit' : 'review';
+      const destination = new URL('https://emp003-campaign-state.internal/' + action);
+      destination.searchParams.set('tenantId', tenantId);
+      destination.searchParams.set('campaignId', campaignId);
+      const payload = request.method === 'POST' ? { ...body, tenantId, campaignId, actorId: actor.actorId, actorRole: 'owner' } : undefined;
+      const stub = runtimeEnv.EMP003_CAMPAIGN_STATE.get(runtimeEnv.EMP003_CAMPAIGN_STATE.idFromName(tenantId));
+      const response = await stub.fetch(new Request(destination, { method: request.method, headers: { 'content-type': 'application/json' }, ...(payload ? { body: JSON.stringify(payload) } : {}) }));
+      return new Response(response.body, { status: response.status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+    }
     if (url.pathname === '/api/internal/emp003/drafts') {
       if (!['GET', 'POST'].includes(request.method)) return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405 });
       if (!isValidM2M(request, runtimeEnv)) return Response.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
