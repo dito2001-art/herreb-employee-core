@@ -40,7 +40,16 @@ function relevance(url: URL, query: string): number {
 }
 
 async function readMarkdown(browser: BrowserMarkdownBinding, url: URL): Promise<string> {
-  const response = await browser.quickAction("markdown", { url: url.toString() });
+  let response = await browser.quickAction("markdown", { url: url.toString() });
+  if (response.status === 429) {
+    // Retry once only, honoring a short Retry-After delay; never loop on quota exhaustion.
+    const retryAfter = response.headers.get("retry-after");
+    const seconds = retryAfter && /^\\d+$/.test(retryAfter.trim()) ? Number(retryAfter.trim()) : 2;
+    if (Number.isFinite(seconds) && seconds <= 10) {
+      await new Promise<void>((resolve) => setTimeout(resolve, Math.max(1, seconds) * 1000));
+      response = await browser.quickAction("markdown", { url: url.toString() });
+    }
+  }
   if (!response.ok) {
     // Never log page content, tokens, or response bodies. Preserve only status and safe diagnostic metadata.
     const diagnostic = response.headers.get("cf-ray")?.replace(/[^a-zA-Z0-9-]/g, "").slice(0, 80);
