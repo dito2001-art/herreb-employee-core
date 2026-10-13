@@ -48,7 +48,7 @@ export async function readWorkforceAdminAccessActor(request: Request, env: Acces
   if (!jwt) throw new Error("WORKFORCE_ACCESS_JWT_REQUIRED");
   const response = await fetcher(config.jwksUrl, { method: "GET", redirect: "error", signal: AbortSignal.timeout(5000), headers: { accept: "application/json" } });
   if (!response.ok) throw new Error("WORKFORCE_ACCESS_JWKS_UNAVAILABLE");
-  const jwks: Jwks = await response.json();
+  const jwks = await response.json() as Jwks;
   if (!jwks || !Array.isArray(jwks.keys) || jwks.keys.length > 50) throw new Error("WORKFORCE_ACCESS_JWKS_INVALID");
   const nowSeconds = Math.floor(Date.now() / 1000);
   const principal = await verifyWorkforceAccessJwt({ jwt, jwks, issuer: config.issuer, audience: config.audience, nowSeconds });
