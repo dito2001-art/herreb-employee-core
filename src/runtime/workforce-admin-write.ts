@@ -6,7 +6,7 @@ export type AdminWriteDecision = "GREEN" | "YELLOW" | "RED";
 export interface WorkforceAdminWriteActor {
   actorId: string;
   tenantId: string;
-  role: "owner" | "admin" | "user";
+  role: "platform_admin" | "owner" | "admin" | "user";
 }
 
 export interface WorkforceAdminStateStore {
@@ -32,6 +32,11 @@ export interface WorkforceAdminPolicy {
 
 export class OwnerScopedAdminPolicy implements WorkforceAdminPolicy {
   evaluate(actor: WorkforceAdminWriteActor, mutation: WorkforceAdminMutation): AdminWriteDecision {
+    // Platform administrators are separately authenticated upstream; tenant owners remain scoped.
+    if (actor.role === "platform_admin") {
+      if (mutation.type === "tenant.create" || mutation.type === "identity.delete") return "YELLOW";
+      return "GREEN";
+    }
     if (actor.role !== "owner") return "RED";
     // Tenant owners cannot provision other tenants or delete identities by email without a tenant-bound lookup.
     if (mutation.type === "tenant.create" || mutation.type === "identity.delete") return "RED";
