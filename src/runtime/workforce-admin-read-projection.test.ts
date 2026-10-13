@@ -4,8 +4,8 @@ import { projectAuthorizedWorkforceAdminRead } from "./workforce-admin-read-proj
 import type { WorkforceAdminMutationPlan } from "../core/workforce-admin-mutations";
 const state: WorkforceAdminMutationPlan = {
  manifests: [
-  { tenantId: "alpha", enabledEmployees: ["EMP-001"], knowledgeNamespace: "alpha-k", offeringNamespace: "alpha-o" },
-  { tenantId: "beta", enabledEmployees: ["EMP-002"], knowledgeNamespace: "beta-k", offeringNamespace: "beta-o" }
+  { tenantId: "alpha", name: "Alpha", enabledEmployees: ["EMP-001"], knowledgeNamespace: "alpha-k", offeringNamespace: "alpha-o" },
+  { tenantId: "beta", name: "Beta", enabledEmployees: ["EMP-002"], knowledgeNamespace: "beta-k", offeringNamespace: "beta-o" }
  ],
  identities: [
   { tenantId: "alpha", actorId: "owner-a", email: "a@example.com", role: "owner" },
