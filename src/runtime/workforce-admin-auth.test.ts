@@ -53,3 +53,18 @@ test("ignores caller-controlled body when resolving privileges", async () => {
   assert.equal(actor.actorId, "fernando");
   assert.equal(actor.tenantId, "herreb-client-0");
 });
+
+test("accepts platform role only with internal platform tenant scope", () => {
+  const valid = new Request("https://admin.test/api", { headers: {
+    "x-herreb-internal-actor-id": "fernando",
+    "x-herreb-internal-tenant-id": "platform",
+    "x-herreb-internal-role": "platform_admin"
+  } });
+  assert.equal(resolveWorkforceAdminActor({ request: valid, identities }).role, "platform_admin");
+  const invalid = new Request("https://admin.test/api", { headers: {
+    "x-herreb-internal-actor-id": "fernando",
+    "x-herreb-internal-tenant-id": "customer",
+    "x-herreb-internal-role": "platform_admin"
+  } });
+  assert.throws(() => resolveWorkforceAdminActor({ request: invalid, identities }), /WORKFORCE_ADMIN_AUTH_REQUIRED/);
+});
