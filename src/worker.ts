@@ -122,7 +122,7 @@ export default {
         const code = error instanceof Error ? error.message : 'EMP003_RESEARCH_UPSTREAM_FAILED';
         const inputError = ['RESEARCH_SOURCE_NOT_ALLOWED','RESEARCH_SOURCES_REQUIRED','RESEARCH_TENANT_SCOPE_MISMATCH','RESEARCH_INPUT_REQUIRED'].includes(code);
         console.error('EMP003_RESEARCH_FAILURE', { correlationId: body.correlationId?.trim() ?? '', code: inputError ? 'RESEARCH_INPUT_REJECTED' : code });
-        return Response.json({ ok: false, error: inputError ? code : 'EMP003_RESEARCH_UPSTREAM_FAILED' }, { status: inputError ? 400 : 503 });
+        return Response.json({ ok: false, error: inputError ? code : 'EMP003_RESEARCH_UPSTREAM_FAILED', failureClass: inputError ? 'INPUT' : /^RESEARCH_BROWSER_HTTP_\d{3}$/.test(code) ? 'BROWSER_HTTP' : ['RESEARCH_BROWSER_INVALID_JSON', 'RESEARCH_BROWSER_EMPTY_CONTENT'].includes(code) ? code : 'BROWSER_UNKNOWN' }, { status: inputError ? 400 : 503 });
       }
     }
     if (url.pathname === '/api/internal/emp003/certification') {
