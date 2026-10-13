@@ -40,3 +40,22 @@ test("conflicting replay and unauthorized scope are rejected", async () => {
   await assert.rejects(applyEMP003ReviewTransaction(store, transition, "tenant-b", "campaign-a", "2026-10-13T18:00:00Z"), /EMP003_TRANSITION_SCOPE_REJECTED/);
   assert.throws(() => reviewKey("tenant:a", "campaign-a"), /EMP003_REVIEW_ID_INVALID/);
 });
+
+test("superseded idempotency replay is rejected without changing state or audit", async () => {
+  const store = storage();
+  await applyEMP003ReviewTransaction(store, transition, "tenant-a", "campaign-a", "2026-10-13T17:00:00Z");
+  const approve = { ...transition, correlationId: "corr-b", from: "IN_REVIEW", to: "APPROVED",
+    reason: "Approved by owner", idempotencyKey: "idem-b" } as const;
+  const latest = await applyEMP003ReviewTransaction(store, approve, "tenant-a", "campaign-a", "2026-10-13T18:00:00Z");
+  assert.equal(latest.state.state, "APPROVED");
+  assert.equal(latest.state.revision, 2);
+  await assert.rejects(
+    applyEMP003ReviewTransaction(store, transition, "tenant-a", "campaign-a", "2026-10-13T19:00:00Z"),
+    /EMP003_TRANSITION_REPLAY_SUPERSEDED/
+  );
+  assert.deepEqual(await store.get(reviewKey("tenant-a", "campaign-a")), latest.state);
+  assert.equal((await store.list({ prefix: "emp003:audit:tenant-a:campaign-a:" })).size, 2);
+  const replay = await applyEMP003ReviewTransaction(store, approve, "tenant-a", "campaign-a", "2026-10-13T19:00:00Z");
+  assert.equal(replay.replayed, true);
+  assert.deepEqual(replay.state, latest.state);
+});
