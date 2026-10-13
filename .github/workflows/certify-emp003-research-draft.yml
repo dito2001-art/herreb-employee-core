@@ -38,7 +38,7 @@ jobs:
           node - "$response_file" "$status" <<'NODE'
           const fs = require('fs');
           const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-          if (process.argv[3] !== '200') { console.error('EMP003_DRAFT_NOT_CERTIFIED:' + String(body.error ?? 'UNKNOWN') + ':STAGE=' + String(body.failureStage ?? 'NOT_REPORTED')); process.exit(1); }
+          if (process.argv[3] !== '200') { console.error('EMP003_DRAFT_NOT_CERTIFIED:' + String(body.error ?? 'UNKNOWN') + ':STAGE=' + String(body.failureStage ?? 'NOT_REPORTED') + ':CODE=' + String(body.failureCode ?? 'NOT_REPORTED')); process.exit(1); }
           if (body.ok !== true || body.tenantId !== 'herreb-client-0' || body.employeeId !== 'EMP-003' || body.status !== 'DRAFT' || body.publishExecuted !== false) process.exit(1);
           if (typeof body.draft !== 'string' || !body.draft.trim()) process.exit(1);
           if (!Array.isArray(body.evidenceRefs) || !body.evidenceRefs.length || !Array.isArray(body.brief?.findings) || !body.brief.findings.length) process.exit(1);
