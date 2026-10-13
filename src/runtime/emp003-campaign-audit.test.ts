@@ -9,9 +9,9 @@ const base = { tenantId: "herreb-client-0", campaignId: "cmp-1", correlationId: 
 function fixture() {
   const values = new Map<string, unknown>();
   return createEMP003AuditRepository({
-    async get(key) { return values.get(key); },
+    async get<T = unknown>(key: string): Promise<T | undefined> { return values.get(key) as T | undefined; },
     async put(key, value) { values.set(key, value); },
-    async list({ prefix }) { return new Map([...values].filter(([key]) => key.startsWith(prefix))); }
+    async list<T = unknown>({ prefix }: { prefix: string }): Promise<Map<string, T>> { return new Map([...values].filter(([key]) => key.startsWith(prefix))) as Map<string, T>; }
   });
 }
 test("append and read-back returns durable tenant-scoped audit event", async () => {
