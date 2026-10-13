@@ -10,6 +10,10 @@ on:
       - 'src/adapters/emp003-cloudflare-browser.ts'
       - 'wrangler.jsonc'
 
+concurrency:
+  group: emp003-production-certification
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
