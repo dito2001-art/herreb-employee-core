@@ -20,7 +20,7 @@ type WorkforceAdminResolvedActor = { email?: string; actorId: string; tenantId: 
 type EMP002E2ERequest = { tenantId?: string; whatsapp?: string; appointmentId?: string; now?: string; startsAt?: string };
 type EMP002CalendarCertRequest = { tenantId?: string; correlationId?: string; idempotencyKey?: string; startsAt?: string; endsAt?: string };
 type EMP002NorthStarPrepareRequest = { tenantId?: string; whatsapp?: string; contactId?: string; displayName?: string; email?: string; ownerWhatsapp?: string; now?: string; startsAt?: string; endsAt?: string; resourceId?: string };
-type WorkerEnv = Env & { AG002_GATEWAY?: ServiceFetcher; RUNTIME_GATEWAY_TOKEN?: string; HERREB_RUNTIME_TOKEN?: string; AG002_TENANT_ID?: string; META_VERIFY_TOKEN?: string; WHATSAPP_TENANT_ROUTES_JSON?: string; EMP002_OPERATIONS?: OperationsNamespace; EMP001_WHATSAPP?: ServiceFetcher; WORKFORCE_ADMIN_STATE?: OperationsNamespace; WORKFORCE_ADMIN_M2M_TOKEN?: string; WORKFORCE_ADMIN_M2M_ACTOR_ID?: string; WORKFORCE_ADMIN_M2M_TENANT_ID?: string; TENANT_MANIFESTS_JSON?: string; ACCESS_IDENTITY_MAP_JSON?: string; EMP003_BRAVE_SEARCH_API_KEY?: string; EMP003_BRAVE_SEARCH_TENANT_ID?: string; EMP003_RESEARCH_TENANT_ID?: string; EMP003_RESEARCH_ALLOWED_HOSTS_JSON?: string; BROWSER?: BrowserMarkdownBinding; };
+type WorkerEnv = Env & { AG002_GATEWAY?: ServiceFetcher; RUNTIME_GATEWAY_TOKEN?: string; HERREB_RUNTIME_TOKEN?: string; AG002_TENANT_ID?: string; META_VERIFY_TOKEN?: string; WHATSAPP_TENANT_ROUTES_JSON?: string; EMP002_OPERATIONS?: OperationsNamespace; EMP001_WHATSAPP?: ServiceFetcher; WORKFORCE_ADMIN_STATE?: OperationsNamespace; EMP003_CAMPAIGN_STATE?: OperationsNamespace; WORKFORCE_ADMIN_M2M_TOKEN?: string; WORKFORCE_ADMIN_M2M_ACTOR_ID?: string; WORKFORCE_ADMIN_M2M_TENANT_ID?: string; TENANT_MANIFESTS_JSON?: string; ACCESS_IDENTITY_MAP_JSON?: string; EMP003_BRAVE_SEARCH_API_KEY?: string; EMP003_BRAVE_SEARCH_TENANT_ID?: string; EMP003_RESEARCH_TENANT_ID?: string; EMP003_RESEARCH_ALLOWED_HOSTS_JSON?: string; BROWSER?: BrowserMarkdownBinding; };
 const WORKFORCE_ADMIN_RUNTIME_MARKER = 'runtime-probe-v1';
 function normalizeWhatsAppNumber(value?: string): string { return String(value ?? '').replace(/\D/g, ''); }
 function constantTimeEqual(left: string, right: string): boolean { const encoder = new TextEncoder(); const a = encoder.encode(left); const b = encoder.encode(right); const length = Math.max(a.length, b.length); let diff = a.length ^ b.length; for (let index = 0; index < length; index += 1) diff |= (a[index] ?? 0) ^ (b[index] ?? 0); return diff === 0; }
@@ -33,6 +33,24 @@ export { EMP003CampaignState } from './runtime/emp003-campaign-state';
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url); const runtimeEnv = env as WorkerEnv;
+    if (url.pathname === '/api/internal/emp003/drafts') {
+      if (!['GET', 'POST'].includes(request.method)) return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405 });
+      if (!isValidM2M(request, runtimeEnv)) return Response.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
+      const body = request.method === 'POST' ? await request.json().catch(() => undefined) as { tenantId?: string; campaignId?: string; blueprint?: unknown } | undefined : undefined;
+      const tenantId = request.method === 'GET' ? url.searchParams.get('tenantId')?.trim() : body?.tenantId?.trim();
+      const campaignId = request.method === 'GET' ? url.searchParams.get('campaignId')?.trim() : body?.campaignId?.trim();
+      const owner = resolveTenantOwner(request, runtimeEnv, tenantId);
+      if (!owner || owner.actorId !== 'fernando') return Response.json({ ok: false, error: 'EMP003_DRAFT_SCOPE_REJECTED' }, { status: 403 });
+      if (!runtimeEnv.EMP003_CAMPAIGN_STATE) return Response.json({ ok: false, error: 'EMP003_DRAFT_STORAGE_UNAVAILABLE' }, { status: 503 });
+      if (request.method === 'POST' && (!campaignId || !body?.blueprint)) return Response.json({ ok: false, error: 'EMP003_DRAFT_INPUT_REQUIRED' }, { status: 400 });
+      const stub = runtimeEnv.EMP003_CAMPAIGN_STATE.get(runtimeEnv.EMP003_CAMPAIGN_STATE.idFromName(owner.tenantId));
+      const path = request.method === 'POST' || campaignId ? '/draft' : '/drafts';
+      const destination = new URL('https://emp003-campaign-state.internal' + path);
+      destination.searchParams.set('tenantId', owner.tenantId);
+      if (campaignId) destination.searchParams.set('campaignId', campaignId);
+      const response = await stub.fetch(new Request(destination, { method: request.method, headers: { 'content-type': 'application/json' }, ...(request.method === 'POST' ? { body: JSON.stringify(body?.blueprint) } : {}) }));
+      return new Response(response.body, { status: response.status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+    }
     if (url.pathname === '/api/internal/emp003/generate-campaign') {
       if (request.method !== 'POST') return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405, headers: { allow: 'POST' } });
       if (!isValidM2M(request, runtimeEnv)) return Response.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
