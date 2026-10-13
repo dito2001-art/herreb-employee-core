@@ -1,18 +1,8 @@
 name: Certify EMP-003 Research-to-Draft
 
 on:
+  workflow_call:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/certify-emp003-research-draft.yml'
-      - 'src/worker.ts'
-      - 'src/adapters/emp003-grounded-brief.ts'
-      - 'src/adapters/emp003-cloudflare-browser.ts'
-
-concurrency:
-  group: emp003-production-certification
-  cancel-in-progress: false
 
 permissions:
   contents: read
