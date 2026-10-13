@@ -40,7 +40,7 @@ export async function verifyWorkforceAccessJwt(input: {
   const matching = jwks.keys.filter(key => key.kid === header.kid && key.kty === "RSA" && (key.alg === undefined || key.alg === "RS256") && (key.use === undefined || key.use === "sig"));
   if (matching.length !== 1) throw new Error("WORKFORCE_ACCESS_JWT_KEY_NOT_FOUND");
   const key = await crypto.subtle.importKey("jwk", matching[0], { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
-  const signature = decodeBase64Url(signaturePart);
+  const signature = Uint8Array.from(decodeBase64Url(signaturePart));
   const valid = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, signature, encoder.encode(headerPart + "." + payloadPart));
   if (!valid) throw new Error("WORKFORCE_ACCESS_JWT_SIGNATURE_INVALID");
   const expectedIssuer = issuer.replace(/\/$/, "");
