@@ -10,6 +10,8 @@ on:
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/deploy-employee-core.yml"
+      - ".github/workflows/certify-emp003-production-sequence.yml"
+      - ".github/workflows/certify-emp003-review-readonly.yml"
   workflow_dispatch:
 
 permissions:
