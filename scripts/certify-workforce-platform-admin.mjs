@@ -20,5 +20,5 @@ if (invalid.status !== 401 || invalid.body?.ok !== false || invalid.body?.error 
 const absent = await send(undefined, payload);
 if (absent.status !== 401 || absent.body?.persisted !== false) throw new Error(`MISSING_PLATFORM_CREDENTIAL_NOT_REJECTED:${absent.status}`);
 const valid = await send(platformToken, payload);
-if (valid.status !== 200 || valid.body?.decision !== "YELLOW" || valid.body?.persisted !== false || !valid.body?.auditId) throw new Error(`PLATFORM_YELLOW_GATE_NOT_CONFIRMED:${valid.status}:${JSON.stringify({decision:valid.body?.decision,persisted:valid.body?.persisted,auditIdPresent:Boolean(valid.body?.auditId)})}`);
+if (valid.status !== 403 || valid.body?.decision !== "YELLOW" || valid.body?.persisted !== false || !valid.body?.auditId) throw new Error(`PLATFORM_YELLOW_GATE_NOT_CONFIRMED:${valid.status}:${JSON.stringify({decision:valid.body?.decision,persisted:valid.body?.persisted,auditIdPresent:Boolean(valid.body?.auditId)})}`);
 console.log(JSON.stringify({ok:true,endpoint,invalid:{status:invalid.status},absent:{status:absent.status},valid:{status:valid.status,decision:valid.body.decision,persisted:valid.body.persisted,auditId:valid.body.auditId}},null,2));
