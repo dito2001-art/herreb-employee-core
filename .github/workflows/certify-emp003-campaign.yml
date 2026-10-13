@@ -10,6 +10,10 @@ on:
       - 'src/core/marketing-blueprint-generation.ts'
       - 'src/core/marketing-campaign-blueprint.ts'
 
+concurrency:
+  group: emp003-production-certification
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
