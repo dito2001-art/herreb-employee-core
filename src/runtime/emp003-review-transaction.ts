@@ -25,6 +25,11 @@ export async function applyEMP003ReviewTransaction(storage: EMP003ReviewTransact
     const { occurredAt: _time, eventType: _type, publishExecuted: _published, ...original } = replay;
     if (JSON.stringify(original) !== JSON.stringify(transition)) throw new Error("EMP003_TRANSITION_IDEMPOTENCY_CONFLICT");
     const state = EMP003ReviewStateSchema.parse(await storage.get<unknown>(key));
+    // A replay is acknowledged only when its transition is still the latest state change.
+    // Never report a newer campaign state as the result of an older idempotency key.
+    if (state.state !== replay.to || state.lastCorrelationId !== replay.correlationId) {
+      throw new Error("EMP003_TRANSITION_REPLAY_SUPERSEDED");
+    }
     return { state, audit: replay, replayed: true };
   }
   const previous = (await storage.get<unknown>(key)) ?? initialEMP003ReviewState(tenantId, campaignId);
