@@ -90,7 +90,7 @@ export default {
           brief = await buildGroundedMarketingBrief(provider, { tenantId: owner.tenantId, correlationId: body.correlationId.trim(), topic: body.topic.trim(), objective: body.objective.trim(), sourceRefs: body.sourceRefs });
         } catch (error) {
           console.error('EMP003_RESEARCH_DRAFT_STAGE_FAILURE', { stage: 'EVIDENCE', correlationId: body.correlationId.trim(), code: error instanceof Error ? error.message.slice(0, 120) : 'UNKNOWN' });
-          return Response.json({ ok: false, error: 'EMP003_RESEARCH_DRAFT_FAILED', failureStage: 'EVIDENCE' }, { status: 503 });
+          return Response.json({ ok: false, error: 'EMP003_RESEARCH_DRAFT_FAILED', failureStage: 'EVIDENCE', failureCode: error instanceof Error && /^RESEARCH_[A-Z0-9_]+$|^EMP003_GROUNDED_BRIEF_[A-Z0-9_]+$/.test(error.message) ? error.message : 'EVIDENCE_UNKNOWN' }, { status: 503 });
         }
         const workersai = createWorkersAI({ binding: runtimeEnv.AI });
         const result = await streamText({
