@@ -39,7 +39,9 @@ jobs:
           const fs = require('fs');
           const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
           if (process.argv[3] !== '200') {
-            console.error('EMP003_CAMPAIGN_NOT_CERTIFIED:' + String(body.error ?? 'UNKNOWN'));
+            const stage = ['GENERATION', 'VALIDATION'].includes(body.failureStage) ? body.failureStage : 'UNCLASSIFIED';
+            const code = typeof body.failureCode === 'string' && /^[A-Z0-9_]{1,80}$/.test(body.failureCode) ? body.failureCode : 'UNKNOWN';
+            console.error('EMP003_CAMPAIGN_NOT_CERTIFIED:' + String(body.error ?? 'UNKNOWN') + ':STAGE=' + stage + ':CODE=' + code);
             process.exit(1);
           }
           const b = body.blueprint;
