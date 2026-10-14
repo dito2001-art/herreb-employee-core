@@ -1,0 +1,98 @@
+name: Certify EMP-003 Review Write (Manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Certify isolated draft transitions, readback, audit, and replay
+        env:
+          WORKFORCE_ADMIN_M2M_TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
+          CLOUDFLARE_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
+          CLOUDFLARE_ACCESS_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$WORKFORCE_ADMIN_M2M_TOKEN"
+          test -n "$CLOUDFLARE_ACCESS_CLIENT_ID"
+          test -n "$CLOUDFLARE_ACCESS_CLIENT_SECRET"
+          endpoint='https://employee.herreb.com/api/internal/emp003'
+          tenant='herreb-client-0'
+          campaign="emp003-review-cert-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          correlation="emp003-review-cert-${GITHUB_RUN_ID}"
+          auth=(--header "CF-Access-Client-Id: $CLOUDFLARE_ACCESS_CLIENT_ID" --header "CF-Access-Client-Secret: $CLOUDFLARE_ACCESS_CLIENT_SECRET" --header "x-herreb-workforce-admin-token: $WORKFORCE_ADMIN_M2M_TOKEN")
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          node - "$work/draft.json" "$work/review.json" "$work/approve.json" "$tenant" "$campaign" "$correlation" <<'NODE'
+          const fs = require('node:fs');
+          const [draftPath, reviewPath, approvePath, tenantId, campaignId, correlationId] = process.argv.slice(2);
+          const blueprint = {
+            tenantId, correlationId, objective: 'Isolated E2E approval storage certification; no publication',
+            audiences: ['Internal certification only'], positioning: 'Technical validation only',
+            keyMessages: ['No public distribution'],
+            channels: [{ name: 'Internal', actions: ['Verify storage and audit only'] }],
+            kpis: [{ metric: 'Audit events', target: '2', measurement: 'Durable Object readback' }],
+            assumptions: [], evidenceRefs: ['https://developers.cloudflare.com/'],
+            status: 'DRAFT', publishApproved: false
+          };
+          const base = { tenantId, campaignId, actorId: 'untrusted-workflow-actor', actorRole: 'operator' };
+          fs.writeFileSync(draftPath, JSON.stringify({ tenantId, campaignId, blueprint }));
+          fs.writeFileSync(reviewPath, JSON.stringify({ ...base, correlationId: correlationId + '-review',
+            from: 'DRAFT', to: 'IN_REVIEW', reason: 'Manual E2E certification',
+            idempotencyKey: correlationId + '-review' }));
+          fs.writeFileSync(approvePath, JSON.stringify({ ...base, correlationId: correlationId + '-approve',
+            from: 'IN_REVIEW', to: 'APPROVED', reason: 'Manual E2E certification only',
+            idempotencyKey: correlationId + '-approve' }));
+          NODE
+          post() {
+            local url="$1" input="$2" output="$3"
+            local status
+            status="$(curl --silent --show-error --max-time 30 --output "$output" --write-out '%{http_code}' "${auth[@]}" --header 'content-type: application/json' --data-binary "@$input" "$url")"
+            test "$status" = 200 || { echo "EMP003_REVIEW_WRITE_HTTP=$status"; exit 1; }
+            node - "$output" <<'NODE'
+          const fs = require('node:fs');
+          const b = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (b.ok !== true) process.exit(1);
+          NODE
+          }
+          get() {
+            curl --fail --silent --show-error --max-time 30 "${auth[@]}" "$1" > "$2"
+          }
+          post "$endpoint/drafts" "$work/draft.json" "$work/draft-response.json"
+          node - "$work/draft-response.json" <<'NODE'
+          const b = require(process.argv[2]);
+          if (b.persisted !== true || b.campaign?.publishApproved !== false) process.exit(1);
+          NODE
+          post "$endpoint/review" "$work/review.json" "$work/review-response.json"
+          post "$endpoint/review" "$work/review.json" "$work/review-replay.json"
+          post "$endpoint/review" "$work/approve.json" "$work/approve-response.json"
+          post "$endpoint/review" "$work/approve.json" "$work/approve-replay.json"
+          get "$endpoint/review?tenantId=$tenant&campaignId=$campaign" "$work/state.json"
+          get "$endpoint/review?tenantId=$tenant&campaignId=$campaign&view=audit" "$work/audit.json"
+          node - "$work" "$tenant" "$campaign" <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const [dir, tenant, campaign] = process.argv.slice(2);
+          const read = (name) => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
+          const review = read('review-response.json');
+          const reviewReplay = read('review-replay.json');
+          const approved = read('approve-response.json');
+          const approvedReplay = read('approve-replay.json');
+          const state = read('state.json');
+          const audit = read('audit.json');
+          if (review.state?.state !== 'IN_REVIEW' || review.state?.revision !== 1 || review.replayed !== false) process.exit(1);
+          if (reviewReplay.replayed !== true || reviewReplay.state?.revision !== 1) process.exit(1);
+          if (approved.state?.state !== 'APPROVED' || approved.state?.revision !== 2 || approved.replayed !== false) process.exit(1);
+          if (approvedReplay.replayed !== true || approvedReplay.state?.revision !== 2) process.exit(1);
+          if (state.state?.state !== 'APPROVED' || state.state?.revision !== 2 || state.state?.publishExecuted !== false) process.exit(1);
+          if (!Array.isArray(audit.events) || audit.events.length !== 2) process.exit(1);
+          if (audit.events.some(e => e.tenantId !== tenant || e.campaignId !== campaign || e.publishExecuted !== false)) process.exit(1);
+          if (approved.readBackConfirmed !== true || approvedReplay.readBackConfirmed !== true) process.exit(1);
+          NODE
+          echo 'EMP003_REVIEW_WRITE_PRODUCTION_CERTIFIED'
