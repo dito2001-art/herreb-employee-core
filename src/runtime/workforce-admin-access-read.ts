@@ -21,7 +21,7 @@ const fail = (status: number, error: string) => Response.json({ ok: false, error
 function accessConfig(env: AccessReadEnv): { issuer: string; audience: string; jwksUrl: string } {
   const team = env.WORKFORCE_ACCESS_TEAM_DOMAIN?.trim().toLowerCase();
   const audience = env.WORKFORCE_ACCESS_AUDIENCE?.trim();
-  if (!team || !/^[a-z0-9-]+\\.cloudflareaccess\\.com$/.test(team) || !audience) throw new Error("WORKFORCE_ACCESS_CONFIG_INVALID");
+  if (!team || !/^[a-z0-9-]+\.cloudflareaccess\.com$/.test(team) || !audience) throw new Error("WORKFORCE_ACCESS_CONFIG_INVALID");
   return { issuer: `https://${team}`, audience, jwksUrl: `https://${team}/cdn-cgi/access/certs` };
 }
 
@@ -65,7 +65,7 @@ export async function readWorkforceAdminAccessActor(request: Request, env: Acces
 /** Read path only. Never forward an external request, including caller-supplied headers, to the Durable Object. */
 export async function handleWorkforceAdminGet(
   request: Request,
-  env: AccessReadEnv & { WORKFORCE_ADMIN_STATE?: { idFromName(name: string): unknown; get(id: any): { fetch(url: string, init?: RequestInit): Promise<Response> } } },
+  env: AccessReadEnv & { WORKFORCE_ADMIN_STATE?: { idFromName(name: string): unknown; get(id: unknown): { fetch(url: string, init?: RequestInit): Promise<Response> } } },
   fetcher: Fetcher = fetch
 ): Promise<Response> {
   if (request.method !== "GET") return fail(405, "METHOD_NOT_ALLOWED");
