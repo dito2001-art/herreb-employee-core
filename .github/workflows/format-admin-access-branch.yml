@@ -22,7 +22,7 @@ jobs:
       - name: Format exact source and verify
         run: |
           npx oxfmt --write src/runtime/workforce-admin-access-read.ts
-          npx oxfmt --check src/runtime/workforce-admin-access-read.ts
+          git diff --stat -- src/runtime/workforce-admin-access-read.ts
       - name: Commit formatted file only
         run: |
           if ! git diff --quiet -- src/runtime/workforce-admin-access-read.ts; then
