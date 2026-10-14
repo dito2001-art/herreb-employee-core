@@ -24,16 +24,21 @@ export class EMP003CampaignState extends DurableObject<Env> {
       }
       if (request.method === "POST" && url.pathname === "/draft") {
         const payload: unknown = await request.json();
-        // The review state and blueprint must be checked and written atomically.
-        // A reviewed campaign cannot be silently replaced through the draft endpoint.
-        await this.ctx.storage.transaction(async (txn) => {
+        // Keep duplicate protection and review-state immutability in one atomic transaction.
+        const createOnly = url.searchParams.get("createOnly") === "1";
+        const result = await this.ctx.storage.transaction(async (txn) => {
+          const transactionalRepo = createPersistentBlueprintRepository(createEMP003DurableStorageAdapter(txn));
+          if (createOnly && await transactionalRepo.get(tenantId, campaignId)) return "EXISTS" as const;
           const state = await txn.get<unknown>(reviewKey(tenantId, campaignId));
           if (state !== undefined && EMP003ReviewStateSchema.parse(state).state !== "DRAFT") {
             throw new Error("EMP003_REVIEWED_DRAFT_IMMUTABLE");
           }
-          const transactionalRepo = createPersistentBlueprintRepository(createEMP003DurableStorageAdapter(txn));
           await transactionalRepo.put(tenantId, campaignId, payload as never);
+          return "CREATED" as const;
         });
+        if (result === "EXISTS") {
+          return Response.json({ ok: false, error: "EMP003_DRAFT_ALREADY_EXISTS" }, { status: 409, headers: { "cache-control": "no-store" } });
+        }
         const campaign = await repo.get(tenantId, campaignId);
         return Response.json({ ok: true, persisted: true, campaign }, { headers: { "cache-control": "no-store" } });
       }
