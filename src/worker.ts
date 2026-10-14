@@ -76,9 +76,11 @@ export default {
     if (url.pathname === '/api/internal/emp003/generate-campaign') {
       if (request.method !== 'POST') return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405, headers: { allow: 'POST' } });
       if (!isValidM2M(request, runtimeEnv)) return Response.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
-      const body: { tenantId?: string; correlationId?: string; topic?: string; objective?: string; sourceRefs?: string[] } = await request.json<{ tenantId?: string; correlationId?: string; topic?: string; objective?: string; sourceRefs?: string[] }>().catch(() => ({}));
+      const body: { tenantId?: string; correlationId?: string; topic?: string; objective?: string; sourceRefs?: string[]; campaignId?: string; saveDraft?: boolean } = await request.json<{ tenantId?: string; correlationId?: string; topic?: string; objective?: string; sourceRefs?: string[]; campaignId?: string; saveDraft?: boolean }>().catch(() => ({}));
       const owner = resolveTenantOwner(request, runtimeEnv, body.tenantId?.trim());
       if (!owner || owner.actorId !== 'fernando') return Response.json({ ok: false, error: 'EMP003_CAMPAIGN_SCOPE_REJECTED' }, { status: 403 });
+      if (body.saveDraft === true && (!body.campaignId || !/^[a-zA-Z0-9_-]{1,100}$/.test(body.campaignId))) return Response.json({ ok: false, error: 'EMP003_CAMPAIGN_ID_REQUIRED' }, { status: 400 });
+      if (body.saveDraft === true && !runtimeEnv.EMP003_CAMPAIGN_STATE) return Response.json({ ok: false, error: 'EMP003_DRAFT_STORAGE_UNAVAILABLE' }, { status: 503 });
       if (!body.correlationId?.trim() || !body.topic?.trim() || !body.objective?.trim() || !Array.isArray(body.sourceRefs)) return Response.json({ ok: false, error: 'EMP003_CAMPAIGN_INPUT_REQUIRED' }, { status: 400 });
       if (!runtimeEnv.BROWSER || runtimeEnv.EMP003_RESEARCH_TENANT_ID !== owner.tenantId) return Response.json({ ok: false, error: 'EMP003_RESEARCH_NOT_CONFIGURED' }, { status: 503 });
       let allowedHosts: string[] = [];
@@ -103,6 +105,19 @@ export default {
         const modelOutput = await result.text;
         failureStage = 'VALIDATION';
         const blueprint = parseGeneratedCampaignBlueprint({ tenantId: owner.tenantId, correlationId: body.correlationId.trim(), objective: body.objective.trim(), evidenceRefs: brief.sourceRefs, modelOutput });
+        if (body.saveDraft === true && body.campaignId) {
+          const stub = runtimeEnv.EMP003_CAMPAIGN_STATE!.get(runtimeEnv.EMP003_CAMPAIGN_STATE!.idFromName(owner.tenantId));
+          const destination = new URL('https://emp003-campaign-state.internal/draft');
+          destination.searchParams.set('tenantId', owner.tenantId);
+          destination.searchParams.set('campaignId', body.campaignId);
+          destination.searchParams.set('createOnly', '1');
+          const saved = await stub.fetch(new Request(destination, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(blueprint) }));
+          if (!saved.ok) return Response.json({ ok: false, error: saved.status === 409 ? 'EMP003_DRAFT_ALREADY_EXISTS' : 'EMP003_DRAFT_SAVE_FAILED' }, { status: saved.status === 409 ? 409 : 503 });
+          const readBack = await stub.fetch(new Request(new URL('https://emp003-campaign-state.internal/draft?tenantId=' + encodeURIComponent(owner.tenantId) + '&campaignId=' + encodeURIComponent(body.campaignId))));
+          const persisted: { campaign?: unknown } = await readBack.json().catch(() => ({}));
+          if (!readBack.ok || JSON.stringify(persisted.campaign) !== JSON.stringify(blueprint)) return Response.json({ ok: false, error: 'EMP003_DRAFT_READBACK_FAILED' }, { status: 503 });
+          return Response.json({ ok: true, tenantId: owner.tenantId, employeeId: 'EMP-003', campaignId: body.campaignId, blueprint, persisted: true, readBackConfirmed: true, publishExecuted: false });
+        }
         return Response.json({ ok: true, tenantId: owner.tenantId, employeeId: 'EMP-003', blueprint, publishExecuted: false });
         } catch {
           console.error('EMP003_CAMPAIGN_STAGE_FAILURE', { stage: failureStage, correlationId: body.correlationId.trim() });
