@@ -27,4 +27,4 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Verify platform credential and internal actor authorization
-        run: npx --yes tsx@4.23.13 --test src/runtime/workforce-platform-admin-auth.test.ts src/runtime/workforce-admin-auth.test.ts src/runtime/workforce-admin-scoped-read.test.ts src/runtime/workforce-admin-read-projection.test.ts src/runtime/workforce-admin-access-principal.test.ts src/runtime/workforce-admin-access-jwt.test.ts
+        run: npx --yes tsx@4.23.13 --test src/runtime/workforce-platform-admin-auth.test.ts src/runtime/workforce-admin-auth.test.ts src/runtime/workforce-admin-scoped-read.test.ts src/runtime/workforce-admin-read-projection.test.ts src/runtime/workforce-admin-access-principal.test.ts src/runtime/workforce-admin-access-jwt.test.ts src/runtime/workforce-admin-access-read.test.ts
