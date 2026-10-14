@@ -15,7 +15,7 @@ interface AccessReadEnv {
 type Jwks = { keys: Array<JsonWebKey & { kid?: string; kty?: string }> };
 type Fetcher = typeof fetch;
 
-const headers: Record<string, string> = { "cache-control": "no-store" };
+const headers = { "cache-control": "no-store" };
 const fail = (status: number, error: string) =>
   Response.json({ ok: false, error }, { status, headers });
 
