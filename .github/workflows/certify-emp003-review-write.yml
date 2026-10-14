@@ -73,6 +73,26 @@ jobs:
           post "$endpoint/review" "$work/review.json" "$work/review-replay.json"
           post "$endpoint/review" "$work/approve.json" "$work/approve-response.json"
           post "$endpoint/review" "$work/approve.json" "$work/approve-replay.json"
+          # A reviewed blueprint must not be mutable through the draft endpoint.
+          get "$endpoint/drafts?tenantId=$tenant&campaignId=$campaign" "$work/before-draft.json"
+          node - "$work/draft.json" "$work/mutated-draft.json" <<'NODE'
+          const fs = require('node:fs');
+          const original = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          original.blueprint.objective = 'UNAUTHORIZED MUTATION SHOULD NEVER PERSIST';
+          fs.writeFileSync(process.argv[3], JSON.stringify(original));
+          NODE
+          blocked="$(curl --silent --show-error --max-time 30 --output "$work/blocked.json" --write-out '%{http_code}' "${auth[@]}" --header 'content-type: application/json' --data-binary "@$work/mutated-draft.json" "$endpoint/drafts")"
+          echo "EMP003_REVIEWED_DRAFT_OVERWRITE_HTTP=$blocked"
+          test "$blocked" = 400
+          get "$endpoint/drafts?tenantId=$tenant&campaignId=$campaign" "$work/after-draft.json"
+          node - "$work/before-draft.json" "$work/after-draft.json" <<'NODE'
+          const fs = require('node:fs');
+          const before = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const after = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+          if (before.ok !== true || before.found !== true || after.ok !== true || after.found !== true) process.exit(1);
+          if (JSON.stringify(before.campaign) !== JSON.stringify(after.campaign)) process.exit(1);
+          if (after.campaign.objective === 'UNAUTHORIZED MUTATION SHOULD NEVER PERSIST') process.exit(1);
+          NODE
           get "$endpoint/review?tenantId=$tenant&campaignId=$campaign" "$work/state.json"
           get "$endpoint/review?tenantId=$tenant&campaignId=$campaign&view=audit" "$work/audit.json"
           node - "$work" "$tenant" "$campaign" <<'NODE'
