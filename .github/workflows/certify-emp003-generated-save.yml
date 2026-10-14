@@ -1,0 +1,53 @@
+name: Certify EMP-003 Generated Draft Save (Manual)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  certify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Verify generation, persistent readback, duplicate protection, and tenant isolation
+        env:
+          WORKFORCE_ADMIN_M2M_TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
+          CLOUDFLARE_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
+          CLOUDFLARE_ACCESS_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$WORKFORCE_ADMIN_M2M_TOKEN"
+          test -n "$CLOUDFLARE_ACCESS_CLIENT_ID"
+          test -n "$CLOUDFLARE_ACCESS_CLIENT_SECRET"
+          endpoint='https://employee.herreb.com/api/internal/emp003'
+          campaign="emp003-generated-save-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          correlation="emp003-generated-save-${GITHUB_RUN_ID}"
+          auth=(--header "CF-Access-Client-Id: $CLOUDFLARE_ACCESS_CLIENT_ID" --header "CF-Access-Client-Secret: $CLOUDFLARE_ACCESS_CLIENT_SECRET")
+          m2m=(--header "x-herreb-workforce-admin-token: $WORKFORCE_ADMIN_M2M_TOKEN")
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          node - "$work/request.json" "$campaign" "$correlation" <<'NODE'
+          const fs = require('node:fs');
+          fs.writeFileSync(process.argv[2], JSON.stringify({ tenantId: 'herreb-client-0',
+            campaignId: process.argv[3], correlationId: process.argv[4],
+            topic: 'Cloudflare Workers', objective: 'Create a grounded B2B awareness campaign draft',
+            sourceRefs: ['https://developers.cloudflare.com/'], saveDraft: true }));
+          NODE
+          no_m2m="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' "${auth[@]}" --header 'content-type: application/json' --data-binary "@$work/request.json" "$endpoint/generate-campaign")"
+          test "$no_m2m" = 401
+          cross_tenant="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' "${auth[@]}" "${m2m[@]}" --header 'content-type: application/json' --data '{"tenantId":"other-tenant","campaignId":"scope-check","correlationId":"scope-check","topic":"Cloudflare Workers","objective":"Test","sourceRefs":[],"saveDraft":true}' "$endpoint/generate-campaign")"
+          test "$cross_tenant" = 403
+          status="$(curl --silent --show-error --max-time 110 --output "$work/generated.json" --write-out '%{http_code}' "${auth[@]}" "${m2m[@]}" --header 'content-type: application/json' --data-binary "@$work/request.json" "$endpoint/generate-campaign")"
+          echo "EMP003_GENERATED_SAVE_HTTP=$status"
+          test "$status" = 200 || { echo 'EMP003_GENERATED_SAVE_GENERATION_FAILED'; exit 1; }
+          curl --fail --silent --show-error --max-time 30 "${auth[@]}" "${m2m[@]}" "$endpoint/drafts?tenantId=herreb-client-0&campaignId=$campaign" > "$work/readback.json"
+          node - "$work/generated.json" "$work/readback.json" "$campaign" <<'NODE'
+          const fs = require('node:fs');
+          const [generated, stored] = process.argv.slice(2,4).map(p => JSON.parse(fs.readFileSync(p, 'utf8')));
+          if (generated.ok !== true || generated.campaignId !== process.argv[4] || generated.persisted !== true || generated.readBackConfirmed !== true || generated.publishExecuted !== false) process.exit(1);
+          if (generated.blueprint?.status !== 'DRAFT' || generated.blueprint?.publishApproved !== false) process.exit(1);
+          if (stored.found !== true || JSON.stringify(stored.campaign) !== JSON.stringify(generated.blueprint)) process.exit(1);
+          NODE
+          duplicate="$(curl --silent --show-error --max-time 110 --output /dev/null --write-out '%{http_code}' "${auth[@]}" "${m2m[@]}" --header 'content-type: application/json' --data-binary "@$work/request.json" "$endpoint/generate-campaign")"
+          test "$duplicate" = 409
+          echo 'EMP003_GENERATED_SAVE_PRODUCTION_CERTIFIED'
