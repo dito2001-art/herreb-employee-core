@@ -101,9 +101,9 @@ export default {
         const blueprint = parseGeneratedCampaignBlueprint({ tenantId: owner.tenantId, correlationId: body.correlationId.trim(), objective: body.objective.trim(), evidenceRefs: brief.sourceRefs, modelOutput: await result.text });
         return Response.json({ ok: true, tenantId: owner.tenantId, employeeId: 'EMP-003', blueprint, publishExecuted: false });
       } catch (error) {
-        const code = error instanceof Error ? error.message : 'EMP003_CAMPAIGN_GENERATION_FAILED';
-        console.error('EMP003_CAMPAIGN_GENERATION_FAILURE', { correlationId: body.correlationId?.trim() ?? '', code });
-        return Response.json({ ok: false, error: 'EMP003_CAMPAIGN_GENERATION_FAILED' }, { status: 503 });
+        const safeCode = error instanceof Error && /^(RESEARCH_[A-Z0-9_]+|EMP003_GROUNDED_BRIEF_[A-Z0-9_]+)$/.test(error.message) ? error.message : 'CAMPAIGN_UNKNOWN';
+        console.error('EMP003_CAMPAIGN_GENERATION_FAILURE', { correlationId: body.correlationId?.trim() ?? '', code: safeCode });
+        return Response.json({ ok: false, error: 'EMP003_CAMPAIGN_GENERATION_FAILED', failureCode: safeCode }, { status: 503 });
       }
     }
     if (url.pathname === '/api/internal/emp003/campaign-blueprint') {
