@@ -114,7 +114,7 @@ export default {
           const saved = await stub.fetch(new Request(destination, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(blueprint) }));
           if (!saved.ok) return Response.json({ ok: false, error: saved.status === 409 ? 'EMP003_DRAFT_ALREADY_EXISTS' : 'EMP003_DRAFT_SAVE_FAILED' }, { status: saved.status === 409 ? 409 : 503 });
           const readBack = await stub.fetch(new Request(new URL('https://emp003-campaign-state.internal/draft?tenantId=' + encodeURIComponent(owner.tenantId) + '&campaignId=' + encodeURIComponent(body.campaignId))));
-          const persisted: { campaign?: unknown } = await readBack.json().catch(() => ({}));
+          const persisted = await readBack.json().catch(() => ({})) as { campaign?: unknown };
           if (!readBack.ok || JSON.stringify(persisted.campaign) !== JSON.stringify(blueprint)) return Response.json({ ok: false, error: 'EMP003_DRAFT_READBACK_FAILED' }, { status: 503 });
           return Response.json({ ok: true, tenantId: owner.tenantId, employeeId: 'EMP-003', campaignId: body.campaignId, blueprint, persisted: true, readBackConfirmed: true, publishExecuted: false });
         }
