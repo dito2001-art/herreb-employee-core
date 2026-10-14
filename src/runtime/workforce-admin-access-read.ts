@@ -66,7 +66,7 @@ export async function readWorkforceAdminAccessActor(request: Request, env: Acces
 export async function handleWorkforceAdminGet(
   request: Request,
   env: AccessReadEnv & { WORKFORCE_ADMIN_STATE?: { idFromName(name: string): unknown; get(id: unknown): { fetch(url: string, init?: RequestInit): Promise<Response> } } },
-  fetcher: Fetcher = fetch,
+  fetcher: Fetcher = fetch
 ): Promise<Response> {
   if (request.method !== "GET") return fail(405, "METHOD_NOT_ALLOWED");
   let actor: AdminReadActor;
