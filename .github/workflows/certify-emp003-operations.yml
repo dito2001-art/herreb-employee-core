@@ -1,0 +1,50 @@
+name: Certify EMP-003 Campaign Operations (Manual)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  certify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify authenticated tenant operations readback
+        env:
+          WORKFORCE_ADMIN_M2M_TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
+          CLOUDFLARE_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
+          CLOUDFLARE_ACCESS_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$WORKFORCE_ADMIN_M2M_TOKEN"
+          test -n "$CLOUDFLARE_ACCESS_CLIENT_ID"
+          test -n "$CLOUDFLARE_ACCESS_CLIENT_SECRET"
+          endpoint='https://employee.herreb.com/api/internal/emp003/operations'
+          auth=(--header "CF-Access-Client-Id: $CLOUDFLARE_ACCESS_CLIENT_ID" --header "CF-Access-Client-Secret: $CLOUDFLARE_ACCESS_CLIENT_SECRET")
+          m2m=(--header "x-herreb-workforce-admin-token: $WORKFORCE_ADMIN_M2M_TOKEN")
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          missing="$(curl --silent --show-error --max-time 25 --output /dev/null --write-out '%{http_code}' "${auth[@]}" "$endpoint?tenantId=herreb-client-0")"
+          echo "EMP003_OPERATIONS_UNAUTH_HTTP=$missing"
+          test "$missing" = 401
+          cross="$(curl --silent --show-error --max-time 25 --output /dev/null --write-out '%{http_code}' "${auth[@]}" "${m2m[@]}" "$endpoint?tenantId=other-tenant")"
+          echo "EMP003_OPERATIONS_CROSS_TENANT_HTTP=$cross"
+          test "$cross" = 403
+          invalid="$(curl --silent --show-error --max-time 25 --output /dev/null --write-out '%{http_code}' "${auth[@]}" "${m2m[@]}" "$endpoint?tenantId=..%2Fbad")"
+          echo "EMP003_OPERATIONS_INVALID_HTTP=$invalid"
+          test "$invalid" = 400
+          status="$(curl --silent --show-error --max-time 30 --output "$work/operations.json" --write-out '%{http_code}' "${auth[@]}" "${m2m[@]}" "$endpoint?tenantId=herreb-client-0")"
+          echo "EMP003_OPERATIONS_OWNER_HTTP=$status"
+          test "$status" = 200
+          node - "$work/operations.json" <<'NODE'
+          const fs = require('node:fs');
+          const payload = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (payload.ok !== true || payload.tenantId !== 'herreb-client-0' || !Array.isArray(payload.campaigns)) process.exit(1);
+          for (const item of payload.campaigns) {
+            if (typeof item.campaignId !== 'string' || !item.campaignId ||
+                item.blueprint?.tenantId !== 'herreb-client-0' ||
+                typeof item.reviewRevision !== 'number' ||
+                item.publishAuthorized !== false || item.publishExecuted !== false) process.exit(1);
+          }
+          console.log('EMP003_OPERATIONS_PRODUCTION_CERTIFIED count=' + payload.campaigns.length);
+          NODE
