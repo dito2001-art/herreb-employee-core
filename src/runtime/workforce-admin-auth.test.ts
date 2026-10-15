@@ -26,13 +26,13 @@ test("fails closed without authenticated Access identity", () => {
   );
 });
 
-test("fails closed for authenticated email not in server-side identity registry", () => {
+test("rejects unknown email header without trusting it as identity", () => {
   const request = new Request("https://admin.test/api", {
     headers: { "cf-access-authenticated-user-email": "attacker@example.test" },
   });
   assert.throws(
     () => resolveWorkforceAdminActor({ request, identities }),
-    /WORKFORCE_ADMIN_IDENTITY_NOT_FOUND/
+    /WORKFORCE_ADMIN_AUTH_REQUIRED/
   );
 });
 
