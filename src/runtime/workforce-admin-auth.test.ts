@@ -61,10 +61,30 @@ test("accepts platform role only with internal platform tenant scope", () => {
     "x-herreb-internal-role": "platform_admin"
   } });
   assert.equal(resolveWorkforceAdminActor({ request: valid, identities }).role, "platform_admin");
+  const ownerHeaders = new Request("https://admin.test/api", { headers: {
+    "x-herreb-internal-actor-id": "fernando",
+    "x-herreb-internal-tenant-id": "herreb-client-0",
+    "x-herreb-internal-role": "owner"
+  } });
+  assert.equal(resolveWorkforceAdminActor({ request: ownerHeaders, identities }).role, "owner");
   const invalid = new Request("https://admin.test/api", { headers: {
     "x-herreb-internal-actor-id": "fernando",
     "x-herreb-internal-tenant-id": "customer",
     "x-herreb-internal-role": "platform_admin"
   } });
   assert.throws(() => resolveWorkforceAdminActor({ request: invalid, identities }), /WORKFORCE_ADMIN_AUTH_REQUIRED/);
+});
+
+test("validated M2M actor must still exist in persisted tenant registry", () => {
+  const headers = {
+    "x-herreb-internal-actor-id": "fernando",
+    "x-herreb-internal-tenant-id": "herreb-client-0",
+    "x-herreb-internal-role": "owner",
+    "cf-access-authenticated-user-email": "other-tenant@example.test"
+  };
+  const request = new Request("https://admin.test/api", { headers });
+  assert.throws(() => resolveWorkforceAdminActor({ request, identities: [] }), /WORKFORCE_ADMIN_IDENTITY_NOT_FOUND/);
+  assert.throws(() => resolveWorkforceAdminActor({ request, identities: [{ ...identities[0], role: "user" }] }), /WORKFORCE_ADMIN_IDENTITY_NOT_FOUND/);
+  assert.throws(() => resolveWorkforceAdminActor({ request, identities: [{ ...identities[0], tenantId: "tenant-b" }] }), /WORKFORCE_ADMIN_IDENTITY_NOT_FOUND/);
+  assert.equal(resolveWorkforceAdminActor({ request, identities }).tenantId, "herreb-client-0");
 });
