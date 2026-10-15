@@ -1,0 +1,125 @@
+name: Certify EMP-003 Generated Approval E2E (Manual)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  certify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify generation, persistent readback, duplicate protection, and tenant isolation
+        env:
+          WORKFORCE_ADMIN_M2M_TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
+          CLOUDFLARE_ACCESS_CLIENT_ID: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_ID }}
+          CLOUDFLARE_ACCESS_CLIENT_SECRET: ${{ secrets.CLOUDFLARE_ACCESS_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$WORKFORCE_ADMIN_M2M_TOKEN"
+          test -n "$CLOUDFLARE_ACCESS_CLIENT_ID"
+          test -n "$CLOUDFLARE_ACCESS_CLIENT_SECRET"
+          endpoint='https://employee.herreb.com/api/internal/emp003'
+          campaign="emp003-generated-save-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          correlation="emp003-generated-save-${GITHUB_RUN_ID}"
+          auth=(--header "CF-Access-Client-Id: $CLOUDFLARE_ACCESS_CLIENT_ID" --header "CF-Access-Client-Secret: $CLOUDFLARE_ACCESS_CLIENT_SECRET")
+          m2m=(--header "x-herreb-workforce-admin-token: $WORKFORCE_ADMIN_M2M_TOKEN")
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          node - "$work/request.json" "$campaign" "$correlation" <<'NODE'
+          const fs = require('node:fs');
+          fs.writeFileSync(process.argv[2], JSON.stringify({ tenantId: 'herreb-client-0',
+            campaignId: process.argv[3], correlationId: process.argv[4],
+            topic: 'Cloudflare Workers', objective: 'Create a grounded B2B awareness campaign draft',
+            sourceRefs: ['https://developers.cloudflare.com/'], saveDraft: true }));
+          NODE
+          no_m2m="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' "${auth[@]}" --header 'content-type: application/json' --data-binary "@$work/request.json" "$endpoint/generate-campaign")"
+          test "$no_m2m" = 401
+          cross_tenant="$(curl --silent --show-error --max-time 20 --output /dev/null --write-out '%{http_code}' "${auth[@]}" "${m2m[@]}" --header 'content-type: application/json' --data '{"tenantId":"other-tenant","campaignId":"scope-check","correlationId":"scope-check","topic":"Cloudflare Workers","objective":"Test","sourceRefs":[],"saveDraft":true}' "$endpoint/generate-campaign")"
+          test "$cross_tenant" = 403
+          status="$(curl --silent --show-error --max-time 110 --output "$work/generated.json" --write-out '%{http_code}' "${auth[@]}" "${m2m[@]}" --header 'content-type: application/json' --data-binary "@$work/request.json" "$endpoint/generate-campaign")"
+          echo "EMP003_GENERATED_SAVE_HTTP=$status"
+          test "$status" = 200 || { echo 'EMP003_GENERATED_SAVE_GENERATION_FAILED'; exit 1; }
+          curl --fail --silent --show-error --max-time 30 "${auth[@]}" "${m2m[@]}" "$endpoint/drafts?tenantId=herreb-client-0&campaignId=$campaign" > "$work/readback.json"
+          node - "$work/generated.json" "$work/readback.json" "$campaign" <<'NODE'
+          const fs = require('node:fs');
+          const [generated, stored] = process.argv.slice(2,4).map(p => JSON.parse(fs.readFileSync(p, 'utf8')));
+          if (generated.ok !== true || generated.campaignId !== process.argv[4] || generated.persisted !== true || generated.readBackConfirmed !== true || generated.publishExecuted !== false) process.exit(1);
+          if (generated.blueprint?.status !== 'DRAFT' || generated.blueprint?.publishApproved !== false) process.exit(1);
+          if (stored.found !== true || JSON.stringify(stored.campaign) !== JSON.stringify(generated.blueprint)) process.exit(1);
+          NODE
+          duplicate="$(curl --silent --show-error --max-time 110 --output /dev/null --write-out '%{http_code}' "${auth[@]}" "${m2m[@]}" --header 'content-type: application/json' --data-binary "@$work/request.json" "$endpoint/generate-campaign")"
+          test "$duplicate" = 409
+          echo 'EMP003_GENERATED_SAVE_STAGE_CERTIFIED'
+          tenant='herreb-client-0'
+          node - "$work/generated.json" "$work/draft.json" "$work/review.json" "$work/approve.json" "$tenant" "$campaign" "$correlation" <<'NODE'
+          const fs = require('node:fs');
+          const [generatedPath,draftPath,reviewPath,approvePath,tenantId,campaignId,correlationId] = process.argv.slice(2);
+          const generated = JSON.parse(fs.readFileSync(generatedPath,'utf8'));
+          if (generated.blueprint?.tenantId !== tenantId) process.exit(1);
+          fs.writeFileSync(draftPath,JSON.stringify({tenantId,campaignId,blueprint:generated.blueprint}));
+          const base = {tenantId,campaignId,actorId:'untrusted-workflow-actor',actorRole:'operator'};
+          fs.writeFileSync(reviewPath,JSON.stringify({...base,correlationId:correlationId+'-review',from:'DRAFT',to:'IN_REVIEW',reason:'Generated campaign E2E certification',idempotencyKey:correlationId+'-review'}));
+          fs.writeFileSync(approvePath,JSON.stringify({...base,correlationId:correlationId+'-approve',from:'IN_REVIEW',to:'APPROVED',reason:'Generated campaign E2E certification only',idempotencyKey:correlationId+'-approve'}));
+          NODE
+          post() {
+            local url="$1" input="$2" output="$3"
+            local status
+            status="$(curl --silent --show-error --max-time 30 --output "$output" --write-out '%{http_code}' "${auth[@]}" "${m2m[@]}" --header 'content-type: application/json' --data-binary "@$input" "$url")"
+            test "$status" = 200 || { echo "EMP003_REVIEW_WRITE_HTTP=$status"; exit 1; }
+            node - "$output" <<'NODE'
+          const fs = require('node:fs');
+          const b = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          if (b.ok !== true) process.exit(1);
+          NODE
+          }
+          get() {
+            curl --fail --silent --show-error --max-time 30 "${auth[@]}" "${m2m[@]}" "$1" > "$2"
+          }
+          post "$endpoint/review" "$work/review.json" "$work/review-response.json"
+          post "$endpoint/review" "$work/review.json" "$work/review-replay.json"
+          post "$endpoint/review" "$work/approve.json" "$work/approve-response.json"
+          post "$endpoint/review" "$work/approve.json" "$work/approve-replay.json"
+          # A reviewed blueprint must not be mutable through the draft endpoint.
+          get "$endpoint/drafts?tenantId=$tenant&campaignId=$campaign" "$work/before-draft.json"
+          node - "$work/draft.json" "$work/mutated-draft.json" <<'NODE'
+          const fs = require('node:fs');
+          const original = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          original.blueprint.objective = 'UNAUTHORIZED MUTATION SHOULD NEVER PERSIST';
+          fs.writeFileSync(process.argv[3], JSON.stringify(original));
+          NODE
+          blocked="$(curl --silent --show-error --max-time 30 --output "$work/blocked.json" --write-out '%{http_code}' "${auth[@]}" "${m2m[@]}" --header 'content-type: application/json' --data-binary "@$work/mutated-draft.json" "$endpoint/drafts")"
+          echo "EMP003_REVIEWED_DRAFT_OVERWRITE_HTTP=$blocked"
+          test "$blocked" = 400
+          get "$endpoint/drafts?tenantId=$tenant&campaignId=$campaign" "$work/after-draft.json"
+          node - "$work/before-draft.json" "$work/after-draft.json" <<'NODE'
+          const fs = require('node:fs');
+          const before = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const after = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+          if (before.ok !== true || before.found !== true || after.ok !== true || after.found !== true) process.exit(1);
+          if (JSON.stringify(before.campaign) !== JSON.stringify(after.campaign)) process.exit(1);
+          if (after.campaign.objective === 'UNAUTHORIZED MUTATION SHOULD NEVER PERSIST') process.exit(1);
+          NODE
+          get "$endpoint/review?tenantId=$tenant&campaignId=$campaign" "$work/state.json"
+          get "$endpoint/review?tenantId=$tenant&campaignId=$campaign&view=audit" "$work/audit.json"
+          node - "$work" "$tenant" "$campaign" <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const [dir, tenant, campaign] = process.argv.slice(2);
+          const read = (name) => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
+          const review = read('review-response.json');
+          const reviewReplay = read('review-replay.json');
+          const approved = read('approve-response.json');
+          const approvedReplay = read('approve-replay.json');
+          const state = read('state.json');
+          const audit = read('audit.json');
+          if (review.state?.state !== 'IN_REVIEW' || review.state?.revision !== 1 || review.replayed !== false) process.exit(1);
+          if (reviewReplay.replayed !== true || reviewReplay.state?.revision !== 1) process.exit(1);
+          if (approved.state?.state !== 'APPROVED' || approved.state?.revision !== 2 || approved.replayed !== false) process.exit(1);
+          if (approvedReplay.replayed !== true || approvedReplay.state?.revision !== 2) process.exit(1);
+          if (state.state?.state !== 'APPROVED' || state.state?.revision !== 2 || state.state?.publishExecuted !== false) process.exit(1);
+          if (!Array.isArray(audit.events) || audit.events.length !== 2) process.exit(1);
+          if (audit.events.some(e => e.tenantId !== tenant || e.campaignId !== campaign || e.publishExecuted !== false)) process.exit(1);
+          if (approved.readBackConfirmed !== true || approvedReplay.readBackConfirmed !== true) process.exit(1);
+          NODE
+          echo 'EMP003_GENERATED_APPROVAL_E2E_PRODUCTION_CERTIFIED'
