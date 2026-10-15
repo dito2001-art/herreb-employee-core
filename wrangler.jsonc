@@ -28,6 +28,7 @@
     "META_PHONE_NUMBER_ID": "1292296713970881",
     "WORKFORCE_ACCESS_TEAM_DOMAIN": "herreb.cloudflareaccess.com",
     "WORKFORCE_ACCESS_AUDIENCE": "abb150dd05499a637e8c7a50701ddd370f418794e58cf27d25522936e7b442ae",
+    "WORKFORCE_PLATFORM_ADMIN_EMAILS_JSON": "[\"dito2001@gmail.com\"]",
     "ACCESS_IDENTITY_MAP_JSON": "[{\"email\":\"dito2001@gmail.com\",\"tenantId\":\"herreb-client-0\",\"actorId\":\"fernando\",\"role\":\"owner\"}]",
     "TENANT_MANIFESTS_JSON": "[{\"tenantId\":\"herreb-client-0\",\"name\":\"HerreB Client 0\",\"enabledEmployees\":[\"EMP-001\",\"EMP-002\",\"EMP-003\"],\"knowledgeNamespace\":\"herreb-client-0:knowledge\",\"offeringNamespace\":\"herreb-client-0:offerings\",\"whatsappOwners\":[\"595981538641\"]}]",
     "WHATSAPP_TENANT_ROUTES_JSON": "[{\"phoneNumberId\":\"1292296713970881\",\"tenantId\":\"herreb-client-0\"}]",
