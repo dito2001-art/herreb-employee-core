@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from "react";
 import { Button, Badge } from "@cloudflare/kumo";
-import { ChatCircleDotsIcon, GearIcon } from "@phosphor-icons/react";
+import { ChatCircleDotsIcon, GearIcon, MegaphoneIcon } from "@phosphor-icons/react";
 import { WorkforceAdminPanel } from "./workforce-admin-panel";
+import { EMP003CampaignDashboard } from "./emp003-campaign-dashboard";
 
-export type WorkforceView = "assistant" | "admin";
+export type WorkforceView = "assistant" | "admin" | "marketer";
 
 export function WorkforceShell({ assistant }: { assistant: ReactNode }) {
   const [view, setView] = useState<WorkforceView>("assistant");
@@ -27,6 +28,14 @@ export function WorkforceShell({ assistant }: { assistant: ReactNode }) {
             </Button>
             <Button
               size="sm"
+              variant={view === "marketer" ? "primary" : "secondary"}
+              icon={<MegaphoneIcon size={15} />}
+              onClick={() => setView("marketer")}
+            >
+              EMP-003
+            </Button>
+            <Button
+              size="sm"
               variant={view === "admin" ? "primary" : "secondary"}
               icon={<GearIcon size={15} />}
               onClick={() => setView("admin")}
@@ -37,7 +46,11 @@ export function WorkforceShell({ assistant }: { assistant: ReactNode }) {
         </div>
       </nav>
       <main className="min-h-0 flex-1">
-        {view === "assistant" ? assistant : (
+        {view === "assistant" ? assistant : view === "marketer" ? (
+          <div className="max-w-5xl mx-auto p-5 overflow-y-auto h-full">
+            <EMP003CampaignDashboard />
+          </div>
+        ) : (
           <div className="max-w-5xl mx-auto p-5 overflow-y-auto h-full">
             <WorkforceAdminPanel />
           </div>
