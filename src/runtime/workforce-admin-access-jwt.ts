@@ -54,5 +54,5 @@ export async function verifyWorkforceAccessJwt(input: {
     throw new Error("WORKFORCE_ACCESS_JWT_CLAIMS_INVALID");
   }
   if (typeof claims.email !== "string" || !claims.email.trim()) throw new Error("WORKFORCE_ACCESS_JWT_EMAIL_INVALID");
-  return { email: claims.email.trim().toLowerCase(), issuer: expectedIssuer, audience, expiresAt: claims.exp };
+  return { email: claims.email.trim().toLowerCase(), issuer: expectedIssuer, audience, expiresAt: claims.exp as number };
 }
