@@ -109,7 +109,7 @@ export function EMP003CampaignDashboard() {
         <button type="button" onClick={startNew} className="rounded-lg border border-kumo-line px-3 py-2">Nueva propuesta</button>
         <button type="button" onClick={() => void load(selectedId ?? undefined)} className="rounded-lg border border-kumo-line px-3 py-2">Volver a consultar</button>
       </div>
-      {!loading && campaigns.length > 0 && <div className="grid gap-4 md:grid-cols-3">
+      {!loading && (campaigns.length > 0 || objective.length > 0) && <div className="grid gap-4 md:grid-cols-3">
         <div className="space-y-2" aria-label="Listado de campañas">
           {campaigns.map(item => <button key={item.campaignId} type="button" onClick={() => { setSelectedId(item.campaignId); void load(item.campaignId); }} aria-pressed={selectedId === item.campaignId} className="w-full rounded-lg border border-kumo-line bg-kumo-base p-3 text-left hover:opacity-80">
             <strong className="block">{item.objective}</strong><span className="text-sm text-kumo-subtle">{stateLabel[item.reviewState]} · Rev. {item.revision}</span>
