@@ -47,7 +47,10 @@ export async function verifyWorkforceAccessJwt(input: {
   const claimIssuer = typeof claims.iss === "string" ? claims.iss.replace(/\/$/, "") : "";
   const claimAudience = claims.aud;
   const audienceMatches = claimAudience === audience || (Array.isArray(claimAudience) && claimAudience.includes(audience));
-  if (claimIssuer !== expectedIssuer || !audienceMatches || typeof claims.exp !== "number" || !Number.isFinite(claims.exp) || claims.exp <= nowSeconds || typeof claims.iat !== "number" || claims.iat > nowSeconds + 60 || (typeof claims.nbf === "number" && claims.nbf > nowSeconds + 60)) {
+  const validExpiration = typeof claims.exp === "number" && Number.isFinite(claims.exp) && claims.exp > nowSeconds;
+  const validIssuedAt = typeof claims.iat === "number" && Number.isFinite(claims.iat) && claims.iat <= nowSeconds + 60;
+  const validNotBefore = claims.nbf === undefined || (typeof claims.nbf === "number" && Number.isFinite(claims.nbf) && claims.nbf <= nowSeconds + 60);
+  if (claimIssuer !== expectedIssuer || !audienceMatches || !validExpiration || !validIssuedAt || !validNotBefore) {
     throw new Error("WORKFORCE_ACCESS_JWT_CLAIMS_INVALID");
   }
   if (typeof claims.email !== "string" || !claims.email.trim()) throw new Error("WORKFORCE_ACCESS_JWT_EMAIL_INVALID");
