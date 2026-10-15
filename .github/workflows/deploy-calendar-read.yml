@@ -1,26 +1,44 @@
 name: Deploy Calendar Read
 
+# Never publish from a feature branch or an unreviewed push.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - feature/emp002-scheduling-waitlist-v0.1
-    paths:
-      - "src/calendar-read-worker.ts"
-      - "wrangler.calendar-read.jsonc"
-      - ".github/workflows/deploy-calendar-read.yml"
+    inputs:
+      release_sha:
+        description: "Independently approved exact main SHA"
+        required: true
+        type: string
 
 permissions:
   contents: read
 
+concurrency:
+  group: production-calendar-read
+  cancel-in-progress: false
+
 jobs:
   deploy:
     name: Deploy herreb-calendar-read
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: production
     steps:
-      - name: Checkout
+      - name: Verify approved main commit
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || [ "$RELEASE_SHA" != "$EXPECTED_SHA" ]; then
+            echo "::error::Calendar release must match the exact main SHA"
+            exit 1
+          fi
+
+      - name: Checkout approved source
         uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.release_sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v5
@@ -31,7 +49,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Deployment is intentionally isolated from the core Worker.
+      # Secrets must be scoped to a protected Environment and unavailable
+      # at repository scope. Environment reviewers must be independent.
       - name: Deploy calendar read worker
         run: npx wrangler deploy --config wrangler.calendar-read.jsonc
         env:
