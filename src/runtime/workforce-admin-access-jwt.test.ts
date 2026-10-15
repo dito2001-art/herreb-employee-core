@@ -47,6 +47,7 @@ test("rejects malformed temporal claims including nonnumeric not-before and infi
   { ...f.claims, iat: Number.POSITIVE_INFINITY },
   { ...f.claims, exp: Number.POSITIVE_INFINITY },
  ]) {
-  await assert.rejects(() => verifyWorkforceAccessJwt({ ...f.input, jwt: await f.sign(claims) }));
+  const jwt = await f.sign(claims);
+  await assert.rejects(() => verifyWorkforceAccessJwt({ ...f.input, jwt }));
  }
 });
