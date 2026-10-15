@@ -156,7 +156,14 @@ export class ChatAgent extends AIChatAgent<Env, Record<string, unknown>, AgentPr
     };
 
     const modelRouter = new StaticModelRouter({ provider: "workers-ai", model: DEFAULT_MODEL, reason: "employee-runtime-v0.1 tool-calling route" });
-    const bootstrap = buildTenantReadOnlyRuntime({ ...runtimeEnv, MARKETING_CONTENT_PROVIDER: marketingContentProvider }, tenantId, tenantCapabilityBindings(runtimeEnv));
+    // EMP-002 must never inherit a personal/legacy CRM or Google Calendar binding.
+    // Until a tenant-owned Workforce calendar is explicitly provisioned, fail closed.
+    // Other employees retain their existing capability routing.
+    const emp002NativeOnly = employeeId === "EMP-002";
+    const capabilityEnv = emp002NativeOnly
+      ? { ...runtimeEnv, AG002_GATEWAY: undefined, RUNTIME_GATEWAY_TOKEN: undefined, HERREB_RUNTIME_TOKEN: undefined, CALENDAR_READ: undefined, CALENDAR_READ_TOKEN: undefined, MARKETING_CONTENT_PROVIDER: marketingContentProvider }
+      : { ...runtimeEnv, MARKETING_CONTENT_PROVIDER: marketingContentProvider };
+    const bootstrap = buildTenantReadOnlyRuntime(capabilityEnv, tenantId, emp002NativeOnly ? [] : tenantCapabilityBindings(runtimeEnv));
     console.log(JSON.stringify({ event: "EMP002_RUNTIME_DIAGNOSTIC", tenantId, calendarDiagnostic: bootstrap.diagnostics.calendar, calendarCapabilityConnected: bootstrap.connectedCapabilities.has("calendar.read"), crmWriteConnected: bootstrap.connectedCapabilities.has("crm.write"), accessIdentityVerified: Boolean(verifiedIdentity) }));
     const runtime = new HerreBEmployeeRuntime({
       modelRouter,
@@ -168,7 +175,13 @@ export class ChatAgent extends AIChatAgent<Env, Record<string, unknown>, AgentPr
 
     const model = workersai(session.modelRoute.model, { sessionAffinity: this.sessionAffinity });
     const systemPrompt = session.manifest.id === "EMP-002"
-      ? buildEMP002ConversationSystemPrompt({ context: session.context, manifest: session.manifest })
+      ? [
+          buildEMP002ConversationSystemPrompt({ context: session.context, manifest: session.manifest }),
+          "The native Workforce calendar is not yet connected. Do not use legacy CRM, personal CRM, Google Calendar, old conversation history or model memory as current agenda evidence. Never present historical tasks as today's agenda. State that live agenda access is unavailable until the native tenant calendar is connected.",
+          "Distinguish tasks, meetings and events. Never claim a meeting was created, modified, cancelled or read back without a successful tenant-scoped tool result.",
+          "Tenant timezone: America/Asuncion.",
+          `Current server time (UTC): ${new Date().toISOString()}.`
+        ].join("\\n")
       : buildEmployeeSystemPrompt(session.context, session.manifest);
 
     const result = streamText({
