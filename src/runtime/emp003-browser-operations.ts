@@ -1,3 +1,4 @@
+import { EMP003CampaignOperationsResponseSchema } from "../core/emp003-campaign-review-ui-model";
 import { readWorkforceAdminAccessActor } from "./workforce-admin-access-read";
 
 type CampaignStore = {
@@ -36,9 +37,12 @@ export async function handleEMP003BrowserOperations(
     const response = await stub.fetch(new Request(destination, { method: "GET" }));
     if (!response.ok) return fail(503, "EMP003_BROWSER_STORAGE_UNAVAILABLE");
     const payload: unknown = await response.json();
-    if (!payload || typeof payload !== "object" || (payload as { tenantId?: unknown }).tenantId !== tenantId)
+    const parsed = EMP003CampaignOperationsResponseSchema.safeParse(payload);
+    if (!parsed.success || parsed.data.tenantId !== tenantId ||
+      parsed.data.campaigns.some(item => item.blueprint.tenantId !== tenantId) ||
+      new Set(parsed.data.campaigns.map(item => item.campaignId)).size !== parsed.data.campaigns.length)
       return fail(503, "EMP003_BROWSER_SCOPE_INVALID");
-    return Response.json(payload, { headers: { "cache-control": "no-store" } });
+    return Response.json(parsed.data, { headers: { "cache-control": "no-store" } });
   } catch {
     return fail(503, "EMP003_BROWSER_STORAGE_UNAVAILABLE");
   }
