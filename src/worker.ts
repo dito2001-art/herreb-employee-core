@@ -218,6 +218,20 @@ export default {
         return Response.json({ ok: false, error: 'EMP003_RESEARCH_DRAFT_FAILED' }, { status: 503 });
       }
     }
+    if (url.pathname === '/api/internal/emp002/native-calendar') {
+      if (request.method !== 'POST') return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405 });
+      if (!runtimeEnv.EMP002_OPERATIONS) return Response.json({ ok: false, error: 'EMP002_OPERATIONS_BINDING_MISSING' }, { status: 503 });
+      const body = await request.json<{ tenantId?: string; operation?: string; id?: string; from?: string; to?: string; entry?: unknown; expectedVersion?: number }>().catch(() => ({}));
+      const tenantId = body.tenantId?.trim();
+      const owner = resolveTenantOwner(request, runtimeEnv, tenantId);
+      if (!owner || !tenantId || owner.tenantId !== tenantId) return Response.json({ ok: false, error: 'EMP002_NATIVE_CALENDAR_FORBIDDEN' }, { status: 403 });
+      const stub = runtimeEnv.EMP002_OPERATIONS.get(runtimeEnv.EMP002_OPERATIONS.idFromName(`tenant:${owner.tenantId}`));
+      const response = await stub.fetch('https://emp002.operations/native-calendar', {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-herreb-internal-tenant-id': owner.tenantId },
+        body: JSON.stringify({ operation: body.operation, id: body.id, from: body.from, to: body.to, entry: body.entry, expectedVersion: body.expectedVersion }),
+      });
+      return new Response(response.body, { status: response.status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+    }
     if (url.pathname === '/api/internal/emp003/research') {
       if (request.method !== 'POST') return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405, headers: { allow: 'POST' } });
       if (!isValidM2M(request, runtimeEnv)) return Response.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
