@@ -43,6 +43,8 @@ export class WorkforceCalendarStore {
   save(input: Omit<WorkforceCalendarEntry, 'version'>, expectedVersion = 0): WorkforceCalendarEntry {
     if (!input || typeof input !== 'object' || typeof input.tenantId !== 'string' || typeof input.id !== 'string' || typeof input.title !== 'string' || typeof input.startsAt !== 'string' || typeof input.updatedAt !== 'string' || (input.endsAt !== undefined && typeof input.endsAt !== 'string') || !input.tenantId.trim() || !input.id.trim() || !input.title.trim() || !['TASK', 'MEETING', 'EVENT'].includes(input.kind) || !['ACTIVE', 'CANCELLED'].includes(input.status) || !Number.isFinite(Date.parse(input.startsAt)) || !Number.isFinite(Date.parse(input.updatedAt)) || (input.endsAt && (!Number.isFinite(Date.parse(input.endsAt)) || Date.parse(input.endsAt) <= Date.parse(input.startsAt)))) throw new Error('INVALID_CALENDAR_ENTRY');
     if (input.kind !== 'TASK' && !input.endsAt) throw new Error('CALENDAR_END_REQUIRED');
+    const current = this.get(input.tenantId, input.id);
+    if ((current?.version ?? 0) !== expectedVersion) throw new Error('CALENDAR_VERSION_CONFLICT');
     if (input.status === 'ACTIVE' && input.kind !== 'TASK' && input.endsAt) {
       // Include earlier-starting meetings that can still overlap this slot.
       // A finite lookback would miss long-running events.
@@ -51,8 +53,7 @@ export class WorkforceCalendarStore {
         .filter(entry => entry.tenantId === input.tenantId && entry.status === 'ACTIVE' && entry.id !== input.id && entry.kind !== 'TASK' && entry.endsAt);
       if (overlaps.some(entry => Date.parse(entry.startsAt) < Date.parse(input.endsAt!) && Date.parse(entry.endsAt!) > Date.parse(input.startsAt))) throw new Error('CALENDAR_TIME_CONFLICT');
     }
-    const current = this.get(input.tenantId, input.id);
-    if ((current?.version ?? 0) !== expectedVersion) throw new Error('CALENDAR_VERSION_CONFLICT');
+
     const next: WorkforceCalendarEntry = { ...input, version: expectedVersion + 1 };
     this.sql.exec('INSERT INTO workforce_calendar_entries (tenant_id, id, version, starts_at, payload) VALUES (?, ?, ?, ?, ?) ON CONFLICT(tenant_id, id) DO UPDATE SET version = excluded.version, starts_at = excluded.starts_at, payload = excluded.payload', input.tenantId, input.id, next.version, new Date(input.startsAt).toISOString(), JSON.stringify(next));
     const readback = this.get(input.tenantId, input.id);
