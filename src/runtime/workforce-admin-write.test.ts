@@ -146,10 +146,10 @@ test("platform administrator requires YELLOW approval to create a tenant", async
   const blocked = await executeWorkforceAdminMutation({ actor, mutation, store: h.store, audit: h.audit, randomId: () => "platform-1" });
   assert.equal(blocked.decision, "YELLOW");
   assert.equal(blocked.persisted, false);
-  const approved = await executeWorkforceAdminMutation({ actor, mutation, store: h.store, audit: h.audit, randomId: () => "platform-2" });
-  assert.equal(approved.decision, "YELLOW");
-  assert.equal(approved.persisted, true);
-  assert.equal(h.getState().manifests.length, 2);
+  const secondAttemptWithoutEvidence = await executeWorkforceAdminMutation({ actor, mutation, store: h.store, audit: h.audit, randomId: () => "platform-2" });
+  assert.equal(secondAttemptWithoutEvidence.decision, "YELLOW");
+  assert.equal(secondAttemptWithoutEvidence.persisted, false);
+  assert.equal(h.getState().manifests.length, 1);
 });
 
 test("tenant owner cannot modify another tenant while platform administrator can", async () => {
