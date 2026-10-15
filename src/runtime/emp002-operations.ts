@@ -144,7 +144,39 @@ export class EMP002Operations implements DurableObject {
         const manifests = (() => { try { return JSON.parse(this.env.TENANT_MANIFESTS_JSON ?? '[]') as Array<{ tenantId?: string; whatsappOwners?: string[] }>; } catch { return []; } })();
         const owners = (manifests.find(m => m.tenantId?.trim() === message.tenantId)?.whatsappOwners ?? []).map(normalizeEMP002WhatsAppNumber);
         if (!owners.includes(normalizeEMP002WhatsAppNumber(message.from))) return Response.json({ ok: false, handled: false, error: 'EMP002_OWNER_VERIFICATION_FAILED' }, { status: 403 });
-        return Response.json({ ok: false, handled: false, error: 'EMP002_NATIVE_CALENDAR_CONVERSATION_NOT_CONNECTED' }, { status: 503 });
+        // Owner-only native calendar path. Never fall through to legacy CRM transports.
+        const command = await parseEMP002OwnerCalendarCommand(this.env.AI, message.body, new Date().toISOString()).catch(() => ({ operation: 'none' as const }));
+        if (command.operation === 'update' || command.operation === 'delete') return Response.json({ ok: false, handled: false, error: 'EMP002_NATIVE_CALENDAR_MUTATION_NOT_CONNECTED' }, { status: 503 });
+        if (command.operation === 'none' && !isEMP002CalendarReadIntent(message.body)) return Response.json({ ok: false, handled: false, error: 'EMP002_NATIVE_CALENDAR_COMMAND_AMBIGUOUS' }, { status: 422 });
+        const first = await this.conversationStore.markInboundOnce(message.tenantId, message.messageId, message.receivedAt);
+        if (!first) return Response.json({ ok: true, handled: true, duplicate: true, mode: 'native-calendar' });
+        try {
+          let reply: string;
+          let mode: string;
+          if (command.operation === 'create') {
+            const id = `wa-${message.messageId}`;
+            const start = new Date(command.startTime).toISOString();
+            const end = new Date(command.endTime).toISOString();
+            const entry = this.nativeCalendar.save({ tenantId: message.tenantId, id, kind: 'MEETING', title: command.title, startsAt: start, endsAt: end, status: 'ACTIVE', updatedAt: new Date().toISOString() }, 0);
+            const readBack = this.nativeCalendar.get(message.tenantId, id);
+            if (!readBack || JSON.stringify(entry) !== JSON.stringify(readBack)) throw new Error('EMP002_NATIVE_CALENDAR_READBACK_FAILED');
+            reply = `Agendé "${entry.title}" para ${entry.startsAt} y confirmé que quedó guardada en el calendario de Workforce.`;
+            mode = 'native-calendar-create';
+          } else {
+            const window = resolveEMP002CalendarQueryWindow(message.body, new Date());
+            const entries = this.nativeCalendar.list(message.tenantId, window.timeMin, window.timeMax);
+            reply = entries.length ? `Tu agenda de Workforce: ${entries.map(entry => `${entry.title} (${entry.startsAt})`).join('; ')}` : 'No tenés reuniones registradas en Workforce para ese período.';
+            mode = 'native-calendar-read';
+          }
+          const whatsapp = buildEMP002WhatsAppTransport(this.env, message.tenantId);
+          const outbound = await whatsapp.sendText({ tenantId: message.tenantId, to: message.from, body: reply, audience: 'EXTERNAL_CONTACT', correlationId: `wa:${message.messageId}`, idempotencyKey: `emp002-${mode}:${message.messageId}` });
+          await this.conversationStore.append(message.tenantId, message.from, { role: 'assistant', content: reply, at: new Date().toISOString(), messageId: outbound.messageId ?? undefined });
+          return Response.json({ ok: true, handled: true, mode, readBackConfirmed: true, outboundMessageId: outbound.messageId });
+        } catch (error) {
+          await this.conversationStore.releaseInboundForRetry(message.tenantId, message.messageId);
+          const code = error instanceof Error ? error.message : 'EMP002_NATIVE_CALENDAR_FAILED';
+          return Response.json({ ok: false, handled: false, error: code }, { status: code === 'CALENDAR_TIME_CONFLICT' || code === 'CALENDAR_VERSION_CONFLICT' ? 409 : 503 });
+        }
       }
       const record = await this.dispatchStore.findActiveByWhatsapp(message.tenantId, message.from);
       if (!record) {
