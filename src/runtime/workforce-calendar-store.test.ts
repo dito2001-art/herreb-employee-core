@@ -68,3 +68,12 @@ test('native calendar compares offset query windows against UTC storage', () => 
   assert.equal(entries.length, 1);
   assert.equal(entries[0].id, base.id);
 });
+
+test('native calendar rejects overlapping meetings but isolates tenants', () => {
+  const store = new WorkforceCalendarStore(memorySql());
+  store.save(base);
+  assert.throws(() => store.save({ ...base, id: 'meeting-2', startsAt: '2026-10-16T12:30:00.000Z', endsAt: '2026-10-16T13:30:00.000Z' }), /CALENDAR_TIME_CONFLICT/);
+  assert.equal(store.get('tenant-a', 'meeting-2'), undefined);
+  assert.equal(store.save({ ...base, tenantId: 'tenant-b', id: 'meeting-2' }).version, 1);
+  assert.equal(store.save({ ...base, id: 'meeting-3', startsAt: '2026-10-16T13:00:00.000Z', endsAt: '2026-10-16T14:00:00.000Z' }).version, 1);
+});
