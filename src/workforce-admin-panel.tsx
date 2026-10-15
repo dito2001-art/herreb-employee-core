@@ -19,6 +19,7 @@ export function WorkforceAdminPanel() {
   const [authorization, setAuthorization] = useState<AdminAuthorization>();
   const [error, setError] = useState<string>();
   const [query, setQuery] = useState("");
+  const [expandedTenant, setExpandedTenant] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -60,8 +61,15 @@ export function WorkforceAdminPanel() {
         {filteredTenants.map((tenant) => (
           <article key={tenant.tenantId} className="p-3 rounded-lg border">
             <div className="flex justify-between gap-3"><strong>{tenant.tenantId}</strong><span className="text-xs">{tenant.enabledEmployees.join(" · ")}</span></div>
-            <p className="text-xs mt-2 opacity-70">Knowledge: {tenant.knowledgeNamespace}</p>
-            <p className="text-xs opacity-70">Offerings: {tenant.offeringNamespace}</p>
+            <button type="button" className="text-sm underline mt-2" aria-expanded={expandedTenant === tenant.tenantId} onClick={() => setExpandedTenant(expandedTenant === tenant.tenantId ? null : tenant.tenantId)}>{expandedTenant === tenant.tenantId ? "Hide details" : "View details"}</button>
+            {expandedTenant === tenant.tenantId && <div className="mt-2 space-y-1 text-xs">
+              <p>Tenant ID: {tenant.tenantId}</p>
+              <p>Enabled employees: {tenant.enabledEmployees.length ? tenant.enabledEmployees.join(", ") : "None"}</p>
+              <p>Assigned identities: {tenant.identities.length}</p>
+              <p>Knowledge: {tenant.knowledgeNamespace}</p>
+              <p>Offerings: {tenant.offeringNamespace}</p>
+              <p className="opacity-70">Management actions unavailable until controlled-write certification.</p>
+            </div>}
             <div className="mt-2 text-sm">{tenant.identities.length ? tenant.identities.map((identity) => <div key={identity.email}>{identity.email} · {identity.role} · {identity.actorId}</div>) : <span className="opacity-60">No identities assigned</span>}</div>
           </article>
         ))}
