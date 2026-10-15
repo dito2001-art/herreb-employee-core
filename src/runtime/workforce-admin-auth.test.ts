@@ -11,15 +11,11 @@ const identities = [
   },
 ];
 
-test("resolves actor only from authenticated Access email", () => {
+test("rejects unauthenticated Access email header at the Durable Object boundary", () => {
   const request = new Request("https://admin.test/api", {
     headers: { "cf-access-authenticated-user-email": " OWNER@HERREB.TEST " },
   });
-  assert.deepEqual(resolveWorkforceAdminActor({ request, identities }), {
-    actorId: "fernando",
-    tenantId: "herreb-client-0",
-    role: "owner",
-  });
+  assert.throws(() => resolveWorkforceAdminActor({ request, identities }), /WORKFORCE_ADMIN_AUTH_REQUIRED/);
 });
 
 test("fails closed without authenticated Access identity", () => {
@@ -49,9 +45,7 @@ test("ignores caller-controlled body when resolving privileges", async () => {
     },
     body: JSON.stringify({ actor: { actorId: "attacker", tenantId: "other", role: "owner" } }),
   });
-  const actor = resolveWorkforceAdminActor({ request, identities });
-  assert.equal(actor.actorId, "fernando");
-  assert.equal(actor.tenantId, "herreb-client-0");
+  assert.throws(() => resolveWorkforceAdminActor({ request, identities }), /WORKFORCE_ADMIN_AUTH_REQUIRED/);
 });
 
 test("accepts platform role only with internal platform tenant scope", () => {
