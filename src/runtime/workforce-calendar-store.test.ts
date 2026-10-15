@@ -60,3 +60,11 @@ test('native calendar rejects malformed fields without mutating tenant records',
   }
   assert.equal(store.get('tenant-a', base.id), undefined);
 });
+
+test('native calendar compares offset query windows against UTC storage', () => {
+  const store = new WorkforceCalendarStore(memorySql());
+  store.save(base);
+  const entries = store.list('tenant-a', '2026-10-16T08:00:00-03:00', '2026-10-16T10:00:00-03:00');
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].id, base.id);
+});
