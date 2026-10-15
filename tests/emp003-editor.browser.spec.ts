@@ -35,7 +35,7 @@ test("browser: create, edit, reload, read-back, approved lock and failed read-ba
     }
     return json({ error: "not found" }, 404);
   });
-  await page.goto("/");
+  await page.goto("http://127.0.0.1:5173/");
   await page.getByRole("button", { name: "EMP-003" }).click();
   await page.getByRole("button", { name: "Nueva propuesta" }).click();
   await page.getByRole("button", { name: "Guardar y verificar persistencia" }).click();
