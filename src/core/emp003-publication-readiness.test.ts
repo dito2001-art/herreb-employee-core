@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import assert from "node:assert/strict";
+import { test } from "node:test";
 import { evaluateCampaignPublicationReadiness } from "./emp003-publication-readiness";
 
 const valid = {
   tenantId: "tenant-a",
   campaignTenantId: "tenant-a",
-  reviewState: { state: "APPROVED" as const, publishExecuted: false as const },
+  reviewState: { state: "APPROVED" as const, publishExecuted: false },
   contentStatus: "PUBLISH_READY" as const,
   approvedBy: "owner",
   approvalEvidenceRef: "audit-123",
@@ -12,19 +13,21 @@ const valid = {
   executionPolicyAuthorized: true
 };
 
-describe("EMP-003 publication readiness", () => {
-  it("requires all independent gates", () => {
-    expect(evaluateCampaignPublicationReadiness(valid)).toEqual({ ready: true, publishExecuted: false });
-  });
-  it.each([
-    [{ campaignTenantId: "tenant-b" }, "TENANT_MISMATCH"],
-    [{ reviewState: { state: "DRAFT" as const, publishExecuted: false as const } }, "CAMPAIGN_NOT_APPROVED"],
-    [{ contentStatus: "APPROVED" as const }, "CONTENT_APPROVAL_REQUIRED"],
-    [{ approvedBy: "" }, "CONTENT_APPROVAL_REQUIRED"],
-    [{ approvalEvidenceRef: "" }, "CONTENT_APPROVAL_REQUIRED"],
-    [{ channelAuthorized: false }, "CHANNEL_NOT_AUTHORIZED"],
-    [{ executionPolicyAuthorized: false }, "EXECUTION_NOT_AUTHORIZED"]
-  ])("rejects unsafe conditions", (override, reason) => {
-    expect(evaluateCampaignPublicationReadiness({ ...valid, ...override })).toEqual({ ready: false, publishExecuted: false, reason });
-  });
+test("EMP-003 publication readiness requires all independent gates", () => {
+  assert.deepEqual(evaluateCampaignPublicationReadiness(valid), { ready: true, publishExecuted: false });
+});
+
+test("EMP-003 publication readiness rejects unsafe conditions", () => {
+  const cases: Array<{ override: Partial<typeof valid>; reason: string }> = [
+    { override: { campaignTenantId: "tenant-b" }, reason: "TENANT_MISMATCH" },
+    { override: { reviewState: { state: "DRAFT", publishExecuted: false } as typeof valid.reviewState }, reason: "CAMPAIGN_NOT_APPROVED" },
+    { override: { contentStatus: "APPROVED" as typeof valid.contentStatus }, reason: "CONTENT_APPROVAL_REQUIRED" },
+    { override: { approvedBy: "" }, reason: "CONTENT_APPROVAL_REQUIRED" },
+    { override: { approvalEvidenceRef: "" }, reason: "CONTENT_APPROVAL_REQUIRED" },
+    { override: { channelAuthorized: false }, reason: "CHANNEL_NOT_AUTHORIZED" },
+    { override: { executionPolicyAuthorized: false }, reason: "EXECUTION_NOT_AUTHORIZED" }
+  ];
+  for (const { override, reason } of cases) {
+    assert.deepEqual(evaluateCampaignPublicationReadiness({ ...valid, ...override }), { ready: false, publishExecuted: false, reason });
+  }
 });
