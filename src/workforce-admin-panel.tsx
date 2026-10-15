@@ -18,6 +18,7 @@ export function WorkforceAdminPanel() {
   const [snapshot, setSnapshot] = useState<AdminSnapshot>();
   const [authorization, setAuthorization] = useState<AdminAuthorization>();
   const [error, setError] = useState<string>();
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -34,6 +35,11 @@ export function WorkforceAdminPanel() {
   if (error) return <section className="p-4 rounded-xl border"><strong>Workforce Admin</strong><p className="text-sm mt-2">Unavailable: {error}</p></section>;
   if (!snapshot) return <section className="p-4 rounded-xl border"><strong>Workforce Admin</strong><p className="text-sm mt-2">Loading…</p></section>;
 
+  const filteredTenants = snapshot.tenants.filter((tenant) =>
+    [tenant.tenantId, ...tenant.enabledEmployees, ...tenant.identities.flatMap((identity) => [identity.email, identity.actorId, identity.role])]
+      .some((value) => value.toLowerCase().includes(query.trim().toLowerCase()))
+  );
+
   return (
     <section className="p-4 rounded-xl border space-y-4" aria-label="Workforce Admin">
       <header>
@@ -46,8 +52,12 @@ export function WorkforceAdminPanel() {
         <div><strong>{snapshot.totals.identities}</strong><br />Identities</div>
         <div><strong>{snapshot.totals.enabledEmployees}</strong><br />Employees enabled</div>
       </div>
+      <label className="block text-sm">Search tenants and identities
+        <input className="block w-full mt-1 p-2 rounded-lg border bg-transparent" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tenant, email, actor or employee" />
+      </label>
+      <p className="text-xs opacity-70">Showing {filteredTenants.length} of {snapshot.totals.tenants} tenants · read-only</p>
       <div className="space-y-3">
-        {snapshot.tenants.map((tenant) => (
+        {filteredTenants.map((tenant) => (
           <article key={tenant.tenantId} className="p-3 rounded-lg border">
             <div className="flex justify-between gap-3"><strong>{tenant.tenantId}</strong><span className="text-xs">{tenant.enabledEmployees.join(" · ")}</span></div>
             <p className="text-xs mt-2 opacity-70">Knowledge: {tenant.knowledgeNamespace}</p>
@@ -55,6 +65,7 @@ export function WorkforceAdminPanel() {
             <div className="mt-2 text-sm">{tenant.identities.length ? tenant.identities.map((identity) => <div key={identity.email}>{identity.email} · {identity.role} · {identity.actorId}</div>) : <span className="opacity-60">No identities assigned</span>}</div>
           </article>
         ))}
+        {filteredTenants.length === 0 && <p className="text-sm opacity-70">No matching tenants or identities.</p>}
       </div>
     </section>
   );
