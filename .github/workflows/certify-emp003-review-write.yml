@@ -69,6 +69,25 @@ jobs:
           const b = require(process.argv[2]);
           if (b.persisted !== true || b.campaign?.publishApproved !== false) process.exit(1);
           NODE
+          # Verify an editable DRAFT round-trip before the review lock is applied.
+          node - "$work/draft.json" "$work/edited-draft.json" <<'NODE'
+          const fs = require('node:fs');
+          const draft = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          draft.blueprint.objective = 'UPDATED DRAFT: measurable HerreB internal evaluation';
+          draft.blueprint.keyMessages = ['Revision verified before owner review'];
+          fs.writeFileSync(process.argv[3], JSON.stringify(draft));
+          NODE
+          post "$endpoint/drafts" "$work/edited-draft.json" "$work/edited-response.json"
+          get "$endpoint/drafts?tenantId=$tenant&campaignId=$campaign" "$work/edited-readback.json"
+          node - "$work/edited-draft.json" "$work/edited-response.json" "$work/edited-readback.json" <<'NODE'
+          const fs = require('node:fs');
+          const [input, saved, reread] = process.argv.slice(2).map(p => JSON.parse(fs.readFileSync(p, 'utf8')));
+          if (saved.persisted !== true || reread.ok !== true || reread.found !== true) process.exit(1);
+          if (JSON.stringify(saved.campaign) !== JSON.stringify(input.blueprint)) process.exit(1);
+          if (JSON.stringify(reread.campaign) !== JSON.stringify(input.blueprint)) process.exit(1);
+          if (reread.campaign.publishApproved !== false || reread.campaign.status !== 'DRAFT') process.exit(1);
+          console.log('EMP003_DRAFT_EDIT_READBACK_CERTIFIED');
+          NODE
           post "$endpoint/review" "$work/review.json" "$work/review-response.json"
           post "$endpoint/review" "$work/review.json" "$work/review-replay.json"
           post "$endpoint/review" "$work/approve.json" "$work/approve-response.json"
