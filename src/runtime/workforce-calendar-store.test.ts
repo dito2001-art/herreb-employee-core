@@ -11,6 +11,9 @@ function memorySql(): SchedulingSqlStorage {
       const row = rows.get(JSON.stringify([args[0], args[1]]));
       return row ? [{ payload: row.payload }] : [];
     }
+    if (query.startsWith('SELECT payload FROM workforce_calendar_entries WHERE tenant_id = ? AND starts_at < ?')) {
+      return [...rows.values()].filter(row => row.tenantId === args[0] && row.startsAt < String(args[1])).map(row => ({ payload: row.payload }));
+    }
     if (query.startsWith('SELECT payload FROM workforce_calendar_entries WHERE tenant_id = ? AND starts_at')) {
       return [...rows.values()].filter(row => row.tenantId === args[0] && row.startsAt >= String(args[1]) && row.startsAt < String(args[2])).map(row => ({ payload: row.payload }));
     }
@@ -83,4 +86,10 @@ test('native meetings and events require an end time', () => {
   assert.throws(() => store.save({ ...base, endsAt: undefined }), /CALENDAR_END_REQUIRED/);
   assert.throws(() => store.save({ ...base, kind: 'EVENT', endsAt: undefined }), /CALENDAR_END_REQUIRED/);
   assert.equal(store.save({ ...base, kind: 'TASK', endsAt: undefined }).version, 1);
+});
+
+test('native calendar detects a long-running event beginning days earlier', () => {
+  const store = new WorkforceCalendarStore(memorySql());
+  store.save({ ...base, id: 'long-event', kind: 'EVENT', startsAt: '2026-10-01T12:00:00.000Z', endsAt: '2026-10-20T12:00:00.000Z' });
+  assert.throws(() => store.save({ ...base, id: 'inside-event' }), /CALENDAR_TIME_CONFLICT/);
 });
