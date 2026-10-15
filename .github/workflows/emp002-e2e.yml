@@ -47,7 +47,9 @@ jobs:
         shell: bash
         env:
           E2E_TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
-          E2E_URL: https://herreb-employee-core.dito2001.workers.dev/api/internal/emp002/e2e
+          CF_ACCESS_CLIENT_ID: ${{ secrets.EMP002_CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.EMP002_CF_ACCESS_CLIENT_SECRET }}
+          E2E_URL: https://employee.herreb.com/api/internal/emp002/e2e
           E2E_TENANT: herreb-client-0
           E2E_WHATSAPP: '595981538641'
         run: |
@@ -56,6 +58,8 @@ jobs:
           test "$E2E_TENANT" = 'herreb-client-0'
           test "$E2E_WHATSAPP" = '595981538641'
           test -n "$E2E_TOKEN"
+          test -n "$CF_ACCESS_CLIENT_ID"
+          test -n "$CF_ACCESS_CLIENT_SECRET"
 
           APPT_ID="emp002-e2e-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           NOW="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
@@ -79,6 +83,8 @@ jobs:
             -X POST "$E2E_URL" \
             -H 'content-type: application/json' \
             -H "x-herreb-workforce-admin-token: $E2E_TOKEN" \
+            -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+            -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET" \
             --data "$BODY")"
 
           RESPONSE="$(cat "$RESPONSE_FILE")"
