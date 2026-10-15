@@ -198,7 +198,9 @@ export class EMP002Operations implements DurableObject {
             const id = `wa-${message.messageId}`;
             const start = new Date(command.startTime).toISOString();
             const end = new Date(command.endTime).toISOString();
-            const entry = this.nativeCalendar.save({ tenantId: message.tenantId, id, kind: 'MEETING', title: command.title, startsAt: start, endsAt: end, status: 'ACTIVE', updatedAt: new Date().toISOString() }, 0);
+            const existing = this.nativeCalendar.get(message.tenantId, id);
+            if (existing && (existing.title !== command.title || existing.startsAt !== start || existing.endsAt !== end || existing.status !== 'ACTIVE')) throw new Error('EMP002_NATIVE_CALENDAR_IDEMPOTENCY_MISMATCH');
+            const entry = existing ?? this.nativeCalendar.save({ tenantId: message.tenantId, id, kind: 'MEETING', title: command.title, startsAt: start, endsAt: end, status: 'ACTIVE', updatedAt: new Date().toISOString() }, 0);
             const readBack = this.nativeCalendar.get(message.tenantId, id);
             if (!readBack || JSON.stringify(entry) !== JSON.stringify(readBack)) throw new Error('EMP002_NATIVE_CALENDAR_READBACK_FAILED');
             reply = `Agendé "${entry.title}" para ${entry.startsAt} y confirmé que quedó guardada en el calendario de Workforce.`;
