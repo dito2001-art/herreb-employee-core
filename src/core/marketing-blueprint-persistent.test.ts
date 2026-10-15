@@ -43,3 +43,23 @@ test("rejects tampered persisted tenant on read", async () => {
   map.set("emp003:blueprint:herreb-client-0:cmp-1", JSON.stringify({ ...blueprint, tenantId: "other-tenant" }));
   await assert.rejects(repo.get("herreb-client-0", "cmp-1"), /EMP003_STORAGE_TENANT_VIOLATION/);
 });
+
+test("listWithIds preserves campaign identity and tenant scope", async () => {
+  const { repo } = fixture();
+  await repo.put("herreb-client-0", "cmp-1", blueprint);
+  await repo.put("herreb-client-0", "cmp-2", { ...blueprint, objective: "More leads" });
+  assert.deepEqual(await repo.listWithIds("herreb-client-0"), [
+    { campaignId: "cmp-1", blueprint },
+    { campaignId: "cmp-2", blueprint: { ...blueprint, objective: "More leads" } }
+  ]);
+  assert.deepEqual(await repo.listWithIds("other-tenant"), []);
+});
+
+test("listWithIds rejects tampered tenant or unsafe stored campaign ID", async () => {
+  const { repo, map } = fixture();
+  map.set("emp003:blueprint:herreb-client-0:cmp-1", JSON.stringify({ ...blueprint, tenantId: "other-tenant" }));
+  await assert.rejects(repo.listWithIds("herreb-client-0"), /EMP003_STORAGE_TENANT_VIOLATION/);
+  map.clear();
+  map.set("emp003:blueprint:herreb-client-0:../bad", JSON.stringify(blueprint));
+  await assert.rejects(repo.listWithIds("herreb-client-0"), /EMP003_STORAGE_ID_INVALID/);
+});
