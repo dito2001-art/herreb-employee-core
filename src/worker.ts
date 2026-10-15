@@ -221,7 +221,7 @@ export default {
     if (url.pathname === '/api/internal/emp002/native-calendar') {
       if (request.method !== 'POST') return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405 });
       if (!runtimeEnv.EMP002_OPERATIONS) return Response.json({ ok: false, error: 'EMP002_OPERATIONS_BINDING_MISSING' }, { status: 503 });
-      const body = await request.json<{ tenantId?: string; operation?: string; id?: string; from?: string; to?: string; entry?: unknown; expectedVersion?: number }>().catch(() => ({}));
+      const body = await request.json<{ tenantId?: string; operation?: string; id?: string; from?: string; to?: string; entry?: unknown; expectedVersion?: number }>().catch((): { tenantId?: string; operation?: string; id?: string; from?: string; to?: string; entry?: unknown; expectedVersion?: number } => ({}));
       const tenantId = body.tenantId?.trim();
       const owner = resolveTenantOwner(request, runtimeEnv, tenantId);
       if (!owner || !tenantId || owner.tenantId !== tenantId) return Response.json({ ok: false, error: 'EMP002_NATIVE_CALENDAR_FORBIDDEN' }, { status: 403 });
