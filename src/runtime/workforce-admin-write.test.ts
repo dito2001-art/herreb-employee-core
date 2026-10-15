@@ -196,3 +196,34 @@ test("YELLOW write cannot be self-approved with a caller-controlled boolean", as
   assert.equal(h.getState().manifests.length, 1);
   assert.equal(h.audits[0]?.persisted, false);
 });
+
+test("tenant owner cannot change another tenant employees or create a cross-tenant identity", async () => {
+  const h = harness();
+  const attempts = [
+    { type: "tenant.employees.set" as const, tenantId: "other", enabledEmployees: ["EMP-003" as const] },
+    { type: "identity.upsert" as const, identity: { email: "foreign@example.test", tenantId: "other", actorId: "foreign", role: "owner" as const } }
+  ];
+  for (const mutation of attempts) {
+    const result = await executeWorkforceAdminMutation({ actor: owner, mutation, store: h.store, audit: h.audit });
+    assert.equal(result.decision, "RED");
+    assert.equal(result.persisted, false);
+  }
+  assert.equal(h.audits.length, 2);
+  assert.deepEqual(h.getState().manifests.map(x => x.tenantId), ["herreb"]);
+  assert.deepEqual(h.getState().identities.map(x => x.email), ["owner@herreb.test"]);
+});
+
+test("YELLOW identity deletion remains denied and audited even for platform admin", async () => {
+  const h = harness();
+  const result = await executeWorkforceAdminMutation({
+    actor: { actorId: "platform", tenantId: "platform", role: "platform_admin" },
+    mutation: { type: "identity.delete", email: "owner@herreb.test" },
+    store: h.store,
+    audit: h.audit
+  });
+  assert.equal(result.decision, "YELLOW");
+  assert.equal(result.persisted, false);
+  assert.equal(h.getState().identities.length, 1);
+  assert.equal(h.audits[0]?.decision, "YELLOW");
+  assert.equal(h.audits[0]?.persisted, false);
+});
