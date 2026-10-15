@@ -1,4 +1,5 @@
 import { SqliteWhatsAppSchedulingDispatchStore } from './emp002-whatsapp-sqlite-dispatch-store';
+import { normalizeEMP002WhatsAppNumber } from './emp002-whatsapp-normalize';
 import type { WhatsAppSchedulingDispatchRecord } from './emp002-whatsapp-dispatch-store';
 import type { RoutedWhatsAppInbound } from './emp002-whatsapp-endpoint';
 import { dispatchSchedulingWhatsAppInbound } from './emp002-whatsapp-dispatcher';
@@ -116,7 +117,7 @@ export class EMP002Operations implements DurableObject {
           const correlationId = `wa:${message.messageId}`;
           const whatsapp = buildEMP002WhatsAppTransport(this.env, message.tenantId);
           const calendarIntent = isEMP002CalendarReadIntent(message.body);
-          const normalizeWhatsApp = (value: string) => value.replace(/\\D/g, '');
+          const normalizeWhatsApp = normalizeEMP002WhatsAppNumber;
           const manifests = (() => {
             try {
               return JSON.parse(this.env.TENANT_MANIFESTS_JSON ?? '[]') as Array<{ tenantId?: string; whatsappOwners?: string[] }>;
