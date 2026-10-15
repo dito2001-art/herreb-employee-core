@@ -125,3 +125,36 @@ test("an identity removed from persisted state is no longer authorized despite s
   );
   assert.equal(response.status, 401);
 });
+
+test("two signed tenant identities cannot read each other's employee entitlements or namespaces", async () => {
+  const f = await setup();
+  for (const [email, ownTenant, otherTenant, ownEmployee, foreignEmployee] of [
+    ["owner@example.com", "alpha", "beta", "EMP-001", "EMP-002"],
+    ["other@example.com", "beta", "alpha", "EMP-002", "EMP-001"],
+  ]) {
+    const request = new Request("https://employee.herreb.com/api/admin/workforce?tenantId=" + otherTenant, {
+      headers: { "cf-access-jwt-assertion": await f.token(email), "cf-access-authenticated-user-email": "admin@example.com" }
+    });
+    const response = await handleWorkforceAdminGet(request, f.env, f.fetcher);
+    assert.equal(response.status, 200);
+    const body = await response.json() as { snapshot: { tenants: Array<{ tenantId: string; enabledEmployees: string[] }> } };
+    assert.equal(body.snapshot.tenants.length, 1);
+    assert.equal(body.snapshot.tenants[0].tenantId, ownTenant);
+    assert.deepEqual(body.snapshot.tenants[0].enabledEmployees, [ownEmployee]);
+    assert.equal(JSON.stringify(body).includes(otherTenant + "-k"), false);
+    assert.equal(JSON.stringify(body).includes(foreignEmployee), false);
+  }
+});
+
+test("Durable Object unavailable denies both tenant identities without static fallback", async () => {
+  const f = await setup();
+  f.env.WORKFORCE_ADMIN_STATE.get = () => ({ fetch: async () => new Response("offline", { status: 503 }) });
+  for (const email of ["owner@example.com", "other@example.com"]) {
+    const response = await handleWorkforceAdminGet(
+      new Request("https://employee.herreb.com/api/admin/workforce", { headers: { "cf-access-jwt-assertion": await f.token(email) } }),
+      f.env, f.fetcher
+    );
+    assert.equal(response.status, 503);
+    assert.equal(JSON.stringify(await response.json()).includes("alpha-k"), false);
+  }
+});

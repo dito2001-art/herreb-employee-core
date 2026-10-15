@@ -1,18 +1,12 @@
 name: Deploy Employee Core
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "src/**"
-      - "wrangler.jsonc"
-      - "package.json"
-      - "package-lock.json"
-      - ".github/workflows/deploy-employee-core.yml"
-      - ".github/workflows/certify-emp003-production-sequence.yml"
-      - ".github/workflows/certify-emp003-review-readonly.yml"
   workflow_dispatch:
+    inputs:
+      release_sha:
+        description: "Approved exact commit SHA from main"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -21,9 +15,26 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    concurrency:
+      group: production-employee-core
+      cancel-in-progress: false
     steps:
+      - name: Validate release commit
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] || [ "$RELEASE_SHA" != "$CURRENT_SHA" ]; then
+            echo "::error::Release SHA must match exact currently approved main commit"
+            exit 1
+          fi
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.release_sha }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -34,9 +45,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Format
-        run: npx oxfmt --write .
-
+      # Validation is intentionally read-only: deploy exactly the checked-out SHA.
       - name: Validate
         run: npm run check
 
