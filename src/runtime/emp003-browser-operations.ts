@@ -39,13 +39,28 @@ export async function handleEMP003BrowserOperations(request: Request, env: Acces
 
 /** Owner-only draft create/update. Tenant comes only from the verified Access identity. */
 export async function handleEMP003BrowserDraftSave(request: Request, env: AccessEnv, fetcher?: typeof fetch): Promise<Response> {
-  if (request.method !== "POST") return fail(405, "METHOD_NOT_ALLOWED");
+  if (!["GET", "POST"].includes(request.method)) return fail(405, "METHOD_NOT_ALLOWED");
   let actor: Awaited<ReturnType<typeof readWorkforceAdminAccessActor>>;
   try { actor = await readWorkforceAdminAccessActor(request, env, fetcher); }
   catch { return fail(401, "EMP003_BROWSER_AUTH_REQUIRED"); }
-  if (actor.role !== "owner") return fail(403, "EMP003_BROWSER_OWNER_REQUIRED");
+  if (request.method === "POST" && actor.role !== "owner") return fail(403, "EMP003_BROWSER_OWNER_REQUIRED");
+  if (request.method === "GET" && actor.role !== "owner" && actor.role !== "user") return fail(403, "EMP003_BROWSER_ROLE_FORBIDDEN");
   const tenantId = actor.tenantId;
   if (!/^[a-zA-Z0-9_-]{1,100}$/.test(tenantId)) return fail(403, "EMP003_BROWSER_TENANT_FORBIDDEN");
+  if (!env.EMP003_CAMPAIGN_STATE) return fail(503, "EMP003_BROWSER_STORAGE_UNAVAILABLE");
+  if (request.method === "GET") {
+    const campaignId = new URL(request.url).searchParams.get("campaignId") ?? "";
+    if (!/^[a-zA-Z0-9_-]{1,100}$/.test(campaignId)) return fail(400, "EMP003_DRAFT_ID_INVALID");
+    try {
+      const destination = new URL("https://emp003-campaign-state.internal/draft");
+      destination.searchParams.set("tenantId", tenantId);
+      destination.searchParams.set("campaignId", campaignId);
+      const stub = env.EMP003_CAMPAIGN_STATE.get(env.EMP003_CAMPAIGN_STATE.idFromName(tenantId));
+      const response = await stub.fetch(new Request(destination, { method: "GET" }));
+      if (!response.ok) return fail(503, "EMP003_DRAFT_READBACK_FAILED");
+      return new Response(response.body, { status: response.status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
+    } catch { return fail(503, "EMP003_BROWSER_STORAGE_UNAVAILABLE"); }
+  }
   let raw: unknown;
   try { raw = await request.json(); } catch { return fail(400, "EMP003_DRAFT_JSON_INVALID"); }
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return fail(400, "EMP003_DRAFT_INPUT_INVALID");
