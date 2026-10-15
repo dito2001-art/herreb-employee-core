@@ -136,9 +136,23 @@ export default {
           return Response.json({ ok: true, tenantId: owner.tenantId, employeeId: 'EMP-003', campaignId: body.campaignId, blueprint, persisted: true, readBackConfirmed: true, publishExecuted: false });
         }
         return Response.json({ ok: true, tenantId: owner.tenantId, employeeId: 'EMP-003', blueprint, publishExecuted: false });
-        } catch {
-          console.error('EMP003_CAMPAIGN_STAGE_FAILURE', { stage: failureStage, correlationId: body.correlationId.trim() });
-          return Response.json({ ok: false, error: 'EMP003_CAMPAIGN_GENERATION_FAILED', failureStage, failureCode: 'CAMPAIGN_UNKNOWN' }, { status: 503 });
+        } catch (error) {
+          const failureCode = error instanceof Error && /^EMP003_BLUEPRINT_[A-Z0-9_]+$/.test(error.message)
+            ? error.message
+            : error instanceof Error && error.name === 'ZodError'
+              ? 'EMP003_BLUEPRINT_SCHEMA_REJECTED'
+              : error instanceof Error && error.name === 'TypeError'
+                ? 'EMP003_CAMPAIGN_TYPE_ERROR'
+                : error instanceof Error && error.name === 'SyntaxError'
+                  ? 'EMP003_CAMPAIGN_SYNTAX_ERROR'
+                  : 'EMP003_CAMPAIGN_UNCLASSIFIED';
+          console.error('EMP003_CAMPAIGN_STAGE_FAILURE', {
+            stage: failureStage,
+            correlationId: body.correlationId.trim(),
+            code: failureCode,
+            errorType: error instanceof Error ? error.name : typeof error
+          });
+          return Response.json({ ok: false, error: 'EMP003_CAMPAIGN_GENERATION_FAILED', failureStage, failureCode }, { status: 503 });
         }
       } catch (error) {
         const safeCode = error instanceof Error && /^(RESEARCH_[A-Z0-9_]+|EMP003_GROUNDED_BRIEF_[A-Z0-9_]+)$/.test(error.message) ? error.message : 'CAMPAIGN_UNKNOWN';

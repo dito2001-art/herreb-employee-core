@@ -37,9 +37,15 @@ jobs:
           echo "EMP003_CAMPAIGN_CLIENT0_HTTP=$status"
           node - "$response_file" "$status" <<'NODE'
           const fs = require('fs');
-          const body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          let body;
+          try {
+            body = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          } catch {
+            console.error('EMP003_CAMPAIGN_NOT_CERTIFIED:NON_JSON_RESPONSE:HTTP=' + process.argv[3]);
+            process.exit(1);
+          }
           if (process.argv[3] !== '200') {
-            const stage = ['GENERATION', 'VALIDATION'].includes(body.failureStage) ? body.failureStage : 'UNCLASSIFIED';
+            const stage = ['EVIDENCE', 'GENERATION', 'VALIDATION'].includes(body.failureStage) ? body.failureStage : 'UNCLASSIFIED';
             const code = typeof body.failureCode === 'string' && /^[A-Z0-9_]{1,80}$/.test(body.failureCode) ? body.failureCode : 'UNKNOWN';
             console.error('EMP003_CAMPAIGN_NOT_CERTIFIED:' + String(body.error ?? 'UNKNOWN') + ':STAGE=' + stage + ':CODE=' + code);
             process.exit(1);
