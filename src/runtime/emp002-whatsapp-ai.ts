@@ -57,33 +57,42 @@ export async function generateEMP002WhatsAppReply(
 }
 
 export async function generateEMP002CalendarReply(
-  ai: EMP002WorkersAI | undefined,
+  _ai: EMP002WorkersAI | undefined,
   question: string,
   calendarOutput: unknown,
 ): Promise<string> {
-  if (!ai) throw new Error('EMP002_WORKERS_AI_MISSING');
-  const messages = [
-    {
-      role: 'system',
-      content: [
-        'You are EMP-002 AI Assistant answering the verified tenant owner about the HerreB CRM agenda.',
-        'Use ONLY the CRM tool result supplied below. Never invent records, systems, access limitations, dates, times, statuses, or facts.',
-        'The CRM tasks collection can contain different activity types. Preserve each record activityType exactly for classification: Reunión is a meeting; Tarea is a task. Do not call meetings pendientes or tasks reuniones.',
-        'For a general agenda question, include all returned relevant records and group them under Reuniones and Tareas when both types exist. If only one type exists, use that type as the label.',
-        'If the user explicitly asks only for reuniones/citas/eventos, answer only with meeting-like records. If the user explicitly asks for tareas/pendientes, answer only with task-like records.',
-        'Preserve titles and times from the CRM. Order timed records chronologically. Do not infer a time when none is supplied.',
-        'If the tool result contains no matching records, say clearly that there are none in the requested period.',
-        'Keep the WhatsApp answer concise, natural, and in the same language as the user.',
-      ].join(' '),
-    },
-    {
-      role: 'user',
-      content: `Question: ${question}\nCRM agenda result: ${JSON.stringify(calendarOutput)}`,
-    },
-  ];
-  return responseText(await ai.run(MODEL, { messages }));
+  // Calendar reads are factual operations. Never ask a language model to
+  // reinterpret dates, invent meetings, or delay an otherwise completed read.
+  const period = question.match(/Resolved calendar period:\s*(\d{4}-\d{2}-\d{2})T[^\s]+\s+to\s+(\d{4}-\d{2}-\d{2})T/i);
+  if (!period) throw new Error('EMP002_CALENDAR_PERIOD_MISSING');
+  const payload = calendarOutput && typeof calendarOutput === 'object' && !Array.isArray(calendarOutput)
+    ? calendarOutput as Record<string, unknown> : null;
+  if (!payload || !Array.isArray(payload.data)) throw new Error('EMP002_CALENDAR_DATA_INVALID');
+  const onlyMeetings = /\b(reuni[oó]n(?:es)?|cita(?:s)?|eventos?)\b/i.test(question) && !/\b(agenda|tareas|pendientes)\b/i.test(question);
+  const onlyTasks = /\b(tareas|pendientes)\b/i.test(question) && !/\b(agenda|reuni[oó]n(?:es)?)\b/i.test(question);
+  const records = payload.data.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object' && !Array.isArray(item));
+  const selected = records.filter((record) => {
+    const type = String(record.activityType ?? '').toLocaleLowerCase('es');
+    const meeting = /reuni[oó]n|cita|evento/.test(type);
+    return onlyMeetings ? meeting : onlyTasks ? !meeting : true;
+  });
+  const date = period[1];
+  const endDate = period[2];
+  const nextDay = new Date(`${date}T12:00:00Z`);
+  nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+  const dateLabel = endDate === nextDay.toISOString().slice(0, 10) ? `el ${date}` : `del ${date} al ${endDate} (fin exclusivo)`;
+  const label = onlyMeetings ? 'reuniones' : onlyTasks ? 'tareas' : 'actividades';
+  if (!selected.length) return `No encontré ${label} para ${dateLabel} en el CRM HerreB.`;
+  const ordered = selected.sort((a, b) => String(a.startTime ?? '').localeCompare(String(b.startTime ?? '')));
+  const lines = ordered.map((record) => {
+    const title = String(record.title ?? record.name ?? 'Sin título').trim();
+    const type = String(record.activityType ?? 'Actividad');
+    const rawTime = String(record.startTime ?? '');
+    const time = rawTime.match(/(?:T|^)(\d{2}:\d{2})/)?.[1];
+    return `• ${title} (${type})${time ? ` — ${time}` : ''}`;
+  });
+  return `Para ${dateLabel}, encontré ${selected.length} ${label} en el CRM HerreB:\n${lines.join('\n')}`;
 }
-
 
 export type EMP002OwnerCalendarCommand =
   | { operation: 'none' }

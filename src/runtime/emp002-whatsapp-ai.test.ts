@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { generateEMP002WhatsAppReply, parseEMP002OwnerCalendarCommand } from './emp002-whatsapp-ai';
+import { generateEMP002WhatsAppReply, generateEMP002CalendarReply, parseEMP002OwnerCalendarCommand } from './emp002-whatsapp-ai';
 
 describe('EMP-002 general WhatsApp AI', () => {
   it('passes persisted conversation history to Workers AI and returns legacy response text', async () => {
@@ -83,5 +83,35 @@ describe('EMP-002 general WhatsApp AI', () => {
       endTime: '2026-10-08T16:30:00',
       timezone: 'America/Asuncion',
     });
+  });
+});
+
+describe('EMP-002 calendar reply grounded in CRM', () => {
+  const question = 'Reuniones de mañana\nResolved calendar period: 2026-10-12T00:00:00-03:00 to 2026-10-13T00:00:00-03:00 (exclusive).';
+  it('uses the CRM record and exact date without calling AI', async () => {
+    const ai = { async run(): Promise<never> { throw new Error('AI called'); } };
+    const reply = await generateEMP002CalendarReply(ai, question, { data: [{ title: 'Reunión comercial', activityType: 'Reunión', startTime: '10:30' }] });
+    assert.match(reply, /2026-10-12/);
+    assert.match(reply, /Reunión comercial/);
+  });
+  it('reports no meetings for the resolved date when CRM returns none', async () => {
+    const reply = await generateEMP002CalendarReply(undefined, question, { data: [] });
+    assert.equal(reply, 'No encontré reuniones para el 2026-10-12 en el CRM HerreB.');
+  });
+  it('does not mislabel CRM tasks as meetings', async () => {
+    const reply = await generateEMP002CalendarReply(undefined, question, { data: [
+      { title: 'Llamar a cliente', activityType: 'Tarea', startTime: '09:00' },
+      { title: 'Reunión comercial', activityType: 'Reunión', startTime: '10:00' },
+    ] });
+    assert.match(reply, /Reunión comercial/);
+    assert.doesNotMatch(reply, /Llamar a cliente/);
+  });
+  it('labels a multi-day window without claiming all meetings are on day one', async () => {
+    const rangeQuestion = 'Mi agenda semanal\nResolved calendar period: 2026-10-12T00:00:00-03:00 to 2026-10-19T00:00:00-03:00 (exclusive).';
+    const reply = await generateEMP002CalendarReply(undefined, rangeQuestion, { data: [{ title: 'Reunión de equipo', activityType: 'Reunión' }] });
+    assert.match(reply, /2026-10-12 al 2026-10-19/);
+  });
+  it('rejects malformed CRM data', async () => {
+    await assert.rejects(() => generateEMP002CalendarReply(undefined, question, {}), /EMP002_CALENDAR_DATA_INVALID/);
   });
 });
