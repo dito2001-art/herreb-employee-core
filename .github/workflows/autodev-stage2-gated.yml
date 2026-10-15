@@ -33,12 +33,14 @@ jobs:
           gh api "repos/$GH_REPO/issues/$ISSUE_NUMBER" > /tmp/autodev-issue.json
           jq -e '.state == "open" and (.pull_request == null) and ([.labels[].name] | index("autodev-approved") != null)' /tmp/autodev-issue.json >/dev/null
           jq -r '.title, (.body // "")' /tmp/autodev-issue.json > /tmp/autodev-task-full.txt
-          head -c 12000 /tmp/autodev-task-full.txt > "$GITHUB_WORKSPACE/.autodev-task.txt"
-          test -s "$GITHUB_WORKSPACE/.autodev-task.txt"
           echo "branch=autodev/issue-$ISSUE_NUMBER-${GITHUB_RUN_ID}" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
+      - name: Prepare authorized issue task
+        run: |
+          head -c 12000 /tmp/autodev-task-full.txt > .autodev-task.txt
+          test -s .autodev-task.txt
       - name: Configure branch
         env:
           BRANCH: ${{ steps.issue.outputs.branch }}
