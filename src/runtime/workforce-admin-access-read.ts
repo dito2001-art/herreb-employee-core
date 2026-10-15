@@ -81,7 +81,8 @@ function configuredPlatformEmails(env: AccessReadEnv): string[] {
 export async function readWorkforceAdminAccessActor(
   request: Request,
   env: AccessReadEnv,
-  fetcher: Fetcher = fetch
+  fetcher: Fetcher = fetch,
+  persistedIdentities?: WorkforceAdminMutationPlan["identities"]
 ): Promise<AdminReadActor> {
   const config = accessConfig(env);
   const jwt = request.headers.get("cf-access-jwt-assertion")?.trim();
@@ -118,7 +119,7 @@ export async function readWorkforceAdminAccessActor(
     expectedIssuer: config.issuer,
     expectedAudience: config.audience,
     nowSeconds,
-    identities: parseServerIdentities(env.ACCESS_IDENTITY_MAP_JSON)
+    identities: persistedIdentities ?? parseServerIdentities(env.ACCESS_IDENTITY_MAP_JSON)
   });
 }
 
@@ -136,9 +137,25 @@ export async function handleWorkforceAdminGet(
   fetcher: Fetcher = fetch
 ): Promise<Response> {
   if (request.method !== "GET") return fail(405, "METHOD_NOT_ALLOWED");
+  if (!env.WORKFORCE_ADMIN_STATE)
+    return fail(503, "WORKFORCE_ADMIN_STATE_BINDING_MISSING");
+  // Fetch only through the server-side Durable Object binding; external headers
+  // are never forwarded. No state is exposed before Access JWT verification.
+  let state: WorkforceAdminMutationPlan;
+  try {
+    const stub = env.WORKFORCE_ADMIN_STATE.get(env.WORKFORCE_ADMIN_STATE.idFromName("global"));
+    const response = await stub.fetch("https://workforce.admin/state", { method: "GET" });
+    if (!response.ok) return fail(503, "WORKFORCE_ADMIN_STATE_UNAVAILABLE");
+    const body = (await response.json()) as { ok?: unknown; state?: WorkforceAdminMutationPlan };
+    if (body.ok !== true || !body.state || !Array.isArray(body.state.manifests) || !Array.isArray(body.state.identities))
+      throw new Error("WORKFORCE_ADMIN_STATE_INVALID");
+    state = body.state;
+  } catch {
+    return fail(503, "WORKFORCE_ADMIN_STATE_UNAVAILABLE");
+  }
   let actor: AdminReadActor;
   try {
-    actor = await readWorkforceAdminAccessActor(request, env, fetcher);
+    actor = await readWorkforceAdminAccessActor(request, env, fetcher, state.identities);
   } catch (cause) {
     const code = cause instanceof Error ? cause.message : "";
     if (
@@ -147,40 +164,14 @@ export async function handleWorkforceAdminGet(
       code.startsWith("WORKFORCE_ACCESS_JWT_") ||
       code.startsWith("WORKFORCE_ACCESS_PRINCIPAL_") ||
       code.startsWith("WORKFORCE_ACCESS_IDENTITY_")
-    )
-      return fail(401, "WORKFORCE_ADMIN_AUTH_REQUIRED");
-    if (
-      code === "WORKFORCE_ADMIN_IDENTITIES_INVALID" ||
-      code.endsWith("_CONFIG_INVALID") ||
-      code === "WORKFORCE_ACCESS_JWKS_UNAVAILABLE" ||
-      code === "WORKFORCE_ACCESS_JWKS_INVALID"
-    )
+    ) return fail(401, "WORKFORCE_ADMIN_AUTH_REQUIRED");
+    if (code.endsWith("_CONFIG_INVALID") || code === "WORKFORCE_ACCESS_JWKS_UNAVAILABLE" || code === "WORKFORCE_ACCESS_JWKS_INVALID")
       return fail(503, "WORKFORCE_ADMIN_AUTH_UNAVAILABLE");
     console.warn("workforce_admin_read_denied", { phase: "access_identity", reason: code || "UNEXPECTED_ERROR" });
     return fail(403, "WORKFORCE_ADMIN_READ_FORBIDDEN");
   }
-  if (!env.WORKFORCE_ADMIN_STATE)
-    return fail(503, "WORKFORCE_ADMIN_STATE_BINDING_MISSING");
   try {
-    const stub = env.WORKFORCE_ADMIN_STATE.get(
-      env.WORKFORCE_ADMIN_STATE.idFromName("global")
-    );
-    const response = await stub.fetch("https://workforce.admin/state", {
-      method: "GET"
-    });
-    if (!response.ok) return fail(503, "WORKFORCE_ADMIN_STATE_UNAVAILABLE");
-    const body = (await response.json()) as {
-      ok?: unknown;
-      state?: WorkforceAdminMutationPlan;
-    };
-    if (
-      body.ok !== true ||
-      !body.state ||
-      !Array.isArray(body.state.manifests) ||
-      !Array.isArray(body.state.identities)
-    )
-      throw new Error("WORKFORCE_ADMIN_STATE_INVALID");
-    const snapshot = projectAuthorizedWorkforceAdminRead(body.state, actor);
+    const snapshot = projectAuthorizedWorkforceAdminRead(state, actor);
     return Response.json({ ok: true, authorization: { role: actor.role, scope: actor.tenantId }, snapshot }, { headers });
   } catch (cause) {
     const code = cause instanceof Error ? cause.message : "";

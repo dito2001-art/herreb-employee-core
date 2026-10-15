@@ -84,7 +84,7 @@ test("missing JWT, forged email header, wrong audience and tampered signature ar
 });
 test("regular user is denied and no data is returned", async () => {
   const f = await setup();
-  f.env.ACCESS_IDENTITY_MAP_JSON = JSON.stringify([{ ...state.identities[0], role: "user" }]);
+  f.env.WORKFORCE_ADMIN_STATE.get = () => ({ fetch: async () => Response.json({ ok: true, state: { ...state, identities: [{ ...state.identities[0], role: "user" }, state.identities[1]] } }) });
   const response = await handleWorkforceAdminGet(new Request("https://employee.herreb.com/api/admin/workforce", { headers: { "cf-access-jwt-assertion": await f.token("owner@example.com") } }), f.env, f.fetcher);
   assert.equal(response.status, 403);
   assert.equal(JSON.stringify(await response.json()).includes("alpha-k"), false);
@@ -96,4 +96,32 @@ test("missing config and unavailable trusted JWKS fail closed", async () => {
   assert.equal((await handleWorkforceAdminGet(req, { ...f.env, WORKFORCE_ACCESS_AUDIENCE: undefined }, f.fetcher)).status, 503);
   const failedFetch = (async () => new Response("unavailable", { status: 503 })) as typeof fetch;
   assert.equal((await handleWorkforceAdminGet(req, f.env, failedFetch)).status, 503);
+});
+
+test("persisted newly onboarded owner can read only its own tenant", async () => {
+  const f = await setup();
+  const gamma = { tenantId: "gamma", name: "Gamma", enabledEmployees: ["EMP-001"], knowledgeNamespace: "gamma-k", offeringNamespace: "gamma-o" };
+  const dynamicState = {
+    manifests: [...state.manifests, gamma],
+    identities: [...state.identities, { email: "new@example.com", actorId: "owner-gamma", tenantId: "gamma", role: "owner" }]
+  };
+  f.env.WORKFORCE_ADMIN_STATE.get = () => ({ fetch: async () => Response.json({ ok: true, state: dynamicState }) });
+  const response = await handleWorkforceAdminGet(
+    new Request("https://employee.herreb.com/api/admin/workforce", { headers: { "cf-access-jwt-assertion": await f.token("new@example.com") } }),
+    f.env, f.fetcher
+  );
+  assert.equal(response.status, 200);
+  const body = await response.json() as { snapshot: { tenants: Array<{ tenantId: string }>; totals: { identities: number } } };
+  assert.deepEqual(body.snapshot.tenants.map(tenant => tenant.tenantId), ["gamma"]);
+  assert.equal(JSON.stringify(body).includes("alpha-k"), false);
+  assert.equal(JSON.stringify(body).includes("beta-k"), false);
+});
+test("an identity removed from persisted state is no longer authorized despite stale bootstrap env", async () => {
+  const f = await setup();
+  f.env.WORKFORCE_ADMIN_STATE.get = () => ({ fetch: async () => Response.json({ ok: true, state: { ...state, identities: [state.identities[1]] } }) });
+  const response = await handleWorkforceAdminGet(
+    new Request("https://employee.herreb.com/api/admin/workforce", { headers: { "cf-access-jwt-assertion": await f.token("owner@example.com") } }),
+    f.env, f.fetcher
+  );
+  assert.equal(response.status, 401);
 });

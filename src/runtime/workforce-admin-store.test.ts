@@ -37,3 +37,16 @@ test("audit sink persists immutable evidence under audit namespace", async () =>
   assert.equal(storage.data.size, 1);
   assert.equal((Array.from(storage.data.values())[0] as { auditId: string }).auditId, "audit-1");
 });
+
+test("revoked bootstrap identity is not resurrected by subsequent reads", async () => {
+  const storage = memoryStorage();
+  const bootstrap = {
+    manifests: [{ tenantId: "client-0", name: "Client", enabledEmployees: ["EMP-002" as const], knowledgeNamespace: "k", offeringNamespace: "o" }],
+    identities: [{ email: "owner@example.com", tenantId: "client-0", actorId: "owner", role: "owner" as const }]
+  };
+  const store = new DurableWorkforceAdminStore(storage, bootstrap);
+  assert.equal((await store.read()).identities.length, 1);
+  await store.write({ manifests: bootstrap.manifests, identities: [] });
+  assert.deepEqual((await store.read()).identities, []);
+  assert.deepEqual((await new DurableWorkforceAdminStore(storage, bootstrap).read()).identities, []);
+});
