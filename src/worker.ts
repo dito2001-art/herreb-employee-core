@@ -1,6 +1,7 @@
 import employeeServer from './server';
 import { handleEMP003BrowserOperations } from './runtime/emp003-browser-operations';
 import { resolvePlatformAdminCredential } from './runtime/workforce-platform-admin-auth';
+import { resolveScopedM2MOwner } from './runtime/workforce-admin-tenant-owner';
 import { handleWorkforceAdminGet, readWorkforceAdminAccessActor } from './runtime/workforce-admin-access-read';
 import { extractMetaTextMessages, handleMetaWhatsAppWebhook } from './runtime';
 import { routeWorkforceWhatsAppMessage } from './runtime/workforce-whatsapp-router';
@@ -30,7 +31,7 @@ function constantTimeEqual(left: string, right: string): boolean { const encoder
 function configuredAdminIdentities(env: WorkerEnv): WorkforceAdminResolvedActor[] { try { const identities = JSON.parse(env.ACCESS_IDENTITY_MAP_JSON ?? '[]') as Array<{ email?: string; actorId?: string; tenantId?: string; role?: string }>; return identities.flatMap((identity) => { const email = identity.email?.trim().toLowerCase(); const actorId = identity.actorId?.trim(); const tenantId = identity.tenantId?.trim(); const role = identity.role === 'owner' ? 'owner' : identity.role === 'user' ? 'user' : undefined; return actorId && tenantId && role ? [{ email, actorId, tenantId, role }] : []; }); } catch { return []; } }
 function isValidM2M(request: Request, env: WorkerEnv): boolean { const expectedToken = env.WORKFORCE_ADMIN_M2M_TOKEN; const suppliedToken = request.headers.get('x-herreb-workforce-admin-token'); return Boolean(expectedToken && suppliedToken && constantTimeEqual(expectedToken, suppliedToken)); }
 function resolveWorkforceAdminActor(request: Request, env: WorkerEnv): WorkforceAdminResolvedActor | undefined { if (!isValidM2M(request, env)) return undefined; const configuredActorId = env.WORKFORCE_ADMIN_M2M_ACTOR_ID?.trim(); const configuredTenantId = env.WORKFORCE_ADMIN_M2M_TENANT_ID?.trim(); if (configuredActorId && configuredTenantId) return { actorId: configuredActorId, tenantId: configuredTenantId, role: 'owner' }; return undefined; }
-function resolveTenantOwner(request: Request, env: WorkerEnv, tenantId?: string): WorkforceAdminResolvedActor | undefined { if (!tenantId) return undefined; const actor = resolveWorkforceAdminActor(request, env); return actor?.tenantId === tenantId && actor.role === 'owner' ? actor : undefined; }
+function resolveTenantOwner(request: Request, env: WorkerEnv, tenantId?: string): WorkforceAdminResolvedActor | undefined { return resolveScopedM2MOwner({ authenticated: isValidM2M(request, env), actorId: env.WORKFORCE_ADMIN_M2M_ACTOR_ID, tenantId: env.WORKFORCE_ADMIN_M2M_TENANT_ID, requestedTenantId: tenantId }); }
 export { ChatAgent } from './server'; export { EMP002Operations } from './runtime/emp002-operations'; export { WorkforceAdminState } from './runtime/workforce-admin-state';
 export { EMP003CampaignState } from './runtime/emp003-campaign-state';
 export default {
