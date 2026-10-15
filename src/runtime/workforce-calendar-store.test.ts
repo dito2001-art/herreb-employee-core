@@ -45,3 +45,18 @@ test('native calendar never exposes another tenant records', () => {
   assert.equal(store.get('tenant-a', 'meeting-1')?.title, base.title);
   assert.equal(store.get('tenant-b', 'meeting-1')?.title, 'Private B');
 });
+
+test('native calendar rejects malformed fields without mutating tenant records', () => {
+  const store = new WorkforceCalendarStore(memorySql());
+  const invalid = [
+    { ...base, title: null },
+    { ...base, tenantId: 17 },
+    { ...base, startsAt: 42 },
+    { ...base, updatedAt: 'not-a-date' },
+    { ...base, endsAt: {} },
+  ];
+  for (const input of invalid) {
+    assert.throws(() => store.save(input as never), /INVALID_CALENDAR_ENTRY/);
+  }
+  assert.equal(store.get('tenant-a', base.id), undefined);
+});
