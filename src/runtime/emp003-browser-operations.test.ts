@@ -7,11 +7,11 @@ const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("bas
 const blueprint = { tenantId, correlationId: "corr", objective: "Generate B2B demand", audiences: ["buyers"], positioning: "reliable", keyMessages: ["value"], channels: [{ name: "Email", actions: ["Prepare a draft"] }], kpis: [{ metric: "leads", target: "10", measurement: "CRM" }], assumptions: [], evidenceRefs: ["https://example.com"], status: "DRAFT", publishApproved: false };
 const campaign = () => ({ campaignId: "campaign-1", blueprint: { ...blueprint }, reviewState: "DRAFT", reviewRevision: 1, requiresOwnerReview: true, publishAuthorized: false, publishExecuted: false });
 const payload = () => ({ ok: true, tenantId, campaigns: [campaign()] });
-async function setup(data: unknown = payload()) {
+async function setup(data: unknown = payload(), options: { reviewState?: string; corruptReadback?: boolean } = {}) {
  const pair = await webcrypto.subtle.generateKey({ name: "RSASSA-PKCS1-v1_5", modulusLength: 2048, publicExponent: new Uint8Array([1,0,1]), hash: "SHA-256" }, true, ["sign","verify"]);
  const jwk = await webcrypto.subtle.exportKey("jwk", pair.publicKey);
  let storedDraft: unknown = blueprint;
- const env = { WORKFORCE_ACCESS_TEAM_DOMAIN: "herreb.cloudflareaccess.com", WORKFORCE_ACCESS_AUDIENCE: "aud-client-0", ACCESS_IDENTITY_MAP_JSON: JSON.stringify([{ email: "owner@example.com", actorId: "owner", tenantId, role: "owner" }]), EMP003_CAMPAIGN_STATE: { idFromName: (id: string) => id, get: () => ({ fetch: async (request: Request) => { const url = new URL(request.url); if (url.pathname === "/operations") return Response.json(data); if (url.pathname === "/review") return Response.json({ ok: true, found: false, state: null }); if (url.pathname === "/draft" && request.method === "POST") { const value = await request.json(); storedDraft = value; return Response.json({ ok: true, persisted: true, campaign: value }); } if (url.pathname === "/draft" && request.method === "GET") return Response.json({ ok: true, found: true, campaign: storedDraft }); return Response.json({ ok: false }, { status: 404 }); } }) } };
+ const env = { WORKFORCE_ACCESS_TEAM_DOMAIN: "herreb.cloudflareaccess.com", WORKFORCE_ACCESS_AUDIENCE: "aud-client-0", ACCESS_IDENTITY_MAP_JSON: JSON.stringify([{ email: "owner@example.com", actorId: "owner", tenantId, role: "owner" }]), EMP003_CAMPAIGN_STATE: { idFromName: (id: string) => id, get: () => ({ fetch: async (request: Request) => { const url = new URL(request.url); if (url.pathname === "/operations") return Response.json(data); if (url.pathname === "/review") return Response.json({ ok: true, found: Boolean(options.reviewState), state: options.reviewState ? { state: options.reviewState } : null }); if (url.pathname === "/draft" && request.method === "POST") { const value = await request.json(); storedDraft = value; return Response.json({ ok: true, persisted: true, campaign: value }); } if (url.pathname === "/draft" && request.method === "GET") return Response.json({ ok: true, found: true, campaign: options.corruptReadback ? blueprint : storedDraft }); return Response.json({ ok: false }, { status: 404 }); } }) } };
  const fetcher = (async () => Response.json({ keys: [{ ...jwk, kid: "k1", alg: "RS256", use: "sig" }] })) as typeof fetch;
  const now = Math.floor(Date.now()/1000);
  const signed = b64({ alg: "RS256", kid: "k1" })+"."+b64({ email:"owner@example.com",iss:"https://herreb.cloudflareaccess.com",aud:"aud-client-0",iat:now-10,exp:now+3600 });
@@ -52,4 +52,21 @@ test("draft save requires verified Access identity", async () => {
  const { env, fetcher } = await setup();
  const response = await handleEMP003BrowserDraftSave(new Request("https://employee.herreb.com/api/emp003/drafts",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({campaignId:"campaign-3",blueprint})}),env,fetcher);
  assert.equal(response.status,401);
+});
+
+test("reviewed campaign is immutable even for authenticated owner", async () => {
+ const { env, fetcher, request } = await setup(payload(), { reviewState: "APPROVED" });
+ const response = await handleEMP003BrowserDraftSave(new Request("https://employee.herreb.com/api/emp003/drafts", {
+   method: "POST", headers: { "cf-access-jwt-assertion": request.headers.get("cf-access-jwt-assertion")!, "content-type": "application/json" },
+   body: JSON.stringify({ campaignId: "campaign-1", blueprint })
+ }), env, fetcher);
+ assert.equal(response.status, 409);
+});
+test("save refuses success when independent readback differs", async () => {
+ const { env, fetcher, request } = await setup(payload(), { corruptReadback: true });
+ const response = await handleEMP003BrowserDraftSave(new Request("https://employee.herreb.com/api/emp003/drafts", {
+   method: "POST", headers: { "cf-access-jwt-assertion": request.headers.get("cf-access-jwt-assertion")!, "content-type": "application/json" },
+   body: JSON.stringify({ campaignId: "campaign-2", blueprint: { ...blueprint, objective: "Edited and saved" } })
+ }), env, fetcher);
+ assert.equal(response.status, 503);
 });
