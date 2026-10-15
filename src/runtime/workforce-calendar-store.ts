@@ -35,7 +35,7 @@ export class WorkforceCalendarStore {
 
   list(tenantId: string, from: string, to: string): WorkforceCalendarEntry[] {
     if (!tenantId.trim() || !Number.isFinite(Date.parse(from)) || !Number.isFinite(Date.parse(to)) || Date.parse(from) >= Date.parse(to)) throw new Error('INVALID_CALENDAR_QUERY');
-    return Array.from(this.sql.exec('SELECT payload FROM workforce_calendar_entries WHERE tenant_id = ? AND starts_at >= ? AND starts_at < ? ORDER BY starts_at', tenantId, from, to))
+    return Array.from(this.sql.exec('SELECT payload FROM workforce_calendar_entries WHERE tenant_id = ? AND starts_at >= ? AND starts_at < ? ORDER BY starts_at', tenantId, new Date(from).toISOString(), new Date(to).toISOString()))
       .map(row => JSON.parse(String(row.payload)) as WorkforceCalendarEntry)
       .filter(entry => entry.tenantId === tenantId && entry.status === 'ACTIVE');
   }
