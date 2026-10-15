@@ -61,9 +61,10 @@ export class WorkforceAdminState extends DurableObject<AdminStateEnv> {
           store,
           audit,
         });
-        const state = await store.read();
+        // Never return the global tenant/identity registry in a mutation response.
+        // Authorized reads use the separately scoped admin GET projection.
         return Response.json(
-          { ...result, state },
+          { ...result },
           {
             status: result.ok ? 200 : 403,
             headers: { "cache-control": "no-store", ...probe },
