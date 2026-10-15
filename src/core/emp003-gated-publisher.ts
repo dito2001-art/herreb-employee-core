@@ -16,13 +16,13 @@ export async function executeEMP003GatedContentPublish(input: {
   idempotencyKey: string;
   authorization?: ControlledWriteAuthorization;
   publisher: ContentPublisher;
-}): Promise<{ executed: false; reason: string } | { executed: true; result: ExecutionResult<ContentPublishReceipt> }> {
+}): Promise<{ attempted: false; reason: string } | { attempted: true; result: ExecutionResult<ContentPublishReceipt> }> {
   const preflight = preflightEMP003ContentPublish(input);
-  if (!preflight.ready) return { executed: false, reason: preflight.reason };
-  if (!input.idempotencyKey.trim()) return { executed: false, reason: "IDEMPOTENCY_KEY_REQUIRED" };
+  if (!preflight.ready) return { attempted: false, reason: preflight.reason };
+  if (!input.idempotencyKey.trim()) return { attempted: false, reason: "IDEMPOTENCY_KEY_REQUIRED" };
   if (!input.authorization?.authorized || input.authorization.tenantId !== input.context.tenantId) {
-    return { executed: false, reason: "CONTROLLED_WRITE_AUTHORIZATION_REQUIRED" };
+    return { attempted: false, reason: "CONTROLLED_WRITE_AUTHORIZATION_REQUIRED" };
   }
   const result = await executeControlledContentPublish(input);
-  return { executed: true, result };
+  return { attempted: true, result };
 }
