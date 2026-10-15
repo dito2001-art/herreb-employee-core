@@ -29,7 +29,7 @@ export function EMP003CampaignDashboard() {
   const [evidence, setEvidence] = useState("https://herreb.com");
   const [campaignId, setCampaignId] = useState(newId());
 
-  async function load(preferredId?: string) {
+  async function load(preferredId?: string): Promise<boolean> {
     setLoading(true); setError("");
     try {
       const response = await fetch("/api/emp003/operations", { credentials: "same-origin", cache: "no-store" });
@@ -58,7 +58,8 @@ export function EMP003CampaignDashboard() {
           }
         }
       }
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Error de conexión"); }
+      return true;
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Error de conexión"); return false; }
     finally { setLoading(false); }
   }
   useEffect(() => { void load(); }, []);
@@ -80,7 +81,8 @@ export function EMP003CampaignDashboard() {
       const result = await response.json() as { ok?: boolean; error?: string; readBackConfirmed?: boolean; persisted?: boolean };
       if (!response.ok || !result.ok || !result.persisted || !result.readBackConfirmed) throw new Error(result.error ?? "No se pudo confirmar la persistencia");
       setCampaignId(nextId); setSelectedId(nextId);
-      await load(nextId);
+      const refreshed = await load(nextId);
+      if (!refreshed) throw new Error("Borrador guardado, pero no se pudo confirmar la actualización del listado. Volvé a consultar.");
       setNotice("Borrador guardado y vuelto a consultar. Sigue sin aprobación del propietario y no se publicó.");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "No se pudo guardar el borrador"); }
     finally { setSaving(false); }
