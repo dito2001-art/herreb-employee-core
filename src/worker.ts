@@ -56,6 +56,20 @@ export default {
       const response = await stub.fetch(new Request(destination, { method: request.method, headers: { 'content-type': 'application/json' }, ...(payload ? { body: JSON.stringify(payload) } : {}) }));
       return new Response(response.body, { status: response.status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
     }
+    if (url.pathname === '/api/internal/emp003/operations') {
+      if (request.method !== 'GET') return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405 });
+      if (!isValidM2M(request, runtimeEnv)) return Response.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
+      const tenantId = url.searchParams.get('tenantId')?.trim();
+      if (!tenantId || !/^[a-zA-Z0-9_-]{1,100}$/.test(tenantId)) return Response.json({ ok: false, error: 'EMP003_OPERATIONS_INVALID_TENANT' }, { status: 400 });
+      const owner = resolveTenantOwner(request, runtimeEnv, tenantId);
+      if (!owner || owner.actorId !== 'fernando' || owner.tenantId !== tenantId) return Response.json({ ok: false, error: 'EMP003_OPERATIONS_FORBIDDEN' }, { status: 403 });
+      if (!runtimeEnv.EMP003_CAMPAIGN_STATE) return Response.json({ ok: false, error: 'EMP003_OPERATIONS_STORAGE_UNAVAILABLE' }, { status: 503 });
+      const destination = new URL('https://emp003-campaign-state.internal/operations');
+      destination.searchParams.set('tenantId', tenantId);
+      const stub = runtimeEnv.EMP003_CAMPAIGN_STATE.get(runtimeEnv.EMP003_CAMPAIGN_STATE.idFromName(tenantId));
+      const response = await stub.fetch(new Request(destination, { method: 'GET' }));
+      return new Response(response.body, { status: response.status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+    }
     if (url.pathname === '/api/internal/emp003/drafts') {
       if (!['GET', 'POST'].includes(request.method)) return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405 });
       if (!isValidM2M(request, runtimeEnv)) return Response.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
