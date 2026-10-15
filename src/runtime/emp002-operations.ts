@@ -159,7 +159,7 @@ export class EMP002Operations implements DurableObject {
         if (receipt) {
           try {
             const whatsapp = buildEMP002WhatsAppTransport(this.env, message.tenantId);
-            const outbound = await whatsapp.sendText({ tenantId: message.tenantId, to: message.from, body: receipt.reply, audience: 'EXTERNAL_CONTACT', correlationId: `wa:${message.messageId}`, idempotencyKey: `emp002-${receipt.mode}:${message.messageId}` });
+            const outbound = await whatsapp.sendText({ tenantId: message.tenantId, to: message.from, body: receipt.reply, audience: 'EXTERNAL_CONTACT', correlationId: `wa:${message.messageId}`, idempotencyKey: `emp002-${receipt.mode.replace('native-calendar-', 'native-')}:${message.messageId}` });
             return Response.json({ ok: true, handled: true, mode: receipt.mode, recovered: true, readBackConfirmed: true, outboundMessageId: outbound.messageId });
           } catch (error) {
             return Response.json({ ok: false, handled: false, error: error instanceof Error ? error.message : 'EMP002_NATIVE_DELIVERY_RETRY_FAILED' }, { status: 503 });
