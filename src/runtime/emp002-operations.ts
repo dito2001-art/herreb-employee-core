@@ -138,11 +138,14 @@ export class EMP002Operations implements DurableObject {
       // General conversation stays available only outside calendar-capable paths.
       const message = await request.json<RoutedWhatsAppInbound>().catch(() => null);
       if (!message || typeof message.body !== 'string') return Response.json({ ok: false, error: 'INVALID_WHATSAPP_INBOUND' }, { status: 400 });
+      if (!message?.tenantId || !message?.from || !message?.messageId || typeof message.body !== 'string') return Response.json({ ok: false, error: 'INVALID_WHATSAPP_INBOUND' }, { status: 400 });
       const calendarRequested = isEMP002CalendarReadIntent(message.body) || /agenda|agendar|agend[aá]|reuni[oó]n|reuniones|citas?|calendario|recordatorios?|reservar|reprogramar|cancelar turno|turnos?/i.test(message.body);
       if (calendarRequested) {
+        const manifests = (() => { try { return JSON.parse(this.env.TENANT_MANIFESTS_JSON ?? '[]') as Array<{ tenantId?: string; whatsappOwners?: string[] }>; } catch { return []; } })();
+        const owners = (manifests.find(m => m.tenantId?.trim() === message.tenantId)?.whatsappOwners ?? []).map(normalizeEMP002WhatsAppNumber);
+        if (!owners.includes(normalizeEMP002WhatsAppNumber(message.from))) return Response.json({ ok: false, handled: false, error: 'EMP002_OWNER_VERIFICATION_FAILED' }, { status: 403 });
         return Response.json({ ok: false, handled: false, error: 'EMP002_NATIVE_CALENDAR_CONVERSATION_NOT_CONNECTED' }, { status: 503 });
       }
-      if (!message?.tenantId || !message?.from || !message?.messageId || typeof message.body !== 'string') return Response.json({ ok: false, error: 'INVALID_WHATSAPP_INBOUND' }, { status: 400 });
       const record = await this.dispatchStore.findActiveByWhatsapp(message.tenantId, message.from);
       if (!record) {
         try {
