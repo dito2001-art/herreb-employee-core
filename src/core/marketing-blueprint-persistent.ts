@@ -6,6 +6,7 @@ export interface BlueprintRepository {
   get(tenantId: string, campaignId: string): Promise<MarketingCampaignBlueprint | undefined>;
   put(tenantId: string, campaignId: string, blueprint: MarketingCampaignBlueprint): Promise<void>;
   list(tenantId: string): Promise<MarketingCampaignBlueprint[]>;
+  listWithIds(tenantId: string): Promise<Array<{ campaignId: string; blueprint: MarketingCampaignBlueprint }>>;
 }
 function safeId(value: string): string {
   if (!/^[a-zA-Z0-9_-]{1,100}$/.test(value)) throw new Error("EMP003_STORAGE_ID_INVALID");
@@ -28,6 +29,15 @@ export function createPersistentBlueprintRepository(storage: CampaignStorage): B
       const validated = MarketingCampaignBlueprintSchema.parse(blueprint);
       if (validated.tenantId !== tenantId) throw new Error("EMP003_STORAGE_TENANT_VIOLATION");
       await storage.put(key(tenantId, campaignId), JSON.stringify(validated));
+    },
+    async listWithIds(tenantId) {
+      const records = await storage.list(prefix(tenantId));
+      return records.map(({ key: storedKey, value }) => {
+        if (!storedKey.startsWith(prefix(tenantId))) throw new Error("EMP003_STORAGE_TENANT_VIOLATION");
+        const campaignId = storedKey.slice(prefix(tenantId).length);
+        safeId(campaignId);
+        return { campaignId, blueprint: decode(value, tenantId) };
+      });
     },
     async list(tenantId) {
       const records = await storage.list(prefix(tenantId));
