@@ -44,9 +44,11 @@ export function EMP003CampaignDashboard() {
       const selected = cards.find(item => item.campaignId === nextId);
       if (selected) {
         const draftResponse = await fetch(`/api/emp003/drafts?campaignId=${encodeURIComponent(selected.campaignId)}`, { credentials: "same-origin", cache: "no-store" });
-        if (draftResponse.ok) {
+        if (!draftResponse.ok) throw new Error("No se pudo volver a consultar el borrador guardado");
+        {
           const stored = await draftResponse.json() as { campaign?: MarketingCampaignBlueprint };
           const blueprint = stored.campaign;
+          if (!blueprint) throw new Error("El borrador guardado no aparece en la lectura posterior");
           if (blueprint) {
             setCampaignId(selected.campaignId); setObjective(blueprint.objective);
             setAudiences(blueprint.audiences.join("\n")); setPositioning(blueprint.positioning);
