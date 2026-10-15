@@ -52,8 +52,7 @@ export async function executeWorkforceAdminMutation(input: {
   store: WorkforceAdminStateStore;
   audit: WorkforceAdminAuditSink;
   policy?: WorkforceAdminPolicy;
-  /** Reserved for server-verified approval evidence; browser booleans are not approval evidence. */
-  approvalEvidence?: { approvedBy: string; approvalId: string };
+
   now?: () => Date;
   randomId?: () => string;
 }): Promise<{ ok: boolean; decision: AdminWriteDecision; persisted: boolean; auditId: string }> {
@@ -61,9 +60,8 @@ export async function executeWorkforceAdminMutation(input: {
   const decision = policy.evaluate(input.actor, input.mutation);
   const auditId = (input.randomId ?? (() => crypto.randomUUID()))();
   const timestamp = (input.now ?? (() => new Date()))().toISOString();
-  const validApproval = decision === "YELLOW" && Boolean(input.approvalEvidence?.approvedBy.trim() && input.approvalEvidence?.approvalId.trim());
-  // YELLOW must carry server-verified approval evidence; a caller-controlled boolean is insufficient.
-  const permitted = decision === "GREEN" || validApproval;
+  // Fail closed: YELLOW remains non-persistent until a separately authenticated approval workflow exists.
+  const permitted = decision === "GREEN";
   let persisted = false;
 
   if (permitted) {
