@@ -187,8 +187,15 @@ export class EMP002Operations implements DurableObject {
                 const verify = await readCalendar.execute({ tenantId: message.tenantId, request: { operation: 'search', timeMin: window.timeMin, timeMax: window.timeMax }, correlationId: `${correlationId}:readback` });
                 if (!verify.ok) throw new Error('EMP002_OWNER_CALENDAR_READBACK_FAILED');
                 const after = (verify.output as { data?: Array<Record<string, unknown>> })?.data ?? [];
-                const exists = after.some((item) => String(item.id ?? '') === id);
-                if (ownerCommand.operation === 'delete' ? exists : !exists) throw new Error('EMP002_OWNER_CALENDAR_PERSISTENCE_NOT_CONFIRMED');
+                const persisted = after.find((item) => String(item.id ?? '') === id);
+                if (ownerCommand.operation === 'delete' ? Boolean(persisted) : !persisted) throw new Error('EMP002_OWNER_CALENDAR_PERSISTENCE_NOT_CONFIRMED');
+                if (ownerCommand.operation === 'update' && persisted) {
+                  const changes = ownerCommand.changes as Record<string, unknown>;
+                  // A matching ID does not certify an update: verify each requested field.
+                  if (!Object.entries(changes).every(([field, value]) => JSON.stringify(persisted[field]) === JSON.stringify(value))) {
+                    throw new Error('EMP002_OWNER_CALENDAR_UPDATE_READBACK_MISMATCH');
+                  }
+                }
                 reply = ownerCommand.operation === 'delete' ? 'Hecho. Cancelé la reunión y confirmé el cambio en el CRM.' : 'Hecho. Reprogramé la reunión y confirmé el cambio en el CRM.';
                 mode = ownerCommand.operation === 'delete' ? 'calendar-delete' : 'calendar-update';
               }
