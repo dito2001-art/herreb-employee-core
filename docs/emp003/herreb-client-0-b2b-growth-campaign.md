@@ -86,4 +86,4 @@ Entregable posterior, si hay encaje: resumen de oportunidad con problema prioriz
 4. Cambiar objetivo o mensaje y comprobar que la versión editada se guarda y se vuelve a leer sin cambios.
 5. Confirmar que la campaña se identifica como borrador y que no se publicó ni se envió nada.
 
-**Limitación verificada en el código actual:** el panel `EMP003CampaignDashboard` es de solo lectura; muestra campañas y su estado, pero no presenta controles para crear/editar desde la interfaz. La edición y read-back existen en la certificación de API, pero todavía hace falta conectar una UI autenticada de edición para considerar completa la demostración interactiva de extremo a extremo.
+**Estado de implementación (rama PR #282):** el componente `EMP003CampaignDashboard` contiene controles para crear y editar borradores, guardar y consultar nuevamente. Los controles no están certificados aún mediante una sesión real autenticada del portal ni mediante una prueba de navegador ejecutada. El flujo de API de edición y read-back requiere certificación integrada en un entorno autorizado. Ninguna campaña de esta propuesta fue publicada, enviada o aprobada automáticamente.
