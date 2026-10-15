@@ -181,7 +181,7 @@ export async function handleWorkforceAdminGet(
     )
       throw new Error("WORKFORCE_ADMIN_STATE_INVALID");
     const snapshot = projectAuthorizedWorkforceAdminRead(body.state, actor);
-    return Response.json({ ok: true, snapshot }, { headers });
+    return Response.json({ ok: true, authorization: { role: actor.role, scope: actor.tenantId }, snapshot }, { headers });
   } catch (cause) {
     const code = cause instanceof Error ? cause.message : "";
     if (code.startsWith("WORKFORCE_ADMIN_READ_")) {
