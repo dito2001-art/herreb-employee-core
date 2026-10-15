@@ -65,6 +65,16 @@ export async function executeWorkforceAdminMutation(input: {
 
   if (permitted) {
     const current = await input.store.read();
+    // A tenant owner must not take over an existing identity assigned to another tenant.
+    // Check persisted state, not only caller-provided tenantId.
+    if (input.actor.role === "owner" && input.mutation.type === "identity.upsert") {
+      const email = input.mutation.identity.email.trim().toLowerCase();
+      const existing = current.identities.find((identity) => identity.email.trim().toLowerCase() === email);
+      if (existing && existing.tenantId !== input.actor.tenantId) {
+        await input.audit.append({ auditId, actorId: input.actor.actorId, tenantId: input.actor.tenantId, mutationType: input.mutation.type, decision: "RED", persisted: false, timestamp });
+        return { ok: false, decision: "RED", persisted: false, auditId };
+      }
+    }
     const next = planWorkforceAdminMutation(current, input.mutation);
     await input.store.write(next);
     persisted = true;
