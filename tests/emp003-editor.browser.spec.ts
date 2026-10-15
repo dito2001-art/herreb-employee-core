@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 
 const tenant = "herreb-browser-test-a";
-const campaignId = "herreb-browser-e2e";
+let campaignId = "herreb-browser-e2e";
 const blueprint = (objective: string) => ({
   tenantId: tenant, correlationId: "ui-" + campaignId, objective,
   audiences: ["Dirección comercial"], positioning: "Estrategia y crecimiento",
@@ -28,6 +28,7 @@ test("browser: create, edit, reload, read-back, approved lock and failed read-ba
     if (req.method() === "GET") return failRead ? json({ error: "read failure" }, 503) : json({ ok: true, campaign: stored });
     if (req.method() === "POST") {
       const body = req.postDataJSON();
+      campaignId = body.campaignId;
       stored = body.blueprint;
       return json({ ok: true, persisted: true, readBackConfirmed: true });
     }
