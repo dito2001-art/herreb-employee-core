@@ -44,8 +44,12 @@ export class WorkforceCalendarStore {
     if (!input || typeof input !== 'object' || typeof input.tenantId !== 'string' || typeof input.id !== 'string' || typeof input.title !== 'string' || typeof input.startsAt !== 'string' || typeof input.updatedAt !== 'string' || (input.endsAt !== undefined && typeof input.endsAt !== 'string') || !input.tenantId.trim() || !input.id.trim() || !input.title.trim() || !['TASK', 'MEETING', 'EVENT'].includes(input.kind) || !['ACTIVE', 'CANCELLED'].includes(input.status) || !Number.isFinite(Date.parse(input.startsAt)) || !Number.isFinite(Date.parse(input.updatedAt)) || (input.endsAt && (!Number.isFinite(Date.parse(input.endsAt)) || Date.parse(input.endsAt) <= Date.parse(input.startsAt)))) throw new Error('INVALID_CALENDAR_ENTRY');
     if (input.kind !== 'TASK' && !input.endsAt) throw new Error('CALENDAR_END_REQUIRED');
     if (input.status === 'ACTIVE' && input.kind !== 'TASK' && input.endsAt) {
-      const overlaps = this.list(input.tenantId, new Date(Date.parse(input.startsAt) - 86400000).toISOString(), new Date(Date.parse(input.endsAt) + 86400000).toISOString());
-      if (overlaps.some(entry => entry.id !== input.id && entry.kind !== 'TASK' && entry.endsAt && Date.parse(entry.startsAt) < Date.parse(input.endsAt!) && Date.parse(entry.endsAt) > Date.parse(input.startsAt))) throw new Error('CALENDAR_TIME_CONFLICT');
+      // Include earlier-starting meetings that can still overlap this slot.
+      // A finite lookback would miss long-running events.
+      const overlaps = Array.from(this.sql.exec('SELECT payload FROM workforce_calendar_entries WHERE tenant_id = ? AND starts_at < ? ORDER BY starts_at', input.tenantId, new Date(input.endsAt).toISOString()))
+        .map(row => JSON.parse(String(row.payload)) as WorkforceCalendarEntry)
+        .filter(entry => entry.tenantId === input.tenantId && entry.status === 'ACTIVE' && entry.id !== input.id && entry.kind !== 'TASK' && entry.endsAt);
+      if (overlaps.some(entry => Date.parse(entry.startsAt) < Date.parse(input.endsAt!) && Date.parse(entry.endsAt!) > Date.parse(input.startsAt))) throw new Error('CALENDAR_TIME_CONFLICT');
     }
     const current = this.get(input.tenantId, input.id);
     if ((current?.version ?? 0) !== expectedVersion) throw new Error('CALENDAR_VERSION_CONFLICT');
