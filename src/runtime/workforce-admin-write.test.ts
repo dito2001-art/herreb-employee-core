@@ -227,3 +227,19 @@ test("YELLOW identity deletion remains denied and audited even for platform admi
   assert.equal(h.audits[0]?.decision, "YELLOW");
   assert.equal(h.audits[0]?.persisted, false);
 });
+
+test("platform admin cannot silently transfer an existing email to another tenant", async () => {
+  const h = harness();
+  const result = await executeWorkforceAdminMutation({
+    actor: { actorId: "platform", tenantId: "platform", role: "platform_admin" },
+    mutation: { type: "identity.upsert", identity: { email: "OWNER@HERREB.TEST", tenantId: "pilot", actorId: "transferred", role: "owner" } },
+    store: h.store,
+    audit: h.audit,
+    randomId: () => "platform-takeover-denied"
+  });
+  assert.equal(result.decision, "RED");
+  assert.equal(result.persisted, false);
+  assert.equal(h.getState().identities[0]?.tenantId, "herreb");
+  assert.equal(h.getState().identities[0]?.actorId, "owner");
+  assert.equal(h.audits[0]?.decision, "RED");
+});
