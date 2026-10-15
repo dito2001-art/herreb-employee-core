@@ -84,7 +84,7 @@ test("missing JWT, forged email header, wrong audience and tampered signature ar
 });
 test("regular user is denied and no data is returned", async () => {
   const f = await setup();
-  f.env.ACCESS_IDENTITY_MAP_JSON = JSON.stringify([{ ...state.identities[0], role: "user" }]);
+  f.env.WORKFORCE_ADMIN_STATE.get = () => ({ fetch: async () => Response.json({ ok: true, state: { ...state, identities: [{ ...state.identities[0], role: "user" }, state.identities[1]] } }) });
   const response = await handleWorkforceAdminGet(new Request("https://employee.herreb.com/api/admin/workforce", { headers: { "cf-access-jwt-assertion": await f.token("owner@example.com") } }), f.env, f.fetcher);
   assert.equal(response.status, 403);
   assert.equal(JSON.stringify(await response.json()).includes("alpha-k"), false);
