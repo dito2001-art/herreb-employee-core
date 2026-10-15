@@ -52,7 +52,7 @@ export function EMP003CampaignDashboard() {
         <p className="text-sm text-kumo-subtle">Propuestas y revisiones. La publicación está deshabilitada.</p>
         {tenantId && <p className="text-xs text-kumo-subtle">Empresa: {tenantId}</p>}
       </header>
-      {loading && <p role="status">Cargando campañas…</p>}
+      {loading && <output>Cargando campañas…</output>}
       {error && <p role="alert" className="text-kumo-danger">{error}</p>}
       {!loading && !error && campaigns.length === 0 && <p>Todavía no hay campañas para mostrar.</p>}
       {!loading && !error && campaigns.length > 0 && (
