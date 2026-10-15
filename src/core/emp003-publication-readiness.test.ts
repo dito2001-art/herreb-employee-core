@@ -18,10 +18,10 @@ test("EMP-003 publication readiness requires all independent gates", () => {
 });
 
 test("EMP-003 publication readiness rejects unsafe conditions", () => {
-  const cases: Array<{ override: Partial<typeof valid>; reason: string }> = [
+  const cases: Array<{ override: Partial<import("./emp003-publication-readiness").CampaignPublicationReadinessInput>; reason: string }> = [
     { override: { campaignTenantId: "tenant-b" }, reason: "TENANT_MISMATCH" },
-    { override: { reviewState: { state: "DRAFT", publishExecuted: false } as typeof valid.reviewState }, reason: "CAMPAIGN_NOT_APPROVED" },
-    { override: { contentStatus: "APPROVED" as typeof valid.contentStatus }, reason: "CONTENT_APPROVAL_REQUIRED" },
+    { override: { reviewState: { state: "DRAFT", publishExecuted: false } }, reason: "CAMPAIGN_NOT_APPROVED" },
+    { override: { contentStatus: "APPROVED" }, reason: "CONTENT_APPROVAL_REQUIRED" },
     { override: { approvedBy: "" }, reason: "CONTENT_APPROVAL_REQUIRED" },
     { override: { approvalEvidenceRef: "" }, reason: "CONTENT_APPROVAL_REQUIRED" },
     { override: { channelAuthorized: false }, reason: "CHANNEL_NOT_AUTHORIZED" },
