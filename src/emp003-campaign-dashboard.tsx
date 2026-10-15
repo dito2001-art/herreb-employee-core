@@ -5,7 +5,7 @@ import type { MarketingCampaignBlueprint } from "./core/marketing-campaign-bluep
 const stateLabel: Record<EMP003CampaignReviewCard["reviewState"], string> = {
   DRAFT: "Borrador sin aprobar", IN_REVIEW: "En revisión", APPROVED: "Aprobada por el propietario", REJECTED: "Rechazada"
 };
-const split = (value: string) => value.split("\\n").map(item => item.trim()).filter(Boolean);
+const split = (value: string) => value.split("\n").map(item => item.trim()).filter(Boolean);
 const newId = () => `herreb-${Date.now().toString(36)}`;
 
 export function EMP003CampaignDashboard() {
@@ -49,12 +49,12 @@ export function EMP003CampaignDashboard() {
           const blueprint = stored.campaign;
           if (blueprint) {
             setCampaignId(selected.campaignId); setObjective(blueprint.objective);
-            setAudiences(blueprint.audiences.join("\\n")); setPositioning(blueprint.positioning);
-            setMessages(blueprint.keyMessages.join("\\n")); setChannelName(blueprint.channels[0]?.name ?? "LinkedIn");
-            setChannelActions(blueprint.channels[0]?.actions.join("\\n") ?? "");
+            setAudiences(blueprint.audiences.join("\n")); setPositioning(blueprint.positioning);
+            setMessages(blueprint.keyMessages.join("\n")); setChannelName(blueprint.channels[0]?.name ?? "LinkedIn");
+            setChannelActions(blueprint.channels[0]?.actions.join("\n") ?? "");
             setKpiMetric(blueprint.kpis[0]?.metric ?? ""); setKpiTarget(blueprint.kpis[0]?.target ?? "");
-            setKpiMeasurement(blueprint.kpis[0]?.measurement ?? ""); setAssumptions(blueprint.assumptions.join("\\n"));
-            setEvidence(blueprint.evidenceRefs.join("\\n"));
+            setKpiMeasurement(blueprint.kpis[0]?.measurement ?? ""); setAssumptions(blueprint.assumptions.join("\n"));
+            setEvidence(blueprint.evidenceRefs.join("\n"));
           }
         }
       }
