@@ -183,10 +183,13 @@ export class EMP002Operations implements DurableObject {
             const first = await this.conversationStore.markInboundOnce(message.tenantId, message.messageId, message.receivedAt);
             if (!first) return Response.json({ ok: true, handled: true, duplicate: true, mode: 'native-calendar-update' });
             try {
-              const updated = this.nativeCalendar.save({ ...target, title: changes.title ?? target.title, startsAt: start, endsAt: end, updatedAt: new Date().toISOString() }, target.version);
+              const updated = this.state.storage.transactionSync(() => {
+                const saved = this.nativeCalendar.save({ ...target, title: changes.title ?? target.title, startsAt: start, endsAt: end, updatedAt: new Date().toISOString() }, target.version);
+                this.saveNativeReceipt(message.tenantId, message.messageId, { reply: `Actualicé "${saved.title}" y confirmé el cambio en el calendario de Workforce.`, mode: 'native-calendar-update', recordId: saved.id });
+                return saved;
+              });
               const readBack = this.nativeCalendar.get(message.tenantId, target.id);
               if (!readBack || readBack.version !== updated.version || readBack.title !== updated.title || readBack.startsAt !== updated.startsAt || readBack.endsAt !== updated.endsAt) throw new Error('EMP002_NATIVE_CALENDAR_UPDATE_READBACK_FAILED');
-              this.saveNativeReceipt(message.tenantId, message.messageId, { reply: `Actualicé "${updated.title}" y confirmé el cambio en el calendario de Workforce.`, mode: 'native-calendar-update', recordId: updated.id });
               const whatsapp = buildEMP002WhatsAppTransport(this.env, message.tenantId);
               const outbound = await whatsapp.sendText({ tenantId: message.tenantId, to: message.from, body: `Actualicé "${updated.title}" y confirmé el cambio en el calendario de Workforce.`, audience: 'EXTERNAL_CONTACT', correlationId: `wa:${message.messageId}`, idempotencyKey: `emp002-native-update:${message.messageId}` });
               return Response.json({ ok: true, handled: true, mode: 'native-calendar-update', readBackConfirmed: true, outboundMessageId: outbound.messageId });
@@ -198,7 +201,10 @@ export class EMP002Operations implements DurableObject {
           const first = await this.conversationStore.markInboundOnce(message.tenantId, message.messageId, message.receivedAt);
           if (!first) return Response.json({ ok: true, handled: true, duplicate: true, mode: 'native-calendar-cancel' });
           try {
-            const cancelled = this.nativeCalendar.save({ ...target, status: 'CANCELLED', updatedAt: new Date().toISOString() }, target.version);
+            const cancelled = this.state.storage.transactionSync(() => {
+              const saved = this.nativeCalendar.save({ ...target, status: 'CANCELLED', updatedAt: new Date().toISOString() }, target.version);
+                return saved;
+            });
             const readBack = this.nativeCalendar.get(message.tenantId, target.id);
             if (!readBack || readBack.version !== cancelled.version || readBack.status !== 'CANCELLED') throw new Error('EMP002_NATIVE_CALENDAR_CANCEL_READBACK_FAILED');
             this.saveNativeReceipt(message.tenantId, message.messageId, { reply: `Cancelé "${target.title}" y confirmé el cambio en el calendario de Workforce.`, mode: 'native-calendar-cancel', recordId: target.id });
@@ -222,7 +228,11 @@ export class EMP002Operations implements DurableObject {
             const end = new Date(command.endTime).toISOString();
             const existing = this.nativeCalendar.get(message.tenantId, id);
             if (existing && (existing.title !== command.title || existing.startsAt !== start || existing.endsAt !== end || existing.status !== 'ACTIVE')) throw new Error('EMP002_NATIVE_CALENDAR_IDEMPOTENCY_MISMATCH');
-            const entry = existing ?? this.nativeCalendar.save({ tenantId: message.tenantId, id, kind: 'MEETING', title: command.title, startsAt: start, endsAt: end, status: 'ACTIVE', updatedAt: new Date().toISOString() }, 0);
+            const entry = this.state.storage.transactionSync(() => {
+              const saved = existing ?? this.nativeCalendar.save({ tenantId: message.tenantId, id, kind: 'MEETING', title: command.title, startsAt: start, endsAt: end, status: 'ACTIVE', updatedAt: new Date().toISOString() }, 0);
+              this.saveNativeReceipt(message.tenantId, message.messageId, { reply: `Agendé "${saved.title}" para ${saved.startsAt} y confirmé que quedó guardada en el calendario de Workforce.`, mode: 'native-calendar-create', recordId: id });
+              return saved;
+            });
             const readBack = this.nativeCalendar.get(message.tenantId, id);
             if (!readBack || JSON.stringify(entry) !== JSON.stringify(readBack)) throw new Error('EMP002_NATIVE_CALENDAR_READBACK_FAILED');
             reply = `Agendé "${entry.title}" para ${entry.startsAt} y confirmé que quedó guardada en el calendario de Workforce.`;
@@ -233,7 +243,7 @@ export class EMP002Operations implements DurableObject {
             reply = entries.length ? `Tu agenda de Workforce: ${entries.map(entry => `${entry.title} (${entry.startsAt})`).join('; ')}` : 'No tenés reuniones registradas en Workforce para ese período.';
             mode = 'native-calendar-read';
           }
-          this.saveNativeReceipt(message.tenantId, message.messageId, { reply, mode, recordId: command.operation === 'create' ? `wa-${message.messageId}` : '' });
+          if (command.operation !== 'create') this.saveNativeReceipt(message.tenantId, message.messageId, { reply, mode, recordId: '' });
           const whatsapp = buildEMP002WhatsAppTransport(this.env, message.tenantId);
           const outbound = await whatsapp.sendText({ tenantId: message.tenantId, to: message.from, body: reply, audience: 'EXTERNAL_CONTACT', correlationId: `wa:${message.messageId}`, idempotencyKey: `emp002-${mode}:${message.messageId}` });
           await this.conversationStore.append(message.tenantId, message.from, { role: 'assistant', content: reply, at: new Date().toISOString(), messageId: outbound.messageId ?? undefined });
