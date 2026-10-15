@@ -146,7 +146,28 @@ export class EMP002Operations implements DurableObject {
         if (!owners.includes(normalizeEMP002WhatsAppNumber(message.from))) return Response.json({ ok: false, handled: false, error: 'EMP002_OWNER_VERIFICATION_FAILED' }, { status: 403 });
         // Owner-only native calendar path. Never fall through to legacy CRM transports.
         const command = await parseEMP002OwnerCalendarCommand(this.env.AI, message.body, new Date().toISOString()).catch(() => ({ operation: 'none' as const }));
-        if (command.operation === 'update' || command.operation === 'delete') return Response.json({ ok: false, handled: false, error: 'EMP002_NATIVE_CALENDAR_MUTATION_NOT_CONNECTED' }, { status: 503 });
+        if (command.operation === 'update' || command.operation === 'delete') {
+          const window = resolveEMP002CalendarQueryWindow(message.body, new Date());
+          const tokens = command.query.toLocaleLowerCase('es').split(/\\s+/).filter(token => token.length > 2);
+          const matches = this.nativeCalendar.list(message.tenantId, window.timeMin, window.timeMax)
+            .filter(entry => tokens.length > 0 && tokens.some(token => entry.title.toLocaleLowerCase('es').includes(token)));
+          if (matches.length !== 1) return Response.json({ ok: false, handled: false, error: matches.length ? 'EMP002_NATIVE_CALENDAR_AMBIGUOUS_TARGET' : 'EMP002_NATIVE_CALENDAR_TARGET_NOT_FOUND' }, { status: 422 });
+          const target = matches[0];
+          if (command.operation === 'update') return Response.json({ ok: false, handled: false, error: 'EMP002_NATIVE_CALENDAR_UPDATE_NOT_CONNECTED' }, { status: 503 });
+          const first = await this.conversationStore.markInboundOnce(message.tenantId, message.messageId, message.receivedAt);
+          if (!first) return Response.json({ ok: true, handled: true, duplicate: true, mode: 'native-calendar-cancel' });
+          try {
+            const cancelled = this.nativeCalendar.save({ ...target, status: 'CANCELLED', updatedAt: new Date().toISOString() }, target.version);
+            const readBack = this.nativeCalendar.get(message.tenantId, target.id);
+            if (!readBack || readBack.version !== cancelled.version || readBack.status !== 'CANCELLED') throw new Error('EMP002_NATIVE_CALENDAR_CANCEL_READBACK_FAILED');
+            const whatsapp = buildEMP002WhatsAppTransport(this.env, message.tenantId);
+            const outbound = await whatsapp.sendText({ tenantId: message.tenantId, to: message.from, body: `Cancelé "${target.title}" y confirmé el cambio en el calendario de Workforce.`, audience: 'EXTERNAL_CONTACT', correlationId: `wa:${message.messageId}`, idempotencyKey: `emp002-native-cancel:${message.messageId}` });
+            return Response.json({ ok: true, handled: true, mode: 'native-calendar-cancel', readBackConfirmed: true, outboundMessageId: outbound.messageId });
+          } catch (error) {
+            await this.conversationStore.releaseInboundForRetry(message.tenantId, message.messageId);
+            return Response.json({ ok: false, handled: false, error: error instanceof Error ? error.message : 'EMP002_NATIVE_CALENDAR_CANCEL_FAILED' }, { status: 503 });
+          }
+        }
         if (command.operation === 'none' && !isEMP002CalendarReadIntent(message.body)) return Response.json({ ok: false, handled: false, error: 'EMP002_NATIVE_CALENDAR_COMMAND_AMBIGUOUS' }, { status: 422 });
         const first = await this.conversationStore.markInboundOnce(message.tenantId, message.messageId, message.receivedAt);
         if (!first) return Response.json({ ok: true, handled: true, duplicate: true, mode: 'native-calendar' });
