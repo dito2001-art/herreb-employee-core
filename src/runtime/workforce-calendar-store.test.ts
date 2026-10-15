@@ -77,3 +77,10 @@ test('native calendar rejects overlapping meetings but isolates tenants', () => 
   assert.equal(store.save({ ...base, tenantId: 'tenant-b', id: 'meeting-2' }).version, 1);
   assert.equal(store.save({ ...base, id: 'meeting-3', startsAt: '2026-10-16T13:00:00.000Z', endsAt: '2026-10-16T14:00:00.000Z' }).version, 1);
 });
+
+test('native meetings and events require an end time', () => {
+  const store = new WorkforceCalendarStore(memorySql());
+  assert.throws(() => store.save({ ...base, endsAt: undefined }), /CALENDAR_END_REQUIRED/);
+  assert.throws(() => store.save({ ...base, kind: 'EVENT', endsAt: undefined }), /CALENDAR_END_REQUIRED/);
+  assert.equal(store.save({ ...base, kind: 'TASK', endsAt: undefined }).version, 1);
+});
