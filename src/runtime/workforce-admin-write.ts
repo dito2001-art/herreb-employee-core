@@ -68,10 +68,13 @@ export async function executeWorkforceAdminMutation(input: {
     const current = await input.store.read();
     // A tenant owner must not take over an existing identity assigned to another tenant.
     // Check persisted state, not only caller-provided tenantId.
-    if (input.actor.role === "owner" && input.mutation.type === "identity.upsert") {
+    if (input.mutation.type === "identity.upsert") {
       const email = input.mutation.identity.email.trim().toLowerCase();
       const existing = current.identities.find((identity) => identity.email.trim().toLowerCase() === email);
-      if (existing && existing.tenantId !== input.actor.tenantId) {
+      // A GREEN upsert must never reassign an existing identity to a different tenant,
+      // including when the caller is a platform administrator. Such a transfer requires
+      // a separate, explicitly authorized and audited workflow.
+      if (existing && existing.tenantId !== input.mutation.identity.tenantId) {
         await input.audit.append({ auditId, actorId: input.actor.actorId, tenantId: input.actor.tenantId, mutationType: input.mutation.type, decision: "RED", persisted: false, timestamp });
         return { ok: false, decision: "RED", persisted: false, auditId };
       }
