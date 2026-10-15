@@ -112,7 +112,6 @@ test("tenant owner cannot create tenants even with approval", async () => {
     mutation,
     store: h.store,
     audit: h.audit,
-    approveYellow: true,
     randomId: () => "audit-4"
   });
   assert.equal(blocked.decision, "RED");
@@ -129,7 +128,6 @@ test("tenant owner cannot delete an identity without tenant-scoped lookup", asyn
     mutation: { type: "identity.delete", email: "owner@herreb.test" },
     store: h.store,
     audit: h.audit,
-    approveYellow: true,
     randomId: () => "audit-delete"
   });
   assert.equal(result.decision, "RED");
@@ -148,10 +146,10 @@ test("platform administrator requires YELLOW approval to create a tenant", async
   const blocked = await executeWorkforceAdminMutation({ actor, mutation, store: h.store, audit: h.audit, randomId: () => "platform-1" });
   assert.equal(blocked.decision, "YELLOW");
   assert.equal(blocked.persisted, false);
-  const approved = await executeWorkforceAdminMutation({ actor, mutation, store: h.store, audit: h.audit, approveYellow: true, randomId: () => "platform-2" });
-  assert.equal(approved.decision, "YELLOW");
-  assert.equal(approved.persisted, true);
-  assert.equal(h.getState().manifests.length, 2);
+  const secondAttemptWithoutEvidence = await executeWorkforceAdminMutation({ actor, mutation, store: h.store, audit: h.audit, randomId: () => "platform-2" });
+  assert.equal(secondAttemptWithoutEvidence.decision, "YELLOW");
+  assert.equal(secondAttemptWithoutEvidence.persisted, false);
+  assert.equal(h.getState().manifests.length, 1);
 });
 
 test("tenant owner cannot modify another tenant while platform administrator can", async () => {
@@ -178,5 +176,23 @@ test("owner cannot take over an existing identity from another tenant; denial is
   assert.equal(h.getState().identities[0]?.tenantId, "herreb");
   assert.equal(h.getState().identities[0]?.actorId, "owner");
   assert.equal(h.audits[0]?.decision, "RED");
+  assert.equal(h.audits[0]?.persisted, false);
+});
+
+test("YELLOW write cannot be self-approved with a caller-controlled boolean", async () => {
+  const h = harness();
+  const actor = { actorId: "platform", tenantId: "platform", role: "platform_admin" as const };
+  const result = await executeWorkforceAdminMutation({
+    actor,
+    mutation: { type: "tenant.create", tenant: { tenantId: "blocked-pilot", name: "Blocked", enabledEmployees: ["EMP-002"], knowledgeNamespace: "k", offeringNamespace: "o" } },
+    store: h.store,
+    audit: h.audit,
+    // A caller-controlled approval flag must not authorize YELLOW persistence.
+    ...({ approveYellow: true } as object),
+    randomId: () => "yellow-no-self-approval"
+  });
+  assert.equal(result.decision, "YELLOW");
+  assert.equal(result.persisted, false);
+  assert.equal(h.getState().manifests.length, 1);
   assert.equal(h.audits[0]?.persisted, false);
 });

@@ -52,7 +52,7 @@ export async function executeWorkforceAdminMutation(input: {
   store: WorkforceAdminStateStore;
   audit: WorkforceAdminAuditSink;
   policy?: WorkforceAdminPolicy;
-  approveYellow?: boolean;
+
   now?: () => Date;
   randomId?: () => string;
 }): Promise<{ ok: boolean; decision: AdminWriteDecision; persisted: boolean; auditId: string }> {
@@ -60,7 +60,8 @@ export async function executeWorkforceAdminMutation(input: {
   const decision = policy.evaluate(input.actor, input.mutation);
   const auditId = (input.randomId ?? (() => crypto.randomUUID()))();
   const timestamp = (input.now ?? (() => new Date()))().toISOString();
-  const permitted = decision === "GREEN" || (decision === "YELLOW" && input.approveYellow === true);
+  // Fail closed: YELLOW remains non-persistent until a separately authenticated approval workflow exists.
+  const permitted = decision === "GREEN";
   let persisted = false;
 
   if (permitted) {

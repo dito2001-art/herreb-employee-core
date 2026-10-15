@@ -58,7 +58,6 @@ export class WorkforceAdminState extends DurableObject<AdminStateEnv> {
         const result = await executeWorkforceAdminMutation({
           actor,
           mutation: body.mutation,
-          approveYellow: body.approveYellow,
           store,
           audit,
         });
