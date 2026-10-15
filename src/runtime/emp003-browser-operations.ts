@@ -40,7 +40,9 @@ export async function handleEMP003BrowserOperations(
     const parsed = EMP003CampaignOperationsResponseSchema.safeParse(payload);
     if (!parsed.success || parsed.data.tenantId !== tenantId ||
       parsed.data.campaigns.some(item => item.blueprint.tenantId !== tenantId) ||
-      new Set(parsed.data.campaigns.map(item => item.campaignId)).size !== parsed.data.campaigns.length)
+      new Set(parsed.data.campaigns.map(item => item.campaignId)).size !== parsed.data.campaigns.length ||
+      parsed.data.campaigns.some(item => item.requiresOwnerReview !==
+        (item.reviewState === "DRAFT" || item.reviewState === "IN_REVIEW")))
       return fail(503, "EMP003_BROWSER_SCOPE_INVALID");
     return Response.json(parsed.data, { headers: { "cache-control": "no-store" } });
   } catch {
