@@ -158,6 +158,12 @@ export class EMP002Operations implements DurableObject {
         const receipt = this.getNativeReceipt(message.tenantId, message.messageId);
         if (receipt) {
           try {
+            if (receipt.recordId) {
+              const persisted = this.nativeCalendar.get(message.tenantId, receipt.recordId);
+              if (!persisted || (receipt.mode === 'native-calendar-cancel' && persisted.status !== 'CANCELLED') || (receipt.mode === 'native-calendar-create' && persisted.status !== 'ACTIVE')) {
+                return Response.json({ ok: false, handled: false, error: 'EMP002_NATIVE_RECEIPT_READBACK_MISMATCH' }, { status: 409 });
+              }
+            }
             const whatsapp = buildEMP002WhatsAppTransport(this.env, message.tenantId);
             const outbound = await whatsapp.sendText({ tenantId: message.tenantId, to: message.from, body: receipt.reply, audience: 'EXTERNAL_CONTACT', correlationId: `wa:${message.messageId}`, idempotencyKey: `emp002-${receipt.mode === 'native-calendar-update' ? 'native-update' : receipt.mode === 'native-calendar-cancel' ? 'native-cancel' : receipt.mode}:${message.messageId}` });
             return Response.json({ ok: true, handled: true, mode: receipt.mode, recovered: true, readBackConfirmed: true, outboundMessageId: outbound.messageId });
