@@ -167,13 +167,6 @@ export class EMP002Operations implements DurableObject {
           const owners = (tenantManifest?.whatsappOwners ?? []).map(normalizeWhatsApp).filter(Boolean);
           const ownerConfigured = owners.length > 0;
           const ownerVerified = owners.includes(normalizeWhatsApp(message.from));
-          // Authorization precedes any calendar-specific response. No legacy CRM fallback.
-          const nativeCalendarIntent = calendarIntent || /agenda|agendar|agend[aá]|reuni[oó]n|reuniones|citas?|calendario|recordatorios?|reservar|reprogramar|cancelar turno|turnos?/i.test(message.body);
-          if (nativeCalendarIntent) {
-            await this.conversationStore.releaseInboundForRetry(message.tenantId, message.messageId);
-            if (!ownerVerified) return Response.json({ ok: false, handled: false, error: 'EMP002_OWNER_VERIFICATION_FAILED', correlationId }, { status: 403 });
-            return Response.json({ ok: false, handled: false, mode: 'native-calendar-not-connected', error: 'EMP002_NATIVE_CALENDAR_CONVERSATION_NOT_CONNECTED', correlationId }, { status: 503 });
-          }
           console.log(JSON.stringify({ event: 'EMP002_ROUTING_DECISION', correlationId, tenantId: message.tenantId, calendarIntent, ownerConfigured, ownerVerified, route: calendarIntent ? (ownerVerified ? 'calendar-read' : 'owner-verification-failed') : 'general-conversation' }));
           if (calendarIntent && !ownerVerified) { await this.conversationStore.releaseInboundForRetry(message.tenantId, message.messageId); return Response.json({ ok: false, handled: false, mode: 'owner-verification-failed', error: 'EMP002_OWNER_VERIFICATION_FAILED', correlationId, routing: { calendarIntent, ownerConfigured, ownerVerified } }, { status: 403 }); }
           let reply: string; let mode = 'general-conversation';
