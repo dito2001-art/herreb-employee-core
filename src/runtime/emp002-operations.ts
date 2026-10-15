@@ -153,7 +153,27 @@ export class EMP002Operations implements DurableObject {
             .filter(entry => tokens.length > 0 && tokens.some(token => entry.title.toLocaleLowerCase('es').includes(token)));
           if (matches.length !== 1) return Response.json({ ok: false, handled: false, error: matches.length ? 'EMP002_NATIVE_CALENDAR_AMBIGUOUS_TARGET' : 'EMP002_NATIVE_CALENDAR_TARGET_NOT_FOUND' }, { status: 422 });
           const target = matches[0];
-          if (command.operation === 'update') return Response.json({ ok: false, handled: false, error: 'EMP002_NATIVE_CALENDAR_UPDATE_NOT_CONNECTED' }, { status: 503 });
+          if (command.operation === 'update') {
+            const changes = command.changes as Record<string, string>;
+            // Reject CRM-only date fragments: native calendar needs complete instants.
+            if (changes.startDate || changes.endDate || (changes.startTime && !Number.isFinite(Date.parse(changes.startTime))) || (changes.endTime && !Number.isFinite(Date.parse(changes.endTime)))) return Response.json({ ok: false, handled: false, error: 'EMP002_NATIVE_CALENDAR_UPDATE_REQUIRES_ISO_INSTANTS' }, { status: 422 });
+            const start = changes.startTime ? new Date(changes.startTime).toISOString() : target.startsAt;
+            const end = changes.endTime ? new Date(changes.endTime).toISOString() : target.endsAt;
+            if (!end || Date.parse(end) <= Date.parse(start)) return Response.json({ ok: false, handled: false, error: 'INVALID_CALENDAR_TIME_RANGE' }, { status: 422 });
+            const first = await this.conversationStore.markInboundOnce(message.tenantId, message.messageId, message.receivedAt);
+            if (!first) return Response.json({ ok: true, handled: true, duplicate: true, mode: 'native-calendar-update' });
+            try {
+              const updated = this.nativeCalendar.save({ ...target, title: changes.title ?? target.title, startsAt: start, endsAt: end, updatedAt: new Date().toISOString() }, target.version);
+              const readBack = this.nativeCalendar.get(message.tenantId, target.id);
+              if (!readBack || readBack.version !== updated.version || readBack.title !== updated.title || readBack.startsAt !== updated.startsAt || readBack.endsAt !== updated.endsAt) throw new Error('EMP002_NATIVE_CALENDAR_UPDATE_READBACK_FAILED');
+              const whatsapp = buildEMP002WhatsAppTransport(this.env, message.tenantId);
+              const outbound = await whatsapp.sendText({ tenantId: message.tenantId, to: message.from, body: `Actualicé "${updated.title}" y confirmé el cambio en el calendario de Workforce.`, audience: 'EXTERNAL_CONTACT', correlationId: `wa:${message.messageId}`, idempotencyKey: `emp002-native-update:${message.messageId}` });
+              return Response.json({ ok: true, handled: true, mode: 'native-calendar-update', readBackConfirmed: true, outboundMessageId: outbound.messageId });
+            } catch (error) {
+              await this.conversationStore.releaseInboundForRetry(message.tenantId, message.messageId);
+              return Response.json({ ok: false, handled: false, error: error instanceof Error ? error.message : 'EMP002_NATIVE_CALENDAR_UPDATE_FAILED' }, { status: 503 });
+            }
+          }
           const first = await this.conversationStore.markInboundOnce(message.tenantId, message.messageId, message.receivedAt);
           if (!first) return Response.json({ ok: true, handled: true, duplicate: true, mode: 'native-calendar-cancel' });
           try {
