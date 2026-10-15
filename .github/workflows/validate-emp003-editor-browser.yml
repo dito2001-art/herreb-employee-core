@@ -25,7 +25,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Start isolated local Vite server
         run: |
-          npm run dev -- --host 127.0.0.1 > /tmp/emp003-vite.log 2>&1 &
+          npx vite --config tests/emp003-vite.config.ts --host 127.0.0.1 > /tmp/emp003-vite.log 2>&1 &
           echo $! > /tmp/emp003-vite.pid
           for i in $(seq 1 45); do curl -fsS http://127.0.0.1:5173/ >/dev/null && exit 0; sleep 2; done
           cat /tmp/emp003-vite.log
