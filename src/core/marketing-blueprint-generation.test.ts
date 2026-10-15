@@ -15,3 +15,18 @@ test("model cannot override trusted tenant, objective, sources, or approval",()=
  assert.equal(result.publishApproved,false);
 });
 test("invalid model JSON fails closed",()=>assert.throws(()=>parseGeneratedCampaignBlueprint({...input,modelOutput:"not-json"}),/JSON_INVALID/));
+
+test("extracts a JSON object wrapped in harmless model prose",()=>{
+ const modelOutput='Here is the campaign plan:\n```json\n'+JSON.stringify({
+ audiences:["B2B decision makers"],positioning:"Practical AI workforce",keyMessages:["Save operational time"],
+ channels:[{name:"LinkedIn",actions:["Publish an approved draft"]}],
+ kpis:[{metric:"qualified leads",target:"TBD",measurement:"CRM"}],assumptions:[]
+ })+'\n```\n';
+ const result=parseGeneratedCampaignBlueprint({...input,modelOutput});
+ assert.deepEqual(result.audiences,["B2B decision makers"]);
+ assert.equal(result.status,"DRAFT");
+ assert.equal(result.publishApproved,false);
+});
+test("truncated model JSON still fails closed",()=>{
+ assert.throws(()=>parseGeneratedCampaignBlueprint({...input,modelOutput:'{"audiences":["B2B"],"positioning":"unfinished'}),/JSON_INVALID/);
+});
