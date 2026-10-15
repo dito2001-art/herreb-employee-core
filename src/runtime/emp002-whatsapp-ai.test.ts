@@ -1,6 +1,15 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { generateEMP002WhatsAppReply, parseEMP002OwnerCalendarCommand } from './emp002-whatsapp-ai';
+import { normalizeEMP002WhatsAppNumber } from './emp002-whatsapp-normalize';
+
+describe('EMP-002 WhatsApp owner number normalization', () => {
+  it('removes formatting from phone numbers before owner identity comparison', () => {
+    assert.equal(normalizeEMP002WhatsAppNumber('+595 981-538-641'), '595981538641');
+    assert.equal(normalizeEMP002WhatsAppNumber('595981538641'), '595981538641');
+    assert.equal(normalizeEMP002WhatsAppNumber('(595) 981.538.641'), '595981538641');
+  });
+});
 
 describe('EMP-002 general WhatsApp AI', () => {
   it('passes persisted conversation history to Workers AI and returns legacy response text', async () => {
