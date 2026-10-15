@@ -47,7 +47,7 @@ jobs:
         shell: bash
         env:
           E2E_TOKEN: ${{ secrets.WORKFORCE_ADMIN_M2M_TOKEN }}
-          E2E_URL: https://herreb-employee-core.dito2001.workers.dev/api/internal/emp002/e2e
+          E2E_URL: https://employee.herreb.com/api/internal/emp002/e2e
           E2E_TENANT: herreb-client-0
           E2E_WHATSAPP: '595981538641'
         run: |
