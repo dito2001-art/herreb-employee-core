@@ -22,6 +22,23 @@ export class EMP003CampaignState extends DurableObject<Env> {
         const campaigns = await repo.list(tenantId);
         return Response.json({ ok: true, campaigns }, { headers: { "cache-control": "no-store" } });
       }
+      if (request.method === "GET" && url.pathname === "/operations") {
+        const campaigns = await repo.listWithIds(tenantId);
+        const items = await Promise.all(campaigns.map(async ({ campaignId, blueprint }) => {
+          const raw = await this.ctx.storage.get<unknown>(reviewKey(tenantId, campaignId));
+          const review = raw === undefined ? null : EMP003ReviewStateSchema.parse(raw);
+          if (review && (review.tenantId !== tenantId || review.campaignId !== campaignId)) throw new Error("EMP003_OPERATIONS_SCOPE_REJECTED");
+          return {
+            campaignId, blueprint,
+            reviewState: review?.state ?? "DRAFT",
+            reviewRevision: review?.revision ?? 0,
+            requiresOwnerReview: review?.state === undefined || review.state === "DRAFT" || review.state === "IN_REVIEW",
+            publishAuthorized: false as const,
+            publishExecuted: false as const
+          };
+        }));
+        return Response.json({ ok: true, tenantId, campaigns: items }, { headers: { "cache-control": "no-store" } });
+      }
       if (request.method === "POST" && url.pathname === "/draft") {
         const payload: unknown = await request.json();
         // Keep duplicate protection and review-state immutability in one atomic transaction.
