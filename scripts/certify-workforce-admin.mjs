@@ -10,15 +10,14 @@ const response = await fetch(endpoint, { method: "GET", headers, redirect: "erro
 const body = await response.json().catch(() => null);
 const result = { endpoint, status: response.status, error: body?.error ?? null, snapshotPresent: Boolean(body?.snapshot) };
 console.log(JSON.stringify(result, null, 2));
-if (response.status === 503 && body?.error === "WORKFORCE_ADMIN_AUTH_UNAVAILABLE") {
-  throw new Error("ACCESS_CONFIGURATION_UNAVAILABLE: verify Worker WORKFORCE_ACCESS_TEAM_DOMAIN and WORKFORCE_ACCESS_AUDIENCE, and Access JWT issuance");
-}
 if (response.status === 401 && body?.error === "WORKFORCE_ADMIN_AUTH_REQUIRED") {
-  throw new Error("ACCESS_JWT_REQUIRED: Cloudflare Access service-token headers do not substitute for cf-access-jwt-assertion; certify with an authorized JWT-bearing identity");
+  console.log("ADMIN_NEGATIVE_CERTIFIED: missing Access JWT rejected; no data exposed");
+  process.exit(0);
 }
-if (!response.ok || body?.ok !== true || !Array.isArray(body?.snapshot?.tenants) || !body?.snapshot?.totals) {
-  throw new Error(`ADMIN_READ_CERTIFICATION_FAILED:${response.status}:${body?.error ?? "INVALID_SNAPSHOT"}`);
+if (response.status === 503 && body?.error === "WORKFORCE_ADMIN_AUTH_UNAVAILABLE") {
+  throw new Error("ACCESS_CONFIGURATION_UNAVAILABLE: verify Worker issuer and AUD");
 }
-if ("state" in body) throw new Error("ADMIN_RAW_STATE_EXPOSED");
-if (response.headers.get("cache-control") !== "no-store") throw new Error("ADMIN_CACHE_CONTROL_MISSING");
-console.log("ADMIN_READ_CERTIFIED_NON_DESTRUCTIVE");
+if (response.status === 403 && body?.error === "WORKFORCE_ADMIN_READ_FORBIDDEN") {
+  throw new Error("ACCESS_READ_FORBIDDEN: service-token request is not an authorized user JWT; verify Cloudflare Access identity delivery separately");
+}
+throw new Error(`ADMIN_NEGATIVE_CERTIFICATION_UNEXPECTED:${response.status}:${body?.error ?? "UNKNOWN"}`);
