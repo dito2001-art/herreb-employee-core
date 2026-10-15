@@ -162,3 +162,21 @@ test("tenant owner cannot modify another tenant while platform administrator can
   const platform = new (await import("./workforce-admin-write")).OwnerScopedAdminPolicy();
   assert.equal(platform.evaluate({ actorId: "platform", tenantId: "platform", role: "platform_admin" }, mutation), "GREEN");
 });
+
+test("owner cannot take over an existing identity from another tenant; denial is audited", async () => {
+  const h = harness();
+  const otherOwner = { actorId: "other-owner", tenantId: "other", role: "owner" as const };
+  const denied = await executeWorkforceAdminMutation({
+    actor: otherOwner,
+    mutation: { type: "identity.upsert", identity: { email: "OWNER@HERREB.TEST", tenantId: "other", actorId: "stolen", role: "owner" } },
+    store: h.store,
+    audit: h.audit,
+    randomId: () => "takeover-denied"
+  });
+  assert.equal(denied.decision, "RED");
+  assert.equal(denied.persisted, false);
+  assert.equal(h.getState().identities[0]?.tenantId, "herreb");
+  assert.equal(h.getState().identities[0]?.actorId, "owner");
+  assert.equal(h.audits[0]?.decision, "RED");
+  assert.equal(h.audits[0]?.persisted, false);
+});
