@@ -20,6 +20,7 @@ export function WorkforceAdminPanel() {
   const [error, setError] = useState<string>();
   const [query, setQuery] = useState("");
   const [expandedTenant, setExpandedTenant] = useState<string | null>(null);
+  const [identityFilter, setIdentityFilter] = useState<"all" | "owner" | "user">("all");
 
   useEffect(() => {
     let active = true;
@@ -70,7 +71,11 @@ export function WorkforceAdminPanel() {
               <p>Offerings: {tenant.offeringNamespace}</p>
               <p className="opacity-70">Management actions unavailable until controlled-write certification.</p>
             </div>}
-            <div className="mt-2 text-sm">{tenant.identities.length ? tenant.identities.map((identity) => <div key={identity.email}>{identity.email} · {identity.role} · {identity.actorId}</div>) : <span className="opacity-60">No identities assigned</span>}</div>
+            <div className="mt-3 text-sm">
+              <div className="flex items-center gap-2 mb-2"><strong>Users</strong><label className="text-xs">Role <select aria-label="Filter users by role" className="border rounded bg-transparent p-1" value={identityFilter} onChange={(event) => setIdentityFilter(event.target.value as "all" | "owner" | "user")}><option value="all">All</option><option value="owner">Owners</option><option value="user">Users</option></select></label></div>
+              {tenant.identities.filter((identity) => identityFilter === "all" || identity.role === identityFilter).map((identity) => <div key={identity.email} className="py-1 border-t"><span className="font-medium">{identity.email}</span><span className="block text-xs opacity-70">Role: {identity.role} · Actor: {identity.actorId}</span></div>)}
+              {tenant.identities.filter((identity) => identityFilter === "all" || identity.role === identityFilter).length === 0 && <span className="opacity-60">No matching users</span>}
+            </div>
           </article>
         ))}
         {filteredTenants.length === 0 && <p className="text-sm opacity-70">No matching tenants or identities.</p>}
