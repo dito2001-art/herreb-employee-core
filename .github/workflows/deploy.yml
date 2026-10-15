@@ -2,6 +2,11 @@ name: Deploy Employee Core
 
 on:
   workflow_dispatch:
+    inputs:
+      release_sha:
+        description: "Approved exact main SHA"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -15,8 +20,18 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    environment: production
     steps:
+      - name: Verify exact approved release
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]] && [ "$RELEASE_SHA" = "$EXPECTED_SHA" ] || exit 1
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.release_sha }}
 
       - uses: actions/setup-node@v5
         with:
