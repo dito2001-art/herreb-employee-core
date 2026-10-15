@@ -150,7 +150,7 @@ export class EMP002Operations implements DurableObject {
           const window = resolveEMP002CalendarQueryWindow(message.body, new Date());
           const tokens = command.query.toLocaleLowerCase('es').split(/\s+/).filter(token => token.length > 2);
           const matches = this.nativeCalendar.list(message.tenantId, window.timeMin, window.timeMax)
-            .filter(entry => tokens.length > 0 && tokens.some(token => entry.title.toLocaleLowerCase('es').includes(token)));
+            .filter(entry => entry.status === 'ACTIVE' && tokens.length > 0 && tokens.some(token => entry.title.toLocaleLowerCase('es').includes(token)));
           if (matches.length !== 1) return Response.json({ ok: false, handled: false, error: matches.length ? 'EMP002_NATIVE_CALENDAR_AMBIGUOUS_TARGET' : 'EMP002_NATIVE_CALENDAR_TARGET_NOT_FOUND' }, { status: 422 });
           const target = matches[0];
           if (command.operation === 'update') {
