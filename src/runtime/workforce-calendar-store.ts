@@ -42,6 +42,10 @@ export class WorkforceCalendarStore {
 
   save(input: Omit<WorkforceCalendarEntry, 'version'>, expectedVersion = 0): WorkforceCalendarEntry {
     if (!input || typeof input !== 'object' || typeof input.tenantId !== 'string' || typeof input.id !== 'string' || typeof input.title !== 'string' || typeof input.startsAt !== 'string' || typeof input.updatedAt !== 'string' || (input.endsAt !== undefined && typeof input.endsAt !== 'string') || !input.tenantId.trim() || !input.id.trim() || !input.title.trim() || !['TASK', 'MEETING', 'EVENT'].includes(input.kind) || !['ACTIVE', 'CANCELLED'].includes(input.status) || !Number.isFinite(Date.parse(input.startsAt)) || !Number.isFinite(Date.parse(input.updatedAt)) || (input.endsAt && (!Number.isFinite(Date.parse(input.endsAt)) || Date.parse(input.endsAt) <= Date.parse(input.startsAt)))) throw new Error('INVALID_CALENDAR_ENTRY');
+    if (input.status === 'ACTIVE' && input.kind !== 'TASK' && input.endsAt) {
+      const overlaps = this.list(input.tenantId, new Date(Date.parse(input.startsAt) - 86400000).toISOString(), new Date(Date.parse(input.endsAt) + 86400000).toISOString());
+      if (overlaps.some(entry => entry.id !== input.id && entry.kind !== 'TASK' && entry.endsAt && Date.parse(entry.startsAt) < Date.parse(input.endsAt!) && Date.parse(entry.endsAt) > Date.parse(input.startsAt))) throw new Error('CALENDAR_TIME_CONFLICT');
+    }
     const current = this.get(input.tenantId, input.id);
     if ((current?.version ?? 0) !== expectedVersion) throw new Error('CALENDAR_VERSION_CONFLICT');
     const next: WorkforceCalendarEntry = { ...input, version: expectedVersion + 1 };
