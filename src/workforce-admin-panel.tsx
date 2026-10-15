@@ -8,6 +8,7 @@ interface AdminTenant {
   offeringNamespace: string;
   identities: AdminIdentity[];
 }
+interface AdminAuthorization { role: "platform_admin" | "owner"; scope: string }
 interface AdminSnapshot {
   tenants: AdminTenant[];
   totals: { tenants: number; identities: number; enabledEmployees: number };
@@ -15,15 +16,16 @@ interface AdminSnapshot {
 
 export function WorkforceAdminPanel() {
   const [snapshot, setSnapshot] = useState<AdminSnapshot>();
+  const [authorization, setAuthorization] = useState<AdminAuthorization>();
   const [error, setError] = useState<string>();
 
   useEffect(() => {
     let active = true;
     fetch("/api/admin/workforce", { headers: { accept: "application/json" }, cache: "no-store" })
       .then(async (response) => {
-        const body = await response.json() as { ok: boolean; snapshot?: AdminSnapshot; error?: string };
+        const body = await response.json() as { ok: boolean; snapshot?: AdminSnapshot; authorization?: AdminAuthorization; error?: string };
         if (!response.ok || !body.ok || !body.snapshot) throw new Error(body.error ?? `HTTP_${response.status}`);
-        if (active) setSnapshot(body.snapshot);
+        if (active) { setSnapshot(body.snapshot); setAuthorization(body.authorization); }
       })
       .catch((cause) => { if (active) setError(cause instanceof Error ? cause.message : "ADMIN_LOAD_FAILED"); });
     return () => { active = false; };
@@ -37,6 +39,7 @@ export function WorkforceAdminPanel() {
       <header>
         <h2 className="font-semibold">HerreB AI Workforce Admin</h2>
         <p className="text-sm opacity-70">Read-only validated tenant registry</p>
+        <p className="text-sm mt-1">Verified access: <strong>{authorization ? `${authorization.role} · ${authorization.scope}` : "not reported"}</strong></p>
       </header>
       <div className="grid grid-cols-3 gap-3 text-sm">
         <div><strong>{snapshot.totals.tenants}</strong><br />Tenants</div>
