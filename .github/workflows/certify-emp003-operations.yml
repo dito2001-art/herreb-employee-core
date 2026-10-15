@@ -1,6 +1,7 @@
-name: Certify EMP-003 Campaign Operations (Manual)
+name: Certify EMP-003 Campaign Operations
 on:
   workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 jobs:
