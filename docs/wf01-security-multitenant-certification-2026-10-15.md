@@ -36,3 +36,20 @@ This change set adds a release gate and removes an untrusted admin-DO email fall
 RED: any cross-tenant read/write, forged actor acceptance, inconsistent revocation or unapproved production deployment.
 YELLOW: provisioning/deletion approval not built, Cloudflare Access two-identity E2E pending, environment reviewers unconfirmed.
 GREEN only when scoped CI, independent WF-04 review, environment protection check, real A/B readback, audit and rollback evidence are archived with immutable URLs.
+
+## Confirmed Cloudflare-native deployment bypass (RED)
+On 2026-10-15 Cloudflare Workers Git integration commented `Deployment successful!` for **unmerged PR #270 commit e4041fdb**. Evidence:
+- https://github.com/dito2001-art/herreb-employee-core/pull/270#issuecomment-6196648891
+- https://dash.cloudflare.com/?to=/3519d3ab1a5b1dc4e629e661df78c150/workers/services/view/herreb-employee-core/production/builds/16c47e9b-3f17-4dc1-bcfa-88715d266286
+
+This is independent of GitHub Actions and therefore **not controlled** by `workflow_dispatch`, `environment: production`, or GitHub reviewers. The Cloudflare comment confirms a successful deployment reported by its integration, but exact effective live Worker version and target must be verified from Cloudflare deployment history. Do not infer rollback or isolation from this comment.
+
+**Required administrator remediation before approval of PR #270 or any other production release:**
+1. Open Cloudflare dashboard for `herreb-employee-core`; record current production deployment version, commit SHA, environment, timestamp, source and deploy actor (attach redacted evidence to WF-04).
+2. In Workers Builds / Git integration, **disable Cloudflare-native automatic production deployment** from branches and PRs; use preview-only builds if needed, with no production route or production secrets. If Cloudflare cannot enforce that policy, disconnect Git-based deployment entirely and retain only the protected GitHub Actions manual release path.
+3. Confirm no secondary GitHub workflows, Cloudflare Deploy Hooks, API tokens or integrations can publish outside the protected release gate. Scope/revoke unnecessary Cloudflare deploy tokens.
+4. Configure GitHub Settings > Environments > `production`: required independent reviewer(s), prevent self-review, main-only branch, environment-scoped Cloudflare deploy token. Restrict who can modify deployment workflows via CODEOWNERS / branch protection.
+5. Perform a harmless branch/PR change in a non-production environment, confirm that **no production deployment occurs**, and archive Cloudflare audit/deploy history. Then test a manual approved release with an exact SHA, review record, deployment log and readback.
+6. If an unapproved version is live, treat it as a deployment-control incident. Decide rollback only through authorized incident response, not via this PR. Verify tenant state and customer impact before changes.
+
+**No live certification** can be marked GREEN until both independent release paths are controlled and A/B Cloudflare Access, M2M, entitlement and revocation tests pass.
