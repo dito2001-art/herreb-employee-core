@@ -129,7 +129,6 @@ test("tenant owner cannot delete an identity without tenant-scoped lookup", asyn
     mutation: { type: "identity.delete", email: "owner@herreb.test" },
     store: h.store,
     audit: h.audit,
-    approvalEvidence: { approvedBy: "owner", approvalId: "owner-self-approved" },
     randomId: () => "audit-delete"
   });
   assert.equal(result.decision, "RED");
@@ -189,7 +188,7 @@ test("YELLOW write cannot be self-approved with a caller-controlled boolean", as
     mutation: { type: "tenant.create", tenant: { tenantId: "blocked-pilot", name: "Blocked", enabledEmployees: ["EMP-002"], knowledgeNamespace: "k", offeringNamespace: "o" } },
     store: h.store,
     audit: h.audit,
-    // Runtime callers cannot use the removed approveYellow boolean as authorization.
+    // A caller-controlled approval flag must not authorize YELLOW persistence.
     ...({ approveYellow: true } as object),
     randomId: () => "yellow-no-self-approval"
   });
