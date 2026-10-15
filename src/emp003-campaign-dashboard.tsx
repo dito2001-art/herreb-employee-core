@@ -104,7 +104,7 @@ export function EMP003CampaignDashboard() {
       </header>
       {loading && <output>Cargando campañas…</output>}
       {error && <p role="alert" className="text-kumo-danger">{error}</p>}
-      {notice && <p role="status" className="text-sm">{notice}</p>}
+      {notice && <output className="text-sm">{notice}</output>}
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={startNew} className="rounded-lg border border-kumo-line px-3 py-2">Nueva propuesta</button>
         <button type="button" onClick={() => void load(selectedId ?? undefined)} className="rounded-lg border border-kumo-line px-3 py-2">Volver a consultar</button>
