@@ -1,4 +1,5 @@
 import { readWorkforceAdminAccessActor } from "./workforce-admin-access-read";
+import { buildEMP003ReviewCards } from "../core/emp003-campaign-review-ui-model";
 
 type CampaignStore = {
   idFromName(name: string): unknown;
@@ -36,8 +37,11 @@ export async function handleEMP003BrowserOperations(
     const response = await stub.fetch(new Request(destination, { method: "GET" }));
     if (!response.ok) return fail(503, "EMP003_BROWSER_STORAGE_UNAVAILABLE");
     const payload: unknown = await response.json();
-    if (!payload || typeof payload !== "object" || (payload as { tenantId?: unknown }).tenantId !== tenantId)
+    try {
+      buildEMP003ReviewCards(payload, tenantId);
+    } catch {
       return fail(503, "EMP003_BROWSER_SCOPE_INVALID");
+    }
     return Response.json(payload, { headers: { "cache-control": "no-store" } });
   } catch {
     return fail(503, "EMP003_BROWSER_STORAGE_UNAVAILABLE");
