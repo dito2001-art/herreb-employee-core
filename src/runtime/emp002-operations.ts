@@ -144,6 +144,13 @@ export class EMP002Operations implements DurableObject {
           const correlationId = `wa:${message.messageId}`;
           const whatsapp = buildEMP002WhatsAppTransport(this.env, message.tenantId);
           const calendarIntent = isEMP002CalendarReadIntent(message.body);
+          // Fail closed: legacy CRM-backed calendar transports are not Workforce native calendar.
+          // Do not dispatch a calendar request to AG002_GATEWAY or personal Google Calendar.
+          const nativeCalendarIntent = calendarIntent || /\b(agend[áa]|reuni[oó]n|cita|calendario|recordatorio)\b/i.test(message.body);
+          if (nativeCalendarIntent) {
+            await this.conversationStore.releaseInboundForRetry(message.tenantId, message.messageId);
+            return Response.json({ ok: false, handled: false, mode: 'native-calendar-not-connected', error: 'EMP002_NATIVE_CALENDAR_CONVERSATION_NOT_CONNECTED', correlationId, tenantId: message.tenantId }, { status: 503 });
+          }
           const normalizeWhatsApp = normalizeEMP002WhatsAppNumber;
           const manifests = (() => {
             try {
