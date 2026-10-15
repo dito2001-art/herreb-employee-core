@@ -45,9 +45,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Format
-        run: npx oxfmt --write .
-
+      # Validation is intentionally read-only: deploy exactly the checked-out SHA.
       - name: Validate
         run: npm run check
 
