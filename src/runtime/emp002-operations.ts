@@ -133,7 +133,15 @@ export class EMP002Operations implements DurableObject {
     }
 
     if (request.method === 'POST' && url.pathname === '/inbound/whatsapp') {
-      const message = await request.json<RoutedWhatsAppInbound>();
+      // Until native tenant-owned conversational calendar is wired, do not allow
+      // the legacy CRM calendar transport to process WhatsApp requests.
+      // General conversation stays available only outside calendar-capable paths.
+      const message = await request.json<RoutedWhatsAppInbound>().catch(() => null);
+      if (!message || typeof message.body !== 'string') return Response.json({ ok: false, error: 'INVALID_WHATSAPP_INBOUND' }, { status: 400 });
+      const calendarRequested = isEMP002CalendarReadIntent(message.body) || /agenda|agendar|agend[aá]|reuni[oó]n|reuniones|citas?|calendario|recordatorios?|reservar|reprogramar|cancelar turno|turnos?/i.test(message.body);
+      if (calendarRequested) {
+        return Response.json({ ok: false, handled: false, error: 'EMP002_NATIVE_CALENDAR_CONVERSATION_NOT_CONNECTED' }, { status: 503 });
+      }
       if (!message?.tenantId || !message?.from || !message?.messageId || typeof message.body !== 'string') return Response.json({ ok: false, error: 'INVALID_WHATSAPP_INBOUND' }, { status: 400 });
       const record = await this.dispatchStore.findActiveByWhatsapp(message.tenantId, message.from);
       if (!record) {
