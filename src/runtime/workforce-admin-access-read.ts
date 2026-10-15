@@ -156,6 +156,7 @@ export async function handleWorkforceAdminGet(
       code === "WORKFORCE_ACCESS_JWKS_INVALID"
     )
       return fail(503, "WORKFORCE_ADMIN_AUTH_UNAVAILABLE");
+    console.warn("workforce_admin_read_denied", { phase: "access_identity", reason: code || "UNEXPECTED_ERROR" });
     return fail(403, "WORKFORCE_ADMIN_READ_FORBIDDEN");
   }
   if (!env.WORKFORCE_ADMIN_STATE)
@@ -183,8 +184,10 @@ export async function handleWorkforceAdminGet(
     return Response.json({ ok: true, snapshot }, { headers });
   } catch (cause) {
     const code = cause instanceof Error ? cause.message : "";
-    if (code.startsWith("WORKFORCE_ADMIN_READ_"))
+    if (code.startsWith("WORKFORCE_ADMIN_READ_")) {
+      console.warn("workforce_admin_read_denied", { phase: "scope_projection", reason: code });
       return fail(403, "WORKFORCE_ADMIN_READ_FORBIDDEN");
+    }
     return fail(503, "WORKFORCE_ADMIN_STATE_UNAVAILABLE");
   }
 }
