@@ -71,12 +71,16 @@ jobs:
           rm -f .autodev-task.txt
           git add -A
           git diff --cached --name-only > /tmp/autodev-files.txt
+          git diff --cached --name-status | awk '$1 !~ /^[AMD]$/ { exit 1 }'
           if git diff --cached --name-only -z | xargs -0 -r -n1 sh -c 'test ! -L "$0"' ; then :; else echo "::error::Symlinks are not allowed"; exit 1; fi
           test -s /tmp/autodev-files.txt
           test "$(wc -l < /tmp/autodev-files.txt)" -le 8
           while IFS= read -r f; do
             [[ "$f" == src/* || "$f" == tests/* || "$f" == docs/* ]] || exit 1
             [[ "$f" != *".."* ]] || exit 1
+            case "$f" in
+              */.github/*|*/node_modules/*|*/.env*|*/wrangler*|*/package.json|*/package-lock.json|*/pnpm-lock.yaml|*/yarn.lock) exit 1 ;;
+            esac
           done < /tmp/autodev-files.txt
           git diff --cached --numstat | awk '$1 == "-" || $2 == "-" { exit 1 }'
           test "$(git diff --cached --numstat | awk '{a+=$1;d+=$2} END {print a+d+0}')" -le 500
