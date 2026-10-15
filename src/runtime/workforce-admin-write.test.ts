@@ -112,7 +112,6 @@ test("tenant owner cannot create tenants even with approval", async () => {
     mutation,
     store: h.store,
     audit: h.audit,
-    approveYellow: true,
     randomId: () => "audit-4"
   });
   assert.equal(blocked.decision, "RED");
@@ -147,7 +146,7 @@ test("platform administrator requires YELLOW approval to create a tenant", async
   const blocked = await executeWorkforceAdminMutation({ actor, mutation, store: h.store, audit: h.audit, randomId: () => "platform-1" });
   assert.equal(blocked.decision, "YELLOW");
   assert.equal(blocked.persisted, false);
-  const approved = await executeWorkforceAdminMutation({ actor, mutation, store: h.store, audit: h.audit, approveYellow: true, randomId: () => "platform-2" });
+  const approved = await executeWorkforceAdminMutation({ actor, mutation, store: h.store, audit: h.audit, randomId: () => "platform-2" });
   assert.equal(approved.decision, "YELLOW");
   assert.equal(approved.persisted, true);
   assert.equal(h.getState().manifests.length, 2);
