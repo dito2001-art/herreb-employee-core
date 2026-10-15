@@ -37,3 +37,16 @@ test("rejects algorithm substitution and unknown kid", async () => {
  const unknownKid = await f.sign(f.claims, { alg: "RS256", kid: "missing" });
  await assert.rejects(() => verifyWorkforceAccessJwt({ ...f.input, jwt: unknownKid }));
 });
+
+test("rejects malformed temporal claims including nonnumeric not-before and infinite issued-at", async () => {
+ const f = await fixture();
+ for (const claims of [
+  { ...f.claims, nbf: "soon" },
+  { ...f.claims, nbf: Number.POSITIVE_INFINITY },
+  { ...f.claims, iat: Number.NaN },
+  { ...f.claims, iat: Number.POSITIVE_INFINITY },
+  { ...f.claims, exp: Number.POSITIVE_INFINITY },
+ ]) {
+  await assert.rejects(() => verifyWorkforceAccessJwt({ ...f.input, jwt: await f.sign(claims) }));
+ }
+});
