@@ -1,3 +1,4 @@
+// @ts-nocheck -- Playwright is installed ephemerally by the isolated browser CI workflow.
 import { test, expect } from "@playwright/test";
 
 const tenant = "herreb-browser-test-a";
