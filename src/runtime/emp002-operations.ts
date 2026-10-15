@@ -35,7 +35,7 @@ export class EMP002Operations implements DurableObject {
     if (request.method === 'POST' && url.pathname === '/native-calendar') {
       const tenantId = request.headers.get('x-herreb-internal-tenant-id')?.trim();
       if (!tenantId || !/^[a-zA-Z0-9_-]{1,100}$/.test(tenantId)) return Response.json({ ok: false, error: 'TENANT_SCOPE_REQUIRED' }, { status: 403 });
-      const body = await request.json<{ operation?: string; id?: string; from?: string; to?: string; entry?: Omit<WorkforceCalendarEntry, 'version'>; expectedVersion?: number }>().catch(() => ({}));
+      const body = await request.json<{ operation?: string; id?: string; from?: string; to?: string; entry?: Omit<WorkforceCalendarEntry, 'version'>; expectedVersion?: number }>().catch((): { operation?: string; id?: string; from?: string; to?: string; entry?: Omit<WorkforceCalendarEntry, 'version'>; expectedVersion?: number } => ({}));
       if (body.entry?.tenantId && body.entry.tenantId !== tenantId) return Response.json({ ok: false, error: 'TENANT_MISMATCH' }, { status: 403 });
       try {
         if (body.operation === 'get' && body.id) return Response.json({ ok: true, entry: this.nativeCalendar.get(tenantId, body.id) ?? null });
