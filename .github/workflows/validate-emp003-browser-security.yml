@@ -1,0 +1,30 @@
+name: Validate EMP003 Browser Security
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "src/runtime/emp003-browser-operations.ts"
+      - "src/runtime/emp003-browser-operations.test.ts"
+      - "src/core/emp003-campaign-review-ui-model.ts"
+      - ".github/workflows/validate-emp003-browser-security.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-security:
+    name: EMP003 browser tenant and payload tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx tsx --test src/runtime/emp003-browser-operations.test.ts
+      - run: npx tsc --noEmit
