@@ -61,14 +61,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git add -N src tests docs 2>/dev/null || true
-          git diff --name-only > /tmp/autodev-files.txt
+          git add -A
+          git diff --cached --name-only > /tmp/autodev-files.txt
           test -s /tmp/autodev-files.txt
           test "$(wc -l < /tmp/autodev-files.txt)" -le 8
           while IFS= read -r f; do
             [[ "$f" == src/* || "$f" == tests/* || "$f" == docs/* ]] || exit 1
           done < /tmp/autodev-files.txt
-          test "$(git diff --numstat | awk '{a+=$1;d+=$2} END {print a+d+0}')" -le 500
+          test "$(git diff --cached --numstat | awk '{a+=$1;d+=$2} END {print a+d+0}')" -le 500
       - name: Open draft PR (never merge or deploy)
         shell: bash
         env:
@@ -77,7 +77,6 @@ jobs:
           set -euo pipefail
           git config user.name "herreb-autodev[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src tests docs
           git commit -m "autodev: propose fix for issue #$ISSUE_NUMBER"
           git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)" push origin "HEAD:refs/heads/$BRANCH"
           gh pr create --draft --base main --head "$BRANCH" \
