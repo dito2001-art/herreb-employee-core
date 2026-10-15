@@ -88,7 +88,7 @@ export function resolveEMP002CalendarQueryWindow(text: string, now = new Date())
     // "Esta semana" includes earlier days of the current Monday–Sunday week.
     // "Próxima semana" starts on the following Monday.
     const daysSinceMonday = (today.weekday + 6) % 7;
-    const start = addDays(base, /\\b(pr[oó]xima|siguiente)\\s+semana\\b/i.test(value) ? 7 - daysSinceMonday : -daysSinceMonday);
+    const start = addDays(base, /\b(pr[oó]xima|siguiente)\s+semana\b/i.test(value) ? 7 - daysSinceMonday : -daysSinceMonday);
     const end = addDays(start, 7);
     return {
       timeMin: `${isoDate(start)}T00:00:00${offsetFor(start)}`,
