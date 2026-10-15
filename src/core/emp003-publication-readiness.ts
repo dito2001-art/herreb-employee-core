@@ -1,10 +1,10 @@
-import type { CampaignReviewState } from "./marketing-campaign-lifecycle";
+import type { CampaignTransition } from "./marketing-campaign-lifecycle";
 
 /** Approval of a campaign plan never grants permission to publish content. */
 export interface CampaignPublicationReadinessInput {
   tenantId: string;
   campaignTenantId: string;
-  reviewState: Pick<CampaignReviewState, "state" | "publishExecuted">;
+  reviewState: { state: CampaignTransition["to"]; publishExecuted: boolean };
   contentStatus: "DRAFT" | "APPROVED" | "PUBLISH_READY";
   approvedBy?: string;
   approvalEvidenceRef?: string;
