@@ -88,7 +88,7 @@ export async function readWorkforceAdminAccessActor(
   if (!jwt) throw new Error("WORKFORCE_ACCESS_JWT_REQUIRED");
   const response = await fetcher(config.jwksUrl, {
     method: "GET",
-    redirect: "error",
+    redirect: "manual",
     signal: AbortSignal.timeout(5000),
     headers: { accept: "application/json" }
   });
