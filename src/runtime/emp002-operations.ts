@@ -49,7 +49,7 @@ export class EMP002Operations implements DurableObject {
         return Response.json({ ok: false, error: 'INVALID_NATIVE_CALENDAR_OPERATION' }, { status: 400 });
       } catch (error) {
         const code = error instanceof Error ? error.message : 'NATIVE_CALENDAR_FAILED';
-        return Response.json({ ok: false, error: code }, { status: code === 'CALENDAR_VERSION_CONFLICT' ? 409 : 400 });
+        return Response.json({ ok: false, error: code }, { status: code === 'CALENDAR_VERSION_CONFLICT' || code === 'CALENDAR_TIME_CONFLICT' ? 409 : 400 });
       }
     }
 
