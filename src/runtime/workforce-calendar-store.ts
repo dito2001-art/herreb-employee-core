@@ -41,7 +41,7 @@ export class WorkforceCalendarStore {
   }
 
   save(input: Omit<WorkforceCalendarEntry, 'version'>, expectedVersion = 0): WorkforceCalendarEntry {
-    if (!input.tenantId.trim() || !input.id.trim() || !input.title.trim() || !['TASK', 'MEETING', 'EVENT'].includes(input.kind) || !['ACTIVE', 'CANCELLED'].includes(input.status) || !Number.isFinite(Date.parse(input.startsAt)) || (input.endsAt && (!Number.isFinite(Date.parse(input.endsAt)) || Date.parse(input.endsAt) <= Date.parse(input.startsAt)))) throw new Error('INVALID_CALENDAR_ENTRY');
+    if (!input || typeof input !== 'object' || typeof input.tenantId !== 'string' || typeof input.id !== 'string' || typeof input.title !== 'string' || typeof input.startsAt !== 'string' || typeof input.updatedAt !== 'string' || (input.endsAt !== undefined && typeof input.endsAt !== 'string') || !input.tenantId.trim() || !input.id.trim() || !input.title.trim() || !['TASK', 'MEETING', 'EVENT'].includes(input.kind) || !['ACTIVE', 'CANCELLED'].includes(input.status) || !Number.isFinite(Date.parse(input.startsAt)) || !Number.isFinite(Date.parse(input.updatedAt)) || (input.endsAt && (!Number.isFinite(Date.parse(input.endsAt)) || Date.parse(input.endsAt) <= Date.parse(input.startsAt)))) throw new Error('INVALID_CALENDAR_ENTRY');
     const current = this.get(input.tenantId, input.id);
     if ((current?.version ?? 0) !== expectedVersion) throw new Error('CALENDAR_VERSION_CONFLICT');
     const next: WorkforceCalendarEntry = { ...input, version: expectedVersion + 1 };
