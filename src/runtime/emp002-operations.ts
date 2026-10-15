@@ -130,7 +130,7 @@ export class EMP002Operations implements DurableObject {
           const ownerConfigured = owners.length > 0;
           const ownerVerified = owners.includes(normalizeWhatsApp(message.from));
           console.log(JSON.stringify({ event: 'EMP002_ROUTING_DECISION', correlationId, tenantId: message.tenantId, calendarIntent, ownerConfigured, ownerVerified, route: calendarIntent ? (ownerVerified ? 'calendar-read' : 'owner-verification-failed') : 'general-conversation' }));
-          if (calendarIntent && !ownerVerified) return Response.json({ ok: false, handled: false, mode: 'owner-verification-failed', error: 'EMP002_OWNER_VERIFICATION_FAILED', correlationId, routing: { calendarIntent, ownerConfigured, ownerVerified } }, { status: 403 });
+          if (calendarIntent && !ownerVerified) { await this.conversationStore.releaseInboundForRetry(message.tenantId, message.messageId); return Response.json({ ok: false, handled: false, mode: 'owner-verification-failed', error: 'EMP002_OWNER_VERIFICATION_FAILED', correlationId, routing: { calendarIntent, ownerConfigured, ownerVerified } }, { status: 403 }); }
           let reply: string; let mode = 'general-conversation';
           // Calendar reads are deterministic and must not wait for the AI mutation
           // parser. Route verified owner READ intents directly to CRM first.
