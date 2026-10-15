@@ -31,7 +31,7 @@ jobs:
           cat /tmp/emp003-vite.log
           exit 1
       - name: Browser E2E (mocked API; NOT real Cloudflare Access)
-        run: npx playwright test tests/emp003-editor.browser.spec.ts --project=chromium --reporter=line
+        run: npx playwright test tests/emp003-editor.browser.spec.ts --reporter=line
       - name: Attach logs on failure
         if: failure()
         run: cat /tmp/emp003-vite.log || true
