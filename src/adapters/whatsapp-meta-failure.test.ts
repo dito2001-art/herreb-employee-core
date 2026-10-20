@@ -38,3 +38,22 @@ test('successful Meta response requires authoritative provider message id', asyn
     await assert.rejects(transport.sendText(message), /META_WHATSAPP_PROVIDER_EVIDENCE_MISSING/);
   } finally { globalThis.fetch = original; }
 });
+
+test('ambiguous accepted send followed by retry can duplicate provider delivery (known blocker)', async () => {
+  const original = globalThis.fetch;
+  const providerAccepted: string[] = [];
+  globalThis.fetch = (async (_url, init) => {
+    const body = JSON.parse(String(init?.body)) as { text: { body: string } };
+    providerAccepted.push(body.text.body);
+    if (providerAccepted.length === 1) throw new TypeError('response lost after provider accepted');
+    return new Response('{"messages":[{"id":"wamid.retry"}]}', { status: 200 });
+  }) as typeof fetch;
+  try {
+    const transport = new MetaWhatsAppTransport({ META_ACCESS_TOKEN: 'fixture', META_PHONE_NUMBER_ID: 'fixture' });
+    await assert.rejects(transport.sendText(message), /response lost after provider accepted/);
+    const recovered = await transport.sendText(message);
+    assert.equal(recovered.messageId, 'wamid.retry');
+    assert.equal(providerAccepted.length, 2, 'both attempts reached provider despite identical idempotency key');
+    assert.deepEqual(providerAccepted, [message.body, message.body]);
+  } finally { globalThis.fetch = original; }
+});
