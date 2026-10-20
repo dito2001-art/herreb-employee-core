@@ -209,11 +209,11 @@ export class EMP002Operations implements DurableObject {
           try {
             const cancelled = this.state.storage.transactionSync(() => {
               const saved = this.nativeCalendar.save({ ...target, status: 'CANCELLED', updatedAt: new Date().toISOString() }, target.version);
-                return saved;
+              this.saveNativeReceipt(message.tenantId, message.messageId, { reply: `Cancelé "${target.title}" y confirmé el cambio en el calendario de Workforce.`, mode: 'native-calendar-cancel', recordId: target.id });
+              return saved;
             });
             const readBack = this.nativeCalendar.get(message.tenantId, target.id);
             if (!readBack || readBack.version !== cancelled.version || readBack.status !== 'CANCELLED') throw new Error('EMP002_NATIVE_CALENDAR_CANCEL_READBACK_FAILED');
-            this.saveNativeReceipt(message.tenantId, message.messageId, { reply: `Cancelé "${target.title}" y confirmé el cambio en el calendario de Workforce.`, mode: 'native-calendar-cancel', recordId: target.id });
             const whatsapp = buildEMP002WhatsAppTransport(this.env, message.tenantId);
             const outbound = await whatsapp.sendText({ tenantId: message.tenantId, to: message.from, body: `Cancelé "${target.title}" y confirmé el cambio en el calendario de Workforce.`, audience: 'EXTERNAL_CONTACT', correlationId: `wa:${message.messageId}`, idempotencyKey: `emp002-native-cancel:${message.messageId}` });
             return Response.json({ ok: true, handled: true, mode: 'native-calendar-cancel', readBackConfirmed: true, outboundMessageId: outbound.messageId });
