@@ -28,11 +28,31 @@ export class EMP002Operations implements DurableObject {
   }
 
 
+  // Once a provider send starts, a lost response is ambiguous. Never resend blindly.
+  private async sendNativeReplyOnce(tenantId: string, messageId: string, send: () => Promise<{ messageId: string }>): Promise<{ messageId: string }> {
+    const rows = Array.from(this.state.storage.sql.exec('SELECT status, provider_message_id FROM emp002_native_outbound WHERE tenant_id = ? AND message_id = ?', tenantId, messageId));
+    if (rows.length) {
+      const prior = rows[0];
+      if (prior.status === 'SENT' && typeof prior.provider_message_id === 'string' && prior.provider_message_id) return { messageId: prior.provider_message_id };
+      throw new Error('EMP002_NATIVE_META_RECONCILIATION_REQUIRED');
+    }
+    this.state.storage.sql.exec('INSERT INTO emp002_native_outbound (tenant_id, message_id, status) VALUES (?, ?, ?)', tenantId, messageId, 'UNKNOWN');
+    try {
+      const result = await send();
+      this.state.storage.sql.exec('UPDATE emp002_native_outbound SET status = ?, provider_message_id = ? WHERE tenant_id = ? AND message_id = ?', 'SENT', result.messageId, tenantId, messageId);
+      return result;
+    } catch (error) {
+      // Even a definite rejection is conservatively fenced pending operator review.
+      throw new Error('EMP002_NATIVE_META_RECONCILIATION_REQUIRED', { cause: error });
+    }
+  }
+
   constructor(private readonly state: DurableObjectState, private readonly env: EMP002OperationsTransportEnv) {
     this.dispatchStore = new SqliteWhatsAppSchedulingDispatchStore(this.state.storage.sql);
     this.conversationStore = new SqliteEMP002WhatsAppConversationStore(this.state.storage.sql);
     this.appointmentStore = new SqliteAppointmentLifecycleStore(this.state.storage.sql);
     this.nativeCalendar = new WorkforceCalendarStore(this.state.storage.sql);
+    this.state.storage.sql.exec('CREATE TABLE IF NOT EXISTS emp002_native_outbound (tenant_id TEXT NOT NULL, message_id TEXT NOT NULL, status TEXT NOT NULL, provider_message_id TEXT, PRIMARY KEY (tenant_id, message_id))');
     this.state.storage.sql.exec('CREATE TABLE IF NOT EXISTS emp002_native_receipts (tenant_id TEXT NOT NULL, message_id TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY (tenant_id, message_id))');
   }
 
@@ -165,7 +185,7 @@ export class EMP002Operations implements DurableObject {
               }
             }
             const whatsapp = buildEMP002WhatsAppTransport(this.env, message.tenantId);
-            const outbound = await whatsapp.sendText({ tenantId: message.tenantId, to: message.from, body: receipt.reply, audience: 'EXTERNAL_CONTACT', correlationId: `wa:${message.messageId}`, idempotencyKey: `emp002-${receipt.mode === 'native-calendar-update' ? 'native-update' : receipt.mode === 'native-calendar-cancel' ? 'native-cancel' : receipt.mode}:${message.messageId}` });
+            const outbound = await this.sendNativeReplyOnce(message.tenantId, message.messageId, () => whatsapp.sendText({ tenantId: message.tenantId, to: message.from, body: receipt.reply, audience: 'EXTERNAL_CONTACT', correlationId: `wa:${message.messageId}`, idempotencyKey: `emp002-${receipt.mode === 'native-calendar-update' ? 'native-update' : receipt.mode === 'native-calendar-cancel' ? 'native-cancel' : receipt.mode}:${message.messageId}` }));
             return Response.json({ ok: true, handled: true, mode: receipt.mode, recovered: true, readBackConfirmed: true, outboundMessageId: outbound.messageId });
           } catch (error) {
             return Response.json({ ok: false, handled: false, error: error instanceof Error ? error.message : 'EMP002_NATIVE_DELIVERY_RETRY_FAILED' }, { status: 503 });
@@ -197,7 +217,7 @@ export class EMP002Operations implements DurableObject {
               const readBack = this.nativeCalendar.get(message.tenantId, target.id);
               if (!readBack || readBack.version !== updated.version || readBack.title !== updated.title || readBack.startsAt !== updated.startsAt || readBack.endsAt !== updated.endsAt) throw new Error('EMP002_NATIVE_CALENDAR_UPDATE_READBACK_FAILED');
               const whatsapp = buildEMP002WhatsAppTransport(this.env, message.tenantId);
-              const outbound = await whatsapp.sendText({ tenantId: message.tenantId, to: message.from, body: `Actualicé "${updated.title}" y confirmé el cambio en el calendario de Workforce.`, audience: 'EXTERNAL_CONTACT', correlationId: `wa:${message.messageId}`, idempotencyKey: `emp002-native-update:${message.messageId}` });
+              const outbound = await this.sendNativeReplyOnce(message.tenantId, message.messageId, () => whatsapp.sendText({ tenantId: message.tenantId, to: message.from, body: `Actualicé "${updated.title}" y confirmé el cambio en el calendario de Workforce.`, audience: 'EXTERNAL_CONTACT', correlationId: `wa:${message.messageId}`, idempotencyKey: `emp002-native-update:${message.messageId}` }));
               return Response.json({ ok: true, handled: true, mode: 'native-calendar-update', readBackConfirmed: true, outboundMessageId: outbound.messageId });
             } catch (error) {
               await this.conversationStore.releaseInboundForRetry(message.tenantId, message.messageId);
@@ -215,7 +235,7 @@ export class EMP002Operations implements DurableObject {
             const readBack = this.nativeCalendar.get(message.tenantId, target.id);
             if (!readBack || readBack.version !== cancelled.version || readBack.status !== 'CANCELLED') throw new Error('EMP002_NATIVE_CALENDAR_CANCEL_READBACK_FAILED');
             const whatsapp = buildEMP002WhatsAppTransport(this.env, message.tenantId);
-            const outbound = await whatsapp.sendText({ tenantId: message.tenantId, to: message.from, body: `Cancelé "${target.title}" y confirmé el cambio en el calendario de Workforce.`, audience: 'EXTERNAL_CONTACT', correlationId: `wa:${message.messageId}`, idempotencyKey: `emp002-native-cancel:${message.messageId}` });
+            const outbound = await this.sendNativeReplyOnce(message.tenantId, message.messageId, () => whatsapp.sendText({ tenantId: message.tenantId, to: message.from, body: `Cancelé "${target.title}" y confirmé el cambio en el calendario de Workforce.`, audience: 'EXTERNAL_CONTACT', correlationId: `wa:${message.messageId}`, idempotencyKey: `emp002-native-cancel:${message.messageId}` }));
             return Response.json({ ok: true, handled: true, mode: 'native-calendar-cancel', readBackConfirmed: true, outboundMessageId: outbound.messageId });
           } catch (error) {
             await this.conversationStore.releaseInboundForRetry(message.tenantId, message.messageId);
@@ -251,7 +271,7 @@ export class EMP002Operations implements DurableObject {
           }
           if (command.operation !== 'create') this.saveNativeReceipt(message.tenantId, message.messageId, { reply, mode, recordId: '' });
           const whatsapp = buildEMP002WhatsAppTransport(this.env, message.tenantId);
-          const outbound = await whatsapp.sendText({ tenantId: message.tenantId, to: message.from, body: reply, audience: 'EXTERNAL_CONTACT', correlationId: `wa:${message.messageId}`, idempotencyKey: `emp002-${mode}:${message.messageId}` });
+          const outbound = await this.sendNativeReplyOnce(message.tenantId, message.messageId, () => whatsapp.sendText({ tenantId: message.tenantId, to: message.from, body: reply, audience: 'EXTERNAL_CONTACT', correlationId: `wa:${message.messageId}`, idempotencyKey: `emp002-${mode}:${message.messageId}` }));
           await this.conversationStore.append(message.tenantId, message.from, { role: 'assistant', content: reply, at: new Date().toISOString(), messageId: outbound.messageId ?? undefined });
           return Response.json({ ok: true, handled: true, mode, readBackConfirmed: true, outboundMessageId: outbound.messageId });
         } catch (error) {
