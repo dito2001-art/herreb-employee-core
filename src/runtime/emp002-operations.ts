@@ -29,7 +29,7 @@ export class EMP002Operations implements DurableObject {
 
 
   // Once a provider send starts, a lost response is ambiguous. Never resend blindly.
-  private async sendNativeReplyOnce(tenantId: string, messageId: string, send: () => Promise<{ messageId?: string }>): Promise<{ messageId: string }> {
+  private async sendNativeReplyOnce(tenantId: string, messageId: string, send: () => Promise<{ messageId: string | null }>): Promise<{ messageId: string }> {
     const rows = Array.from(this.state.storage.sql.exec('SELECT status, provider_message_id FROM emp002_native_outbound WHERE tenant_id = ? AND message_id = ?', tenantId, messageId));
     if (rows.length) {
       const prior = rows[0];
@@ -41,7 +41,7 @@ export class EMP002Operations implements DurableObject {
       const result = await send();
       if (!result.messageId) throw new Error('EMP002_NATIVE_META_PROVIDER_EVIDENCE_MISSING');
       this.state.storage.sql.exec('UPDATE emp002_native_outbound SET status = ?, provider_message_id = ? WHERE tenant_id = ? AND message_id = ?', 'SENT', result.messageId, tenantId, messageId);
-      return result;
+      return { messageId: result.messageId };
     } catch (error) {
       // Even a definite rejection is conservatively fenced pending operator review.
       throw new Error('EMP002_NATIVE_META_RECONCILIATION_REQUIRED', { cause: error });
