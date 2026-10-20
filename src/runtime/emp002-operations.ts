@@ -19,11 +19,11 @@ export class EMP002Operations implements DurableObject {
   private readonly appointmentStore: SqliteAppointmentLifecycleStore;
   private readonly nativeCalendar: WorkforceCalendarStore;
   // Durable per-tenant/message receipt: mutation is committed once, delivery can retry.
-  private getNativeReceipt(tenantId: string, messageId: string): { reply: string; mode: string; recordId: string } | undefined {
+  private getNativeReceipt(tenantId: string, messageId: string): { reply: string; mode: string; recordId: string; version?: number } | undefined {
     const row = Array.from(this.state.storage.sql.exec('SELECT payload FROM emp002_native_receipts WHERE tenant_id = ? AND message_id = ?', tenantId, messageId))[0];
-    return row ? JSON.parse(String(row.payload)) as { reply: string; mode: string; recordId: string } : undefined;
+    return row ? JSON.parse(String(row.payload)) as { reply: string; mode: string; recordId: string; version?: number } : undefined;
   }
-  private saveNativeReceipt(tenantId: string, messageId: string, receipt: { reply: string; mode: string; recordId: string }): void {
+  private saveNativeReceipt(tenantId: string, messageId: string, receipt: { reply: string; mode: string; recordId: string; version?: number }): void {
     this.state.storage.sql.exec('INSERT OR IGNORE INTO emp002_native_receipts (tenant_id, message_id, payload) VALUES (?, ?, ?)', tenantId, messageId, JSON.stringify(receipt));
   }
 
@@ -160,7 +160,7 @@ export class EMP002Operations implements DurableObject {
           try {
             if (receipt.recordId) {
               const persisted = this.nativeCalendar.get(message.tenantId, receipt.recordId);
-              if (!persisted || (receipt.mode === 'native-calendar-cancel' && persisted.status !== 'CANCELLED') || (receipt.mode === 'native-calendar-create' && persisted.status !== 'ACTIVE')) {
+              if (!persisted || (receipt.version !== undefined && persisted.version !== receipt.version) || (receipt.mode === 'native-calendar-cancel' && persisted.status !== 'CANCELLED') || (receipt.mode === 'native-calendar-create' && persisted.status !== 'ACTIVE')) {
                 return Response.json({ ok: false, handled: false, error: 'EMP002_NATIVE_RECEIPT_READBACK_MISMATCH' }, { status: 409 });
               }
             }
@@ -191,7 +191,7 @@ export class EMP002Operations implements DurableObject {
             try {
               const updated = this.state.storage.transactionSync(() => {
                 const saved = this.nativeCalendar.save({ ...target, title: changes.title ?? target.title, startsAt: start, endsAt: end, updatedAt: new Date().toISOString() }, target.version);
-                this.saveNativeReceipt(message.tenantId, message.messageId, { reply: `Actualicé "${saved.title}" y confirmé el cambio en el calendario de Workforce.`, mode: 'native-calendar-update', recordId: saved.id });
+                this.saveNativeReceipt(message.tenantId, message.messageId, { reply: `Actualicé "${saved.title}" y confirmé el cambio en el calendario de Workforce.`, mode: 'native-calendar-update', recordId: saved.id, version: saved.version });
                 return saved;
               });
               const readBack = this.nativeCalendar.get(message.tenantId, target.id);
@@ -209,7 +209,7 @@ export class EMP002Operations implements DurableObject {
           try {
             const cancelled = this.state.storage.transactionSync(() => {
               const saved = this.nativeCalendar.save({ ...target, status: 'CANCELLED', updatedAt: new Date().toISOString() }, target.version);
-              this.saveNativeReceipt(message.tenantId, message.messageId, { reply: `Cancelé "${target.title}" y confirmé el cambio en el calendario de Workforce.`, mode: 'native-calendar-cancel', recordId: target.id });
+              this.saveNativeReceipt(message.tenantId, message.messageId, { reply: `Cancelé "${target.title}" y confirmé el cambio en el calendario de Workforce.`, mode: 'native-calendar-cancel', recordId: target.id, version: saved.version });
               return saved;
             });
             const readBack = this.nativeCalendar.get(message.tenantId, target.id);
@@ -236,7 +236,7 @@ export class EMP002Operations implements DurableObject {
             if (existing && (existing.title !== command.title || existing.startsAt !== start || existing.endsAt !== end || existing.status !== 'ACTIVE')) throw new Error('EMP002_NATIVE_CALENDAR_IDEMPOTENCY_MISMATCH');
             const entry = this.state.storage.transactionSync(() => {
               const saved = existing ?? this.nativeCalendar.save({ tenantId: message.tenantId, id, kind: 'MEETING', title: command.title, startsAt: start, endsAt: end, status: 'ACTIVE', updatedAt: new Date().toISOString() }, 0);
-              this.saveNativeReceipt(message.tenantId, message.messageId, { reply: `Agendé "${saved.title}" para ${saved.startsAt} y confirmé que quedó guardada en el calendario de Workforce.`, mode: 'native-calendar-create', recordId: id });
+              this.saveNativeReceipt(message.tenantId, message.messageId, { reply: `Agendé "${saved.title}" para ${saved.startsAt} y confirmé que quedó guardada en el calendario de Workforce.`, mode: 'native-calendar-create', recordId: id, version: saved.version });
               return saved;
             });
             const readBack = this.nativeCalendar.get(message.tenantId, id);
