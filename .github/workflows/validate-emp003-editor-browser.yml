@@ -1,0 +1,37 @@
+name: Validate EMP003 Editor Browser E2E
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "tests/emp003-editor.browser.spec.ts"
+      - ".github/workflows/validate-emp003-editor-browser.yml"
+      - "src/emp003-campaign-dashboard.tsx"
+      - "src/workforce-shell.tsx"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  editor-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false @playwright/test
+      - run: npx playwright install --with-deps chromium
+      - name: Start isolated local Vite server
+        run: |
+          npx vite --config tests/emp003-vite.config.ts --host 127.0.0.1 > /tmp/emp003-vite.log 2>&1 &
+          echo $! > /tmp/emp003-vite.pid
+          for i in $(seq 1 45); do curl -fsS http://127.0.0.1:5173/ >/dev/null && exit 0; sleep 2; done
+          cat /tmp/emp003-vite.log
+          exit 1
+      - name: Browser E2E (mocked API; NOT real Cloudflare Access)
+        run: npx playwright test tests/emp003-editor.browser.spec.ts --reporter=line
+      - name: Attach logs on failure
+        if: failure()
+        run: cat /tmp/emp003-vite.log || true
