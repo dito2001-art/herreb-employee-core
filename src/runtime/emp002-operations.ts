@@ -11,21 +11,46 @@ import { transitionAppointment, type AppointmentLifecycleEvent, type Appointment
 import { generateEMP002CalendarReply, generateEMP002WhatsAppReply, parseEMP002OwnerCalendarCommand } from './emp002-whatsapp-ai';
 import { buildEMP002CalendarReadTransport, buildEMP002CalendarTransport, buildEMP002OperationsTransports, buildEMP002WhatsAppTransport, type EMP002OperationsTransportEnv } from './emp002-operations-transports';
 import { isEMP002CalendarReadIntent, resolveEMP002CalendarQueryWindow } from './emp002-calendar-query';
+import { WorkforceCalendarStore, type WorkforceCalendarEntry } from './workforce-calendar-store';
 
 export class EMP002Operations implements DurableObject {
   private readonly dispatchStore: SqliteWhatsAppSchedulingDispatchStore;
   private readonly conversationStore: SqliteEMP002WhatsAppConversationStore;
   private readonly appointmentStore: SqliteAppointmentLifecycleStore;
+  private readonly nativeCalendar: WorkforceCalendarStore;
 
   constructor(private readonly state: DurableObjectState, private readonly env: EMP002OperationsTransportEnv) {
     this.dispatchStore = new SqliteWhatsAppSchedulingDispatchStore(this.state.storage.sql);
     this.conversationStore = new SqliteEMP002WhatsAppConversationStore(this.state.storage.sql);
     this.appointmentStore = new SqliteAppointmentLifecycleStore(this.state.storage.sql);
+    this.nativeCalendar = new WorkforceCalendarStore(this.state.storage.sql);
   }
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === 'GET' && url.pathname === '/health') return Response.json({ ok: true, service: 'EMP002Operations' });
+
+    // Internal-only endpoint: public worker must authenticate and resolve the tenant
+    // before forwarding. Never accept an arbitrary tenant from this payload.
+    if (request.method === 'POST' && url.pathname === '/native-calendar') {
+      const tenantId = request.headers.get('x-herreb-internal-tenant-id')?.trim();
+      if (!tenantId || !/^[a-zA-Z0-9_-]{1,100}$/.test(tenantId)) return Response.json({ ok: false, error: 'TENANT_SCOPE_REQUIRED' }, { status: 403 });
+      const body = await request.json<{ operation?: string; id?: string; from?: string; to?: string; entry?: Omit<WorkforceCalendarEntry, 'version'>; expectedVersion?: number }>().catch((): { operation?: string; id?: string; from?: string; to?: string; entry?: Omit<WorkforceCalendarEntry, 'version'>; expectedVersion?: number } => ({}));
+      if (body.entry?.tenantId && body.entry.tenantId !== tenantId) return Response.json({ ok: false, error: 'TENANT_MISMATCH' }, { status: 403 });
+      try {
+        if (body.operation === 'get' && body.id) return Response.json({ ok: true, entry: this.nativeCalendar.get(tenantId, body.id) ?? null });
+        if (body.operation === 'list' && body.from && body.to) return Response.json({ ok: true, entries: this.nativeCalendar.list(tenantId, body.from, body.to) });
+        if (body.operation === 'save' && body.entry && Number.isInteger(body.expectedVersion) && body.expectedVersion! >= 0) {
+          const entry = this.nativeCalendar.save({ ...body.entry, tenantId }, body.expectedVersion);
+          return Response.json({ ok: true, entry, readBackConfirmed: true });
+        }
+        return Response.json({ ok: false, error: 'INVALID_NATIVE_CALENDAR_OPERATION' }, { status: 400 });
+      } catch (error) {
+        const code = error instanceof Error ? error.message : 'NATIVE_CALENDAR_FAILED';
+        return Response.json({ ok: false, error: code }, { status: code === 'CALENDAR_VERSION_CONFLICT' ? 409 : 400 });
+      }
+    }
+
 
     if (request.method === 'POST' && url.pathname === '/appointment/register') {
       const record = await request.json<AppointmentLifecycleRecord>();
