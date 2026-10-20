@@ -56,7 +56,7 @@ test("native Meta fence persists confirmed receipt, blocks ambiguous retries, an
   assert.equal(first.messageId, "wamid.confirmed");
   assert.equal(duplicate.messageId, "wamid.confirmed");
   assert.equal(sends, 1);
-  const lost = async () => { sends++; throw new Error("network response lost"); return { messageId: null }; };
+  const lost = async (): Promise<{ messageId: string | null }> => { sends++; throw new Error("network response lost"); };
   await assert.rejects(sender.call(object, "tenant-A", "message-2", lost), /EMP002_NATIVE_META_RECONCILIATION_REQUIRED/);
   await assert.rejects(sender.call(object, "tenant-A", "message-2", accepted), /EMP002_NATIVE_META_RECONCILIATION_REQUIRED/);
   assert.equal(sends, 2);
