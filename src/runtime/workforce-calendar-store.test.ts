@@ -93,3 +93,19 @@ test('native calendar detects a long-running event beginning days earlier', () =
   store.save({ ...base, id: 'long-event', kind: 'EVENT', startsAt: '2026-10-01T12:00:00.000Z', endsAt: '2026-10-20T12:00:00.000Z' });
   assert.throws(() => store.save({ ...base, id: 'inside-event' }), /CALENDAR_TIME_CONFLICT/);
 });
+
+test('native calendar retry cannot repeat an already committed mutation', () => {
+  const storeSql = memorySql();
+  const store = new WorkforceCalendarStore(storeSql);
+  const created = store.save(base, 0);
+  assert.equal(created.version, 1);
+  assert.throws(() => store.save(base, 0), /CALENDAR_VERSION_CONFLICT/);
+  const updated = store.save({ ...base, title: 'Reunión reprogramada' }, created.version);
+  assert.equal(updated.version, 2);
+  assert.throws(() => store.save({ ...base, title: 'Reunión reprogramada' }, created.version), /CALENDAR_VERSION_CONFLICT/);
+  const cancelled = store.save({ ...base, title: updated.title, status: 'CANCELLED' }, updated.version);
+  assert.equal(cancelled.version, 3);
+  assert.throws(() => store.save({ ...base, title: updated.title, status: 'CANCELLED' }, updated.version), /CALENDAR_VERSION_CONFLICT/);
+  const independentRead = new WorkforceCalendarStore(storeSql);
+  assert.equal(independentRead.get('tenant-a', base.id)?.version, 3);
+});
