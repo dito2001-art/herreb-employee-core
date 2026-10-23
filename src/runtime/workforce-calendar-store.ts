@@ -35,15 +35,25 @@ export class WorkforceCalendarStore {
 
   list(tenantId: string, from: string, to: string): WorkforceCalendarEntry[] {
     if (!tenantId.trim() || !Number.isFinite(Date.parse(from)) || !Number.isFinite(Date.parse(to)) || Date.parse(from) >= Date.parse(to)) throw new Error('INVALID_CALENDAR_QUERY');
-    return Array.from(this.sql.exec('SELECT payload FROM workforce_calendar_entries WHERE tenant_id = ? AND starts_at >= ? AND starts_at < ? ORDER BY starts_at', tenantId, from, to))
+    return Array.from(this.sql.exec('SELECT payload FROM workforce_calendar_entries WHERE tenant_id = ? AND starts_at >= ? AND starts_at < ? ORDER BY starts_at', tenantId, new Date(from).toISOString(), new Date(to).toISOString()))
       .map(row => JSON.parse(String(row.payload)) as WorkforceCalendarEntry)
       .filter(entry => entry.tenantId === tenantId && entry.status === 'ACTIVE');
   }
 
   save(input: Omit<WorkforceCalendarEntry, 'version'>, expectedVersion = 0): WorkforceCalendarEntry {
-    if (!input.tenantId.trim() || !input.id.trim() || !input.title.trim() || !['TASK', 'MEETING', 'EVENT'].includes(input.kind) || !['ACTIVE', 'CANCELLED'].includes(input.status) || !Number.isFinite(Date.parse(input.startsAt)) || (input.endsAt && (!Number.isFinite(Date.parse(input.endsAt)) || Date.parse(input.endsAt) <= Date.parse(input.startsAt)))) throw new Error('INVALID_CALENDAR_ENTRY');
+    if (!input || typeof input !== 'object' || typeof input.tenantId !== 'string' || typeof input.id !== 'string' || typeof input.title !== 'string' || typeof input.startsAt !== 'string' || typeof input.updatedAt !== 'string' || (input.endsAt !== undefined && typeof input.endsAt !== 'string') || !input.tenantId.trim() || !input.id.trim() || !input.title.trim() || !['TASK', 'MEETING', 'EVENT'].includes(input.kind) || !['ACTIVE', 'CANCELLED'].includes(input.status) || !Number.isFinite(Date.parse(input.startsAt)) || !Number.isFinite(Date.parse(input.updatedAt)) || (input.endsAt && (!Number.isFinite(Date.parse(input.endsAt)) || Date.parse(input.endsAt) <= Date.parse(input.startsAt)))) throw new Error('INVALID_CALENDAR_ENTRY');
+    if (input.kind !== 'TASK' && !input.endsAt) throw new Error('CALENDAR_END_REQUIRED');
     const current = this.get(input.tenantId, input.id);
     if ((current?.version ?? 0) !== expectedVersion) throw new Error('CALENDAR_VERSION_CONFLICT');
+    if (input.status === 'ACTIVE' && input.kind !== 'TASK' && input.endsAt) {
+      // Include earlier-starting meetings that can still overlap this slot.
+      // A finite lookback would miss long-running events.
+      const overlaps = Array.from(this.sql.exec('SELECT payload FROM workforce_calendar_entries WHERE tenant_id = ? AND starts_at < ? ORDER BY starts_at', input.tenantId, new Date(input.endsAt).toISOString()))
+        .map(row => JSON.parse(String(row.payload)) as WorkforceCalendarEntry)
+        .filter(entry => entry.tenantId === input.tenantId && entry.status === 'ACTIVE' && entry.id !== input.id && entry.kind !== 'TASK' && entry.endsAt);
+      if (overlaps.some(entry => Date.parse(entry.startsAt) < Date.parse(input.endsAt!) && Date.parse(entry.endsAt!) > Date.parse(input.startsAt))) throw new Error('CALENDAR_TIME_CONFLICT');
+    }
+
     const next: WorkforceCalendarEntry = { ...input, version: expectedVersion + 1 };
     this.sql.exec('INSERT INTO workforce_calendar_entries (tenant_id, id, version, starts_at, payload) VALUES (?, ?, ?, ?, ?) ON CONFLICT(tenant_id, id) DO UPDATE SET version = excluded.version, starts_at = excluded.starts_at, payload = excluded.payload', input.tenantId, input.id, next.version, new Date(input.startsAt).toISOString(), JSON.stringify(next));
     const readback = this.get(input.tenantId, input.id);
