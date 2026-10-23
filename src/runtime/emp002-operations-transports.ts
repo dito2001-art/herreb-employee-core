@@ -22,6 +22,7 @@ export interface EMP002OperationsTransportEnv {
   AG002_TENANT_ID?: string;
   CALENDAR_TENANT_ID?: string;
   TENANT_MANIFESTS_JSON?: string;
+  EMP002_RECONCILIATION_TOKEN?: string;
   META_ACCESS_TOKEN?: string;
   META_PHONE_NUMBER_ID?: string;
   META_GRAPH_VERSION?: string;
