@@ -139,3 +139,42 @@ test("Meta reconciliation commits UNKNOWN->SENT with audit, rejects replay and t
   assert.equal(records.get("tenant-B:message-100")?.status, "UNKNOWN");
   assert.equal(audit.length, 1);
 });
+
+test("Meta UNKNOWN reconciliation after restart is durable, blocks blind resend and serializes competing operators", async () => {
+  const records = new Map<string, { status: string; provider_message_id: string | null }>([
+    ["tenant-A:message-200", { status: "UNKNOWN", provider_message_id: null }]
+  ]);
+  const audit: string[] = [];
+  const sql = { exec(query: string, ...args: unknown[]) {
+    const key = (tenant: unknown, id: unknown) => String(tenant) + ":" + String(id);
+    if (query.startsWith("SELECT status, provider_message_id")) {
+      const row = records.get(key(args[0], args[1]));
+      return row ? [row] : [];
+    }
+    if (query.startsWith("UPDATE emp002_native_outbound")) {
+      records.set(key(args[2], args[3]), { status: String(args[0]), provider_message_id: String(args[1]) });
+      return [];
+    }
+    if (query.startsWith("INSERT INTO emp002_native_outbound_audit")) {
+      audit.push(key(args[0], args[1]));
+      return [];
+    }
+    throw new Error("unexpected SQL: " + query);
+  } };
+  const storage = { sql, transactionSync<T>(fn: () => T): T { return fn(); } };
+  const reconcile = (EMP002Operations.prototype as unknown as { reconcileOutbound: (tenant: string, message: string, provider: string, evidence: string, actor: string) => { ok: boolean } }).reconcileOutbound;
+  const send = (EMP002Operations.prototype as unknown as { sendNativeReplyOnce: (tenant: string, message: string, send: () => Promise<{ messageId: string | null }>) => Promise<{ messageId: string }> }).sendNativeReplyOnce;
+  const firstInstance = { state: { storage } };
+  const restartedInstance = { state: { storage } };
+  let outboundCalls = 0;
+  const unsafeResend = () => { outboundCalls++; return Promise.resolve({ messageId: "wamid.duplicate" }); };
+  await assert.rejects(send.call(restartedInstance, "tenant-A", "message-200", unsafeResend), /RECONCILIATION_REQUIRED/);
+  assert.equal(outboundCalls, 0);
+  const first = reconcile.call(firstInstance, "tenant-A", "message-200", "wamid.confirmed200", "meta-confirmation-200", "operator-A");
+  assert.equal(first.ok, true);
+  assert.throws(() => reconcile.call(restartedInstance, "tenant-A", "message-200", "wamid.different200", "meta-confirmation-201", "operator-B"), /NOT_UNKNOWN/);
+  const recovered = await send.call(restartedInstance, "tenant-A", "message-200", unsafeResend);
+  assert.equal(recovered.messageId, "wamid.confirmed200");
+  assert.equal(outboundCalls, 0);
+  assert.deepEqual(audit, ["tenant-A:message-200"]);
+});
