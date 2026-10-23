@@ -377,7 +377,7 @@ export class EMP002Operations implements DurableObject {
           }
           const outbound = await this.sendNativeReplyOnce(message.tenantId, message.messageId, () => whatsapp.sendText({ tenantId: message.tenantId, to: message.from, body: reply, audience: 'EXTERNAL_CONTACT', correlationId, idempotencyKey: `emp002-${mode}:${message.messageId}` }));
           const saved = await this.conversationStore.append(message.tenantId, message.from, { role: 'assistant', content: reply, at: new Date().toISOString(), messageId: outbound.messageId ?? undefined });
-          return Response.json({ ok: true, handled: true, mode, provider: outbound.provider, outboundMessageId: outbound.messageId, correlationId, historyLength: saved.messages.length });
+          return Response.json({ ok: true, handled: true, mode, provider: 'meta-cloud-api', outboundMessageId: outbound.messageId, correlationId, historyLength: saved.messages.length });
         } catch (error) { const code = error instanceof Error ? error.message : 'EMP002_GENERAL_CONVERSATION_FAILED'; return Response.json({ ok: false, handled: false, mode: 'general-conversation', error: code }, { status: code === 'EMP002_OPERATIONS_TENANT_SCOPE_MISMATCH' ? 403 : 503 }); }
       }
       try {
