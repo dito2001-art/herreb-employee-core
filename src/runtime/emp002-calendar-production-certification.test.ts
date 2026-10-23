@@ -77,3 +77,65 @@ test("native Meta fence persists confirmed receipt, blocks ambiguous retries, an
   assert.equal(recovered.messageId, "wamid.concurrent");
   assert.equal(sends, 4);
 });
+
+test("Meta reconciliation rejects absent token, incorrect token, missing tenant, invalid evidence and malformed JSON", async () => {
+  type Fetcher = (request: Request) => Promise<Response>;
+  const fetcher = (EMP002Operations.prototype as unknown as { fetch: Fetcher }).fetch;
+  const base = "https://internal.example/internal/meta-reconcile";
+  const payload = { messageId: "message-100", providerMessageId: "wamid.confirmed100", evidenceReference: "meta-delivery-proof-100" };
+  const object = { env: { EMP002_RECONCILIATION_TOKEN: "secret-for-tests" } };
+  const call = (headers: Record<string, string>, body: string = JSON.stringify(payload), receiver: unknown = object) =>
+    fetcher.call(receiver, new Request(base, { method: "POST", headers, body }));
+  const scope = { "x-herreb-internal-tenant-id": "tenant-A", "x-herreb-reconciliation-actor": "operator@example.com" };
+  assert.equal((await call({ ...scope })).status, 403);
+  assert.equal((await call({ ...scope, "x-emp002-reconciliation-token": "incorrect" })).status, 403);
+  assert.equal((await call({ ...scope, "x-emp002-reconciliation-token": "secret-for-tests" }, undefined, { env: {} })).status, 403);
+  assert.equal((await call({ "x-emp002-reconciliation-token": "secret-for-tests", "x-herreb-reconciliation-actor": "operator@example.com" })).status, 403);
+  assert.equal((await call({ ...scope, "x-emp002-reconciliation-token": "secret-for-tests" }, JSON.stringify({ ...payload, evidenceReference: "" }))).status, 422);
+  assert.equal((await call({ ...scope, "x-emp002-reconciliation-token": "secret-for-tests" }, "{invalid")).status, 422);
+});
+
+test("Meta reconciliation commits UNKNOWN->SENT with audit, rejects replay and tenant crossing, rolls back audit failure", () => {
+  const records = new Map<string, { status: string; provider_message_id: string | null }>([
+    ["tenant-A:message-100", { status: "UNKNOWN", provider_message_id: null }],
+    ["tenant-B:message-100", { status: "UNKNOWN", provider_message_id: null }]
+  ]);
+  const audit: string[] = [];
+  let failAudit = false;
+  const storage = {
+    sql: { exec(query: string, ...args: unknown[]) {
+      if (query.startsWith("SELECT status, provider_message_id")) {
+        const record = records.get(String(args[0]) + ":" + String(args[1]));
+        return record ? [record] : [];
+      }
+      if (query.startsWith("UPDATE emp002_native_outbound")) {
+        records.set(String(args[2]) + ":" + String(args[3]), { status: String(args[0]), provider_message_id: String(args[1]) });
+        return [];
+      }
+      if (query.startsWith("INSERT INTO emp002_native_outbound_audit")) {
+        if (failAudit) throw new Error("audit storage failure");
+        audit.push(String(args[0]) + ":" + String(args[1]));
+        return [];
+      }
+      throw new Error("unexpected SQL " + query);
+    } },
+    transactionSync<T>(operation: () => T): T {
+      const before = new Map(Array.from(records, ([key, value]) => [key, { ...value }]));
+      const previousAuditLength = audit.length;
+      try { return operation(); }
+      catch (error) { records.clear(); for (const [key, value] of before) records.set(key, value); audit.length = previousAuditLength; throw error; }
+    }
+  };
+  type Reconcile = (tenant: string, message: string, provider: string, evidence: string, actor: string) => { ok: boolean; status: string };
+  const reconcile = (EMP002Operations.prototype as unknown as { reconcileOutbound: Reconcile }).reconcileOutbound;
+  const obj = { state: { storage } };
+  failAudit = true;
+  assert.throws(() => reconcile.call(obj, "tenant-A", "message-100", "wamid.confirmed100", "proof-reference-100", "operator"), /audit storage failure/);
+  assert.equal(records.get("tenant-A:message-100")?.status, "UNKNOWN");
+  failAudit = false;
+  assert.deepEqual(reconcile.call(obj, "tenant-A", "message-100", "wamid.confirmed100", "proof-reference-100", "operator"), { ok: true, status: "SENT" });
+  assert.equal(audit.length, 1);
+  assert.throws(() => reconcile.call(obj, "tenant-A", "message-100", "wamid.confirmed100", "proof-reference-100", "operator"), /NOT_UNKNOWN/);
+  assert.equal(records.get("tenant-B:message-100")?.status, "UNKNOWN");
+  assert.equal(audit.length, 1);
+});
