@@ -54,12 +54,41 @@ export class EMP002Operations implements DurableObject {
     this.appointmentStore = new SqliteAppointmentLifecycleStore(this.state.storage.sql);
     this.nativeCalendar = new WorkforceCalendarStore(this.state.storage.sql);
     this.state.storage.sql.exec('CREATE TABLE IF NOT EXISTS emp002_native_outbound (tenant_id TEXT NOT NULL, message_id TEXT NOT NULL, status TEXT NOT NULL, provider_message_id TEXT, PRIMARY KEY (tenant_id, message_id))');
+    this.state.storage.sql.exec('CREATE TABLE IF NOT EXISTS emp002_native_outbound_audit (tenant_id TEXT NOT NULL, message_id TEXT NOT NULL, provider_message_id TEXT NOT NULL, evidence_reference TEXT NOT NULL, actor TEXT NOT NULL, reconciled_at TEXT NOT NULL, PRIMARY KEY (tenant_id, message_id))');
     this.state.storage.sql.exec('CREATE TABLE IF NOT EXISTS emp002_native_receipts (tenant_id TEXT NOT NULL, message_id TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY (tenant_id, message_id))');
+  }
+
+  // Administrative recovery is internal-only, deny-by-default and evidence-gated.
+  private reconcileOutbound(tenantId: string, messageId: string, providerMessageId: string, evidenceReference: string, actor: string): { ok: boolean; status: string } {
+    return this.state.storage.transactionSync(() => {
+      const rows = Array.from(this.state.storage.sql.exec('SELECT status, provider_message_id FROM emp002_native_outbound WHERE tenant_id = ? AND message_id = ?', tenantId, messageId));
+      if (rows.length !== 1 || rows[0].status !== 'UNKNOWN') throw new Error('EMP002_RECONCILIATION_NOT_UNKNOWN');
+      this.state.storage.sql.exec('UPDATE emp002_native_outbound SET status = ?, provider_message_id = ? WHERE tenant_id = ? AND message_id = ?', 'SENT', providerMessageId, tenantId, messageId);
+      this.state.storage.sql.exec('INSERT INTO emp002_native_outbound_audit (tenant_id, message_id, provider_message_id, evidence_reference, actor, reconciled_at) VALUES (?, ?, ?, ?, ?, ?)', tenantId, messageId, providerMessageId, evidenceReference, actor, new Date().toISOString());
+      return { ok: true, status: 'SENT' };
+    });
   }
 
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === 'GET' && url.pathname === '/health') return Response.json({ ok: true, service: 'EMP002Operations' });
+
+    if (request.method === 'POST' && url.pathname === '/internal/meta-reconcile') {
+      // A distinct secret, never the tenant header, authenticates the operator gateway.
+      const expected = this.env.EMP002_RECONCILIATION_TOKEN?.trim();
+      const supplied = request.headers.get('x-emp002-reconciliation-token');
+      if (!expected || !supplied || supplied !== expected) return Response.json({ ok: false, error: 'RECONCILIATION_FORBIDDEN' }, { status: 403 });
+      const tenantId = request.headers.get('x-herreb-internal-tenant-id')?.trim() ?? '';
+      const actor = request.headers.get('x-herreb-reconciliation-actor')?.trim() ?? '';
+      if (!/^[a-zA-Z0-9_-]{1,100}$/.test(tenantId) || !/^[a-zA-Z0-9@._-]{3,150}$/.test(actor)) return Response.json({ ok: false, error: 'INVALID_RECONCILIATION_SCOPE' }, { status: 403 });
+      const body = await request.json<{ messageId?: string; providerMessageId?: string; evidenceReference?: string }>().catch(() => ({}));
+      const messageId = body.messageId?.trim() ?? '';
+      const providerMessageId = body.providerMessageId?.trim() ?? '';
+      const evidenceReference = body.evidenceReference?.trim() ?? '';
+      if (!/^wamid[.\w-]{4,255}$/.test(providerMessageId) || !/^[\w.:-]{4,255}$/.test(messageId) || evidenceReference.length < 12 || evidenceReference.length > 1024) return Response.json({ ok: false, error: 'RECONCILIATION_EVIDENCE_REQUIRED' }, { status: 422 });
+      try { return Response.json(this.reconcileOutbound(tenantId, messageId, providerMessageId, evidenceReference, actor)); }
+      catch { return Response.json({ ok: false, error: 'RECONCILIATION_CONFLICT' }, { status: 409 }); }
+    }
 
     // Internal-only endpoint: public worker must authenticate and resolve the tenant
     // before forwarding. Never accept an arbitrary tenant from this payload.
