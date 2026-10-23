@@ -81,7 +81,7 @@ export class EMP002Operations implements DurableObject {
       const tenantId = request.headers.get('x-herreb-internal-tenant-id')?.trim() ?? '';
       const actor = request.headers.get('x-herreb-reconciliation-actor')?.trim() ?? '';
       if (!/^[a-zA-Z0-9_-]{1,100}$/.test(tenantId) || !/^[a-zA-Z0-9@._-]{3,150}$/.test(actor)) return Response.json({ ok: false, error: 'INVALID_RECONCILIATION_SCOPE' }, { status: 403 });
-      const body = await request.json<{ messageId?: string; providerMessageId?: string; evidenceReference?: string }>().catch(() => ({}));
+      const body = await request.json<{ messageId?: string; providerMessageId?: string; evidenceReference?: string }>().catch((): { messageId?: string; providerMessageId?: string; evidenceReference?: string } => ({}));
       const messageId = body.messageId?.trim() ?? '';
       const providerMessageId = body.providerMessageId?.trim() ?? '';
       const evidenceReference = body.evidenceReference?.trim() ?? '';
