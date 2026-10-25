@@ -1,0 +1,69 @@
+name: WF-00 PR290 exact-SHA staging validation (NO PUBLISH)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/wf00-pr290-exact-sha-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-pr290:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      CLOUDFLARE_API_TOKEN: ''
+      CLOUDFLARE_API_KEY: ''
+      CLOUDFLARE_EMAIL: ''
+      CLOUDFLARE_ACCOUNT_ID: ''
+    steps:
+      - name: Checkout immutable PR 290 SHA
+        uses: actions/checkout@v4
+        with:
+          ref: addf998702adccaa9e073a5286d80cb171ff5f82
+          persist-credentials: false
+      - name: Verify provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "addf998702adccaa9e073a5286d80cb171ff5f82"
+          test -f deploy/staging/wrangler.emp003.jsonc
+          mkdir -p wf00-evidence
+          printf 'SHA=addf998702adccaa9e073a5286d80cb171ff5f82\nCONFIG=deploy/staging/wrangler.emp003.jsonc\nNO_PUBLISH=true\n' > wf00-evidence/provenance.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Guard crypto and negative tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes tsx@4.23.13 --test src/staging/emp003-access-crypto.test.ts src/staging/emp003-entry.test.ts 2>&1 | tee wf00-evidence/staging-tests.log
+      - name: TypeScript validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit 2>&1 | tee wf00-evidence/typescript.log
+      - name: Build console
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build:console 2>&1 | tee wf00-evidence/build-console.log
+      - name: Wrangler staging dry-run (never publish)
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config deploy/staging/wrangler.emp003.jsonc --dry-run --outdir wf00-evidence/wrangler-output 2>&1 | tee wf00-evidence/wrangler-dryrun.log
+      - name: Evidence for WF-04
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wf00-pr290-exact-sha-predeploy-evidence
+          path: wf00-evidence/
+          if-no-files-found: warn
+          retention-days: 14
