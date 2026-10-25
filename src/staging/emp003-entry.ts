@@ -19,17 +19,26 @@ export default {
     // Dedicated issuer, audience and identity map are mandatory. Missing values
     // must never fall back to production or to unverified email headers.
     const config = env as Env & {
-      WORKFORCE_ACCESS_TEAM_DOMAIN?: string;
-      WORKFORCE_ACCESS_AUDIENCE?: string;
-      ACCESS_IDENTITY_MAP_JSON?: string;
+      EMP003_STAGING_ACCESS_TEAM_DOMAIN?: string;
+      EMP003_STAGING_ACCESS_AUDIENCE?: string;
+      EMP003_STAGING_IDENTITY_MAP_JSON?: string;
     };
-    if (!config.WORKFORCE_ACCESS_TEAM_DOMAIN?.trim() ||
-        !config.WORKFORCE_ACCESS_AUDIENCE?.trim() ||
-        !config.ACCESS_IDENTITY_MAP_JSON?.trim())
+    if (!config.EMP003_STAGING_ACCESS_TEAM_DOMAIN?.trim() ||
+        !config.EMP003_STAGING_ACCESS_AUDIENCE?.trim() ||
+        !config.EMP003_STAGING_IDENTITY_MAP_JSON?.trim())
       return deny(503, "EMP003_STAGING_ACCESS_NOT_CONFIGURED");
 
+    const isolatedEnv = {
+      ...env,
+      WORKFORCE_ACCESS_TEAM_DOMAIN: config.EMP003_STAGING_ACCESS_TEAM_DOMAIN,
+      WORKFORCE_ACCESS_AUDIENCE: config.EMP003_STAGING_ACCESS_AUDIENCE,
+      ACCESS_IDENTITY_MAP_JSON: config.EMP003_STAGING_IDENTITY_MAP_JSON,
+      WORKFORCE_PLATFORM_ADMIN_EMAILS_JSON: "[]",
+      WORKFORCE_PLATFORM_ADMIN_TOKEN: undefined,
+      WORKFORCE_PLATFORM_ADMIN_ACTOR_ID: undefined
+    };
     try {
-      const actor = await readWorkforceAdminAccessActor(request, config);
+      const actor = await readWorkforceAdminAccessActor(request, isolatedEnv);
       if ((actor.role !== "owner" && actor.role !== "user") || !actor.actorId || !actor.tenantId)
         return deny(403, "EMP003_STAGING_ACTOR_FORBIDDEN");
     } catch {
@@ -37,6 +46,6 @@ export default {
     }
     // Downstream browser handler independently verifies JWT and scopes DO by
     // the server-derived tenant, rejecting cross-tenant response payloads.
-    return employeeWorker.fetch(request, env, ctx);
+    return employeeWorker.fetch(request, isolatedEnv as Env, ctx);
   }
 };
