@@ -56,11 +56,13 @@ jobs:
           set -euo pipefail
           npx tsc --noEmit 2>&1 | tee wf00-evidence/typescript.log
       - name: Build console
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
           npm run build:console 2>&1 | tee wf00-evidence/build-console.log
       - name: Wrangler staging dry-run (never publish)
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
