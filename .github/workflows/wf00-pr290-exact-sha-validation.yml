@@ -1,4 +1,4 @@
-name: WF-00 PR290 exact-SHA staging validation (NO PUBLISH)
+name: WF-00 PR292 candidate exact-SHA validation (NO PUBLISH)
 
 on:
   pull_request:
@@ -20,19 +20,19 @@ jobs:
       CLOUDFLARE_EMAIL: ''
       CLOUDFLARE_ACCOUNT_ID: ''
     steps:
-      - name: Checkout immutable PR 290 SHA
+      - name: Checkout immutable PR 292 candidate SHA
         uses: actions/checkout@v4
         with:
-          ref: addf998702adccaa9e073a5286d80cb171ff5f82
+          ref: f4a36fd766c241e8a54675e7c35b76f79b59ae74
           persist-credentials: false
       - name: Verify provenance
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "addf998702adccaa9e073a5286d80cb171ff5f82"
+          test "$(git rev-parse HEAD)" = "f4a36fd766c241e8a54675e7c35b76f79b59ae74"
           test -f deploy/staging/wrangler.emp003.jsonc
           mkdir -p wf00-evidence
-          printf 'SHA=addf998702adccaa9e073a5286d80cb171ff5f82\nCONFIG=deploy/staging/wrangler.emp003.jsonc\nNO_PUBLISH=true\n' > wf00-evidence/provenance.txt
+          printf 'CANDIDATE_PR=292\nNOT_INTEGRATED_IN_PR290=true\nSHA=f4a36fd766c241e8a54675e7c35b76f79b59ae74\nCONFIG=deploy/staging/wrangler.emp003.jsonc\nNO_PUBLISH=true\n' > wf00-evidence/provenance.txt
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -71,7 +71,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: wf00-pr290-exact-sha-predeploy-evidence
+          name: wf00-pr292-candidate-exact-sha-evidence
           path: wf00-evidence/
           if-no-files-found: warn
           retention-days: 14
