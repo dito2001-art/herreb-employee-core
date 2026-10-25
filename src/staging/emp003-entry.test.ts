@@ -36,10 +36,13 @@ test("all internal EMP003 endpoints reject before M2M, even with spoofed headers
   }
 });
 
-test("preview, static assets, agents and websocket paths are denied", async () => {
-  for (const path of ["/", "/index.html", "/assets/app.js", "/agents/ChatAgent/tenant",
+test("preview, agents and websocket paths remain denied; static assets fail closed without Access config", async () => {
+  for (const path of ["/agents/ChatAgent/tenant",
     "/cdn-cgi/preview", "/api/admin/workforce", "/webhooks/meta/whatsapp"]) {
     assert.equal((await call(path)).status, 404, path);
+  }
+  for (const path of ["/", "/index.html", "/assets/app.js"]) {
+    assert.equal((await call(path)).status, 503, path);
   }
   const upgrade = await call("/api/emp003/operations", {
     headers: { connection: "Upgrade", upgrade: "websocket" }
@@ -58,3 +61,23 @@ test("non-GET and forged email header are denied", async () => {
 // JWT signature, issuer, audience, expiry and tenant A/B cryptographic
 // integration tests remain REQUIRED before GO: this negative suite does not
 // claim to generate or verify real Cloudflare-signed tokens.
+
+test("asset reads require a verified Access JWT even with configured staging identity", async () => {
+  const configured = {
+    EMP003_STAGING_ACCESS_TEAM_DOMAIN: "example.cloudflareaccess.com",
+    EMP003_STAGING_ACCESS_AUDIENCE: "staging-only-audience",
+    EMP003_STAGING_IDENTITY_MAP_JSON: "[]"
+  } as unknown as typeof env;
+  for (const path of ["/", "/index.html", "/assets/app.js"]) {
+    assert.equal((await call(path, undefined, configured)).status, 401, path);
+  }
+});
+
+test("static asset allowlist never opens internal, preview or mutation routes", async () => {
+  for (const path of ["/assets", "/assets/../api/internal/emp003/drafts",
+    "/assets/%2e%2e/api/emp003/operations", "/assets/app.js%2fsecret",
+    "/api/emp003/drafts", "/api/emp003/operations/extra"]) {
+    assert.equal((await call(path)).status, 404, path);
+  }
+  assert.equal((await call("/assets/app.js", { method: "POST" })).status, 404);
+});
