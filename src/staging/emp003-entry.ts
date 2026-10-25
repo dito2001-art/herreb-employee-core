@@ -1,4 +1,7 @@
 import employeeWorker from "../worker";
+// Wrangler requires every DO class bound in the staging manifest to be exported
+// by this entrypoint; forwarding these exports does not expose additional routes.
+export { ChatAgent, EMP002Operations, WorkforceAdminState, EMP003CampaignState } from "../worker";
 import { readWorkforceAdminAccessActor } from "../runtime/workforce-admin-access-read";
 
 /**
