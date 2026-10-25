@@ -17,7 +17,7 @@ test("anonymous JWT missing fails closed even with configured audience and ident
     EMP003_STAGING_ACCESS_TEAM_DOMAIN: "example.cloudflareaccess.com",
     EMP003_STAGING_ACCESS_AUDIENCE: "staging-only-audience",
     EMP003_STAGING_IDENTITY_MAP_JSON: "[]"
-  } as typeof env);
+  } as unknown as typeof env);
   assert.equal(response.status, 401);
 });
 
