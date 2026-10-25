@@ -3,6 +3,7 @@ import employeeWorker from "../worker";
 // by this entrypoint; forwarding these exports does not expose additional routes.
 export { ChatAgent, EMP002Operations, WorkforceAdminState, EMP003CampaignState } from "../worker";
 import { readWorkforceAdminAccessActor } from "../runtime/workforce-admin-access-read";
+import { handleEMP003BrowserDraftWrite } from "../runtime/emp003-browser-draft-write";
 
 /**
  * EMP-003 staging-only ingress. Never use the shared production Access policy.
@@ -14,7 +15,8 @@ export default {
     const deny = (status: number, error: string) =>
       Response.json({ ok: false, error }, { status, headers: { "cache-control": "no-store" } });
     const url = new URL(request.url);
-    if (request.method !== "GET" || url.pathname !== "/api/emp003/operations")
+    const draftWrite = request.method === "POST" && url.pathname === "/api/emp003/drafts";
+    if (!draftWrite && (request.method !== "GET" || url.pathname !== "/api/emp003/operations"))
       return deny(404, "EMP003_STAGING_ROUTE_DISABLED");
     if (request.headers.get("upgrade") || request.headers.get("connection")?.toLowerCase().includes("upgrade"))
       return deny(403, "EMP003_STAGING_WEBSOCKET_DISABLED");
@@ -47,6 +49,7 @@ export default {
     } catch {
       return deny(401, "EMP003_STAGING_ACCESS_DENIED");
     }
+    if (draftWrite) return handleEMP003BrowserDraftWrite(request, isolatedEnv);
     // Downstream browser handler independently verifies JWT and scopes DO by
     // the server-derived tenant, rejecting cross-tenant response payloads.
     return employeeWorker.fetch(request, isolatedEnv as Env, ctx);
