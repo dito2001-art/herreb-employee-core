@@ -96,6 +96,13 @@ jobs:
           check GET /agents/ChatAgent/tenant 404
           check GET /assets/app.js 404
           check GET / 404
+          # Explicit websocket upgrade and spoofed identity headers must fail closed.
+          ws=$(curl -sS -o /dev/null -w '%{http_code}' -H 'Connection: Upgrade' -H 'Upgrade: websocket' 'http://127.0.0.1:8789/api/emp003/operations')
+          printf 'WS /api/emp003/operations expected=403 actual=%s\\n' "$ws" | tee -a wf00-evidence/workerd-ingress-negative.log
+          test "$ws" = 403
+          spoof=$(curl -sS -o /dev/null -w '%{http_code}' -H 'cf-access-authenticated-user-email: owner@example.com' -H 'x-herreb-workforce-admin-token: spoofed' 'http://127.0.0.1:8789/api/emp003/operations?tenantId=tenant-B')
+          printf 'SPOOF tenant-B no Access config expected=503 actual=%s\\n' "$spoof" | tee -a wf00-evidence/workerd-ingress-negative.log
+          test "$spoof" = 503
       - name: Evidence for WF-04
         if: always()
         uses: actions/upload-artifact@v4
