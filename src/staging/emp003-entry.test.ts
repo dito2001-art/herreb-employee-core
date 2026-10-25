@@ -14,9 +14,9 @@ test("anonymous read fails closed without staging Access config", async () => {
 
 test("anonymous JWT missing fails closed even with configured audience and identities", async () => {
   const response = await call("/api/emp003/operations", undefined, {
-    WORKFORCE_ACCESS_TEAM_DOMAIN: "example.cloudflareaccess.com",
-    WORKFORCE_ACCESS_AUDIENCE: "staging-only-audience",
-    ACCESS_IDENTITY_MAP_JSON: "[]"
+    EMP003_STAGING_ACCESS_TEAM_DOMAIN: "example.cloudflareaccess.com",
+    EMP003_STAGING_ACCESS_AUDIENCE: "staging-only-audience",
+    EMP003_STAGING_IDENTITY_MAP_JSON: "[]"
   } as typeof env);
   assert.equal(response.status, 401);
 });
