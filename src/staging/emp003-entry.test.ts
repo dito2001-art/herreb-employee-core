@@ -36,10 +36,13 @@ test("all internal EMP003 endpoints reject before M2M, even with spoofed headers
   }
 });
 
-test("preview, static assets, agents and websocket paths are denied", async () => {
-  for (const path of ["/", "/index.html", "/assets/app.js", "/agents/ChatAgent/tenant",
+test("preview, agents and websocket paths remain denied; static assets fail closed without Access config", async () => {
+  for (const path of ["/agents/ChatAgent/tenant",
     "/cdn-cgi/preview", "/api/admin/workforce", "/webhooks/meta/whatsapp"]) {
     assert.equal((await call(path)).status, 404, path);
+  }
+  for (const path of ["/", "/index.html", "/assets/app.js"]) {
+    assert.equal((await call(path)).status, 503, path);
   }
   const upgrade = await call("/api/emp003/operations", {
     headers: { connection: "Upgrade", upgrade: "websocket" }
