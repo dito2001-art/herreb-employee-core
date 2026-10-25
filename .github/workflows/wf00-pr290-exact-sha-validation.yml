@@ -1,0 +1,113 @@
+name: WF-00 PR290 integrated exact-SHA validation (NO PUBLISH)
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/wf00-pr290-exact-sha-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-pr290:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: 'true'
+      CLOUDFLARE_API_TOKEN: ''
+      CLOUDFLARE_API_KEY: ''
+      CLOUDFLARE_EMAIL: ''
+      CLOUDFLARE_ACCOUNT_ID: ''
+    steps:
+      - name: Checkout immutable PR 290 integrated SHA
+        uses: actions/checkout@v4
+        with:
+          ref: f4a36fd766c241e8a54675e7c35b76f79b59ae74
+          persist-credentials: false
+      - name: Verify provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "f4a36fd766c241e8a54675e7c35b76f79b59ae74"
+          test -f deploy/staging/wrangler.emp003.jsonc
+          mkdir -p wf00-evidence
+          printf 'CANDIDATE_PR=290\nINTEGRATED_IN_PR290=true\nSHA=f4a36fd766c241e8a54675e7c35b76f79b59ae74\nCONFIG=deploy/staging/wrangler.emp003.jsonc\nNO_PUBLISH=true\n' > wf00-evidence/provenance.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Guard crypto and negative tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes tsx@4.23.13 --test src/staging/emp003-access-crypto.test.ts 2>&1 | tee wf00-evidence/staging-crypto-tests.log
+      - name: Staging ingress integration test (Node cloudflare unsupported; non-gating evidence)
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes tsx@4.23.13 --test src/staging/emp003-entry.test.ts 2>&1 | tee wf00-evidence/staging-ingress-integration.log
+      - name: TypeScript validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit 2>&1 | tee wf00-evidence/typescript.log
+      - name: Build console
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build:console 2>&1 | tee wf00-evidence/build-console.log
+      - name: Wrangler staging dry-run (never publish)
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config deploy/staging/wrangler.emp003.jsonc --dry-run --outdir wf00-evidence/wrangler-output 2>&1 | tee wf00-evidence/wrangler-dryrun.log
+      - name: Local Workers runtime ingress negative smoke (no remote deploy)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p wf00-evidence
+          npx wrangler dev --config deploy/staging/wrangler.emp003.jsonc --local --ip 127.0.0.1 --port 8789 > wf00-evidence/workerd-local.log 2>&1 &
+          worker_pid=$!
+          trap 'kill "$worker_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 45); do
+            if curl -fsS -o /dev/null http://127.0.0.1:8789/__wf00_health_probe 2>/dev/null; then ready=1; break; fi
+            if curl -sS -o /dev/null http://127.0.0.1:8789/__wf00_health_probe 2>/dev/null; then ready=1; break; fi
+            if ! kill -0 "$worker_pid" 2>/dev/null; then break; fi
+            sleep 2
+          done
+          if [ "$ready" != 1 ]; then cat wf00-evidence/workerd-local.log; echo 'LOCAL_WORKER_NOT_READY'; exit 1; fi
+          check() {
+            local method="$1" path="$2" expected="$3" actual
+            actual=$(curl -sS -o /dev/null -w '%{http_code}' -X "$method" "http://127.0.0.1:8789$path")
+            printf '%s %s expected=%s actual=%s\\n' "$method" "$path" "$expected" "$actual" | tee -a wf00-evidence/workerd-ingress-negative.log
+            test "$actual" = "$expected"
+          }
+          check GET /api/emp003/operations 503
+          check POST /api/emp003/operations 404
+          check GET /api/internal/emp003/review 404
+          check GET /api/internal/emp003/drafts 404
+          check GET /agents/ChatAgent/tenant 404
+          check GET /assets/app.js 404
+          check GET / 404
+          # Explicit websocket upgrade and spoofed identity headers must fail closed.
+          ws=$(curl -sS -o /dev/null -w '%{http_code}' -H 'Connection: Upgrade' -H 'Upgrade: websocket' 'http://127.0.0.1:8789/api/emp003/operations')
+          printf 'WS /api/emp003/operations expected=403 actual=%s\\n' "$ws" | tee -a wf00-evidence/workerd-ingress-negative.log
+          test "$ws" = 403
+          spoof=$(curl -sS -o /dev/null -w '%{http_code}' -H 'cf-access-authenticated-user-email: owner@example.com' -H 'x-herreb-workforce-admin-token: spoofed' 'http://127.0.0.1:8789/api/emp003/operations?tenantId=tenant-B')
+          printf 'SPOOF tenant-B no Access config expected=503 actual=%s\\n' "$spoof" | tee -a wf00-evidence/workerd-ingress-negative.log
+          test "$spoof" = 503
+      - name: Evidence for WF-04
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wf00-pr290-integrated-exact-sha-evidence
+          path: wf00-evidence/
+          if-no-files-found: warn
+          retention-days: 14
