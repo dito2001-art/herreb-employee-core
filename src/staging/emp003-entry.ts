@@ -18,7 +18,7 @@ export default {
     // Do not treat SPA fallback as an authorization decision. Explicit paths only.
     const assetRead = (request.method === "GET" || request.method === "HEAD") &&
       (url.pathname === "/" || url.pathname === "/index.html" ||
-       /^\\/assets\\/[a-zA-Z0-9_./-]+$/.test(url.pathname)) &&
+       url.pathname.startsWith("/assets/") && /^[a-zA-Z0-9_./-]+$/.test(url.pathname.slice(8))) &&
       !url.pathname.split("/").some(segment => segment === "." || segment === "..") &&
       !/%2f|%5c|%2e/i.test(url.pathname);
     if (!operationsRead && !assetRead)
