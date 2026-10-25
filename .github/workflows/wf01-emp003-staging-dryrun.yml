@@ -1,0 +1,71 @@
+name: WF-01 EMP-003 staging Wrangler dry-run (no publish)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/wf01-emp003-staging-dryrun.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  emp003-staging-dryrun:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      CLOUDFLARE_API_TOKEN: ''
+      CLOUDFLARE_API_KEY: ''
+      CLOUDFLARE_EMAIL: ''
+      CLOUDFLARE_ACCOUNT_ID: ''
+    steps:
+      - name: Checkout exact PR 287 candidate SHA
+        uses: actions/checkout@v4
+        with:
+          ref: b6f2034b1322724c43bcce4ec40e4a460920fe53
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Confirm exact SHA and staging config
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "b6f2034b1322724c43bcce4ec40e4a460920fe53"
+          test -f deploy/staging/wrangler.emp003.jsonc
+          echo "SHA=$(git rev-parse HEAD)"
+          echo "CONFIG=deploy/staging/wrangler.emp003.jsonc"
+          echo "NO_PUBLISH=true"
+
+      - name: Install dependencies and build console
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p wf01-evidence
+          npm ci 2>&1 | tee wf01-evidence/npm-ci.log
+          npm run build:console 2>&1 | tee wf01-evidence/build-console.log
+
+      - name: Wrangler staging dry-run only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx wrangler deploy \
+            --config deploy/staging/wrangler.emp003.jsonc \
+            --dry-run \
+            --outdir wf01-evidence/wrangler-output \
+            2>&1 | tee wf01-evidence/wrangler-dryrun.log
+          printf 'SHA=b6f2034b1322724c43bcce4ec40e4a460920fe53\nCONFIG=deploy/staging/wrangler.emp003.jsonc\nDRY_RUN=true\n' > wf01-evidence/provenance.txt
+
+      - name: Upload logs and output for independent WF-04 review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wf01-emp003-staging-dryrun-evidence
+          path: wf01-evidence/
+          if-no-files-found: warn
+          retention-days: 14
