@@ -49,6 +49,8 @@ test("preview, static assets, agents and websocket paths are denied", async () =
 
 test("non-GET and forged email header are denied", async () => {
   assert.equal((await call("/api/emp003/operations", { method: "POST" })).status, 404);
+  assert.equal((await call("/api/emp003/drafts", { method: "GET" })).status, 404);
+  assert.equal((await call("/api/emp003/drafts", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status, 503);
   const response = await call("/api/emp003/operations", {
     headers: { "cf-access-authenticated-user-email": "owner@example.com" }
   });
@@ -58,3 +60,14 @@ test("non-GET and forged email header are denied", async () => {
 // JWT signature, issuer, audience, expiry and tenant A/B cryptographic
 // integration tests remain REQUIRED before GO: this negative suite does not
 // claim to generate or verify real Cloudflare-signed tokens.
+
+test("draft-write rejects missing JWT with configured staging Access", async () => {
+  const configured = {
+    EMP003_STAGING_ACCESS_TEAM_DOMAIN: "example.cloudflareaccess.com",
+    EMP003_STAGING_ACCESS_AUDIENCE: "staging-only-audience",
+    EMP003_STAGING_IDENTITY_MAP_JSON: "[]"
+  } as unknown as typeof env;
+  assert.equal((await call("/api/emp003/drafts", { method: "POST", headers: {
+    "content-type": "application/json", "cf-access-authenticated-user-email": "owner@example.com"
+  }, body: "{}" }, configured)).status, 401);
+});
