@@ -3,6 +3,7 @@ import employeeWorker from "../worker";
 // by this entrypoint; forwarding these exports does not expose additional routes.
 export { ChatAgent, EMP002Operations, WorkforceAdminState, EMP003CampaignState } from "../worker";
 import { readWorkforceAdminAccessActor } from "../runtime/workforce-admin-access-read";
+import { handleEMP003BrowserDraftWrite } from "../runtime/emp003-browser-draft-write";
 
 /**
  * EMP-003 staging-only ingress. Never use the shared production Access policy.
@@ -21,7 +22,8 @@ export default {
        url.pathname.startsWith("/assets/") && /^[a-zA-Z0-9_./-]+$/.test(url.pathname.slice(8))) &&
       !url.pathname.split("/").some(segment => segment === "." || segment === "..") &&
       !/%2f|%5c|%2e/i.test(url.pathname);
-    if (!operationsRead && !assetRead)
+    const draftWrite = request.method === "POST" && url.pathname === "/api/emp003/drafts";
+    if (!operationsRead && !assetRead && !draftWrite)
       return deny(404, "EMP003_STAGING_ROUTE_DISABLED");
     if (request.headers.get("upgrade") || request.headers.get("connection")?.toLowerCase().includes("upgrade"))
       return deny(403, "EMP003_STAGING_WEBSOCKET_DISABLED");
@@ -54,6 +56,7 @@ export default {
     } catch {
       return deny(401, "EMP003_STAGING_ACCESS_DENIED");
     }
+    if (draftWrite) return handleEMP003BrowserDraftWrite(request, isolatedEnv);
     if (assetRead) {
       const assets = (env as Env & { ASSETS?: { fetch(request: Request): Promise<Response> } }).ASSETS;
       if (!assets) return deny(503, "EMP003_STAGING_ASSETS_UNAVAILABLE");
