@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   validate:
-    name: TypeScript, lint and tests
+    name: Validate Employee Core
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -56,6 +56,10 @@ jobs:
         continue-on-error: true
         run: npx tsc --noEmit
 
+      - name: Sales Ops authority and adapter contract regression
+        run: |
+          node --test services/sales-ops/worker.test.mjs
+          npx --yes tsx@4.23.13 --test src/adapters/sales-ops-contract.test.ts
       - name: Core tests
         id: tests
         continue-on-error: true
