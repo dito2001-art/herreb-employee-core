@@ -40,12 +40,14 @@ export async function handleEMP003BrowserDraftWrite(request: Request, env: Env, 
   const destination = new URL("https://emp003-campaign-state.internal/draft");
   destination.searchParams.set("tenantId", actor.tenantId);
   destination.searchParams.set("campaignId", campaignId);
+  // No revision/CAS contract exists for edits yet. Creation is atomic and fail-closed.
+  destination.searchParams.set("createOnly", "1");
   try {
     const response = await stub.fetch(new Request(destination, {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify(parsed.data)
     }));
-    if (!response.ok) return fail(response.status === 400 ? 409 : 503, "EMP003_DRAFT_WRITE_REJECTED");
+    if (!response.ok) return fail(response.status === 409 ? 409 : 503, "EMP003_DRAFT_WRITE_REJECTED");
     const readBack = await stub.fetch(new Request(destination, { method: "GET" }));
     if (!readBack.ok) return fail(503, "EMP003_DRAFT_READBACK_FAILED");
     const payload: unknown = await readBack.json();
