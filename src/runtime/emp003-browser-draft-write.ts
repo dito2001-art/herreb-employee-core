@@ -40,7 +40,7 @@ export async function handleEMP003BrowserDraftWrite(request: Request, env: Env, 
   const destination = new URL("https://emp003-campaign-state.internal/draft");
   destination.searchParams.set("tenantId", actor.tenantId);
   destination.searchParams.set("campaignId", campaignId);
-  // No revision/CAS contract exists for edits yet. Creation is atomic and fail-closed.
+  // Creation is atomic; edits require the expected revision for CAS.
   if (input.expectedRevision === undefined) destination.searchParams.set("createOnly", "1");
   else if (typeof input.expectedRevision === "number" && Number.isSafeInteger(input.expectedRevision) && input.expectedRevision >= 1)
     destination.searchParams.set("expectedRevision", String(input.expectedRevision));
