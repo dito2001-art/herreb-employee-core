@@ -217,3 +217,72 @@ test("browser cannot supply tenant or bypass authentication", async () => {
     401
   );
 });
+test("native portal reminders persist independently, isolate tenants and clear using CAS", async () => {
+  const f = await fixture();
+  const reminderAt = new Date(Date.now() - 60000).toISOString();
+  const task = { ...entry, id: "reminder-task", kind: "TASK", reminderAt };
+  assert.equal(
+    (await f.call({ operation: "save", entry: task, expectedVersion: 0 }))
+      .status,
+    200
+  );
+  const read = await f.call({ operation: "get", id: task.id });
+  assert.equal(
+    ((await read.json()) as { entry: { reminderAt: string } }).entry.reminderAt,
+    reminderAt
+  );
+  let due = await f.call({ operation: "reminders" });
+  assert.equal(
+    ((await due.json()) as { entries: unknown[] }).entries.length,
+    1
+  );
+  due = await f.call({ operation: "reminders" }, f.b);
+  assert.deepEqual(((await due.json()) as { entries: unknown[] }).entries, []);
+  assert.equal(
+    (
+      await f.call({
+        operation: "save",
+        entry: { ...task, reminderAt: "invalid" },
+        expectedVersion: 1
+      })
+    ).status,
+    400
+  );
+  const { reminderAt: _at, ...cleared } = task;
+  assert.equal(
+    (await f.call({ operation: "save", entry: cleared, expectedVersion: 0 }))
+      .status,
+    409
+  );
+  assert.equal(
+    (await f.call({ operation: "save", entry: cleared, expectedVersion: 1 }))
+      .status,
+    200
+  );
+  due = await f.call({ operation: "reminders" });
+  assert.deepEqual(((await due.json()) as { entries: unknown[] }).entries, []);
+  const future = {
+    ...task,
+    id: "future-reminder",
+    reminderAt: new Date(Date.now() + 86400000).toISOString()
+  };
+  assert.equal(
+    (await f.call({ operation: "save", entry: future, expectedVersion: 0 }))
+      .status,
+    200
+  );
+  due = await f.call({ operation: "reminders" });
+  assert.deepEqual(((await due.json()) as { entries: unknown[] }).entries, []);
+  assert.equal(
+    (
+      await f.call({
+        operation: "save",
+        entry: { ...task, id: "cancelled-reminder", status: "CANCELLED" },
+        expectedVersion: 0
+      })
+    ).status,
+    200
+  );
+  due = await f.call({ operation: "reminders" });
+  assert.deepEqual(((await due.json()) as { entries: unknown[] }).entries, []);
+});

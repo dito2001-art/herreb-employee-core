@@ -101,6 +101,7 @@ export class EMP002Operations implements DurableObject {
       if (body.entry?.tenantId && body.entry.tenantId !== tenantId) return Response.json({ ok: false, error: 'TENANT_MISMATCH' }, { status: 403 });
       try {
         if (body.operation === 'get' && body.id) return Response.json({ ok: true, entry: this.nativeCalendar.get(tenantId, body.id) ?? null });
+        if (body.operation === 'reminders') return Response.json({ ok: true, entries: this.nativeCalendar.reminders(tenantId, new Date().toISOString()) });
         if (body.operation === 'list' && body.from && body.to) return Response.json({ ok: true, entries: this.nativeCalendar.list(tenantId, body.from, body.to) });
         if (body.operation === 'save' && body.entry && Number.isInteger(body.expectedVersion) && body.expectedVersion! >= 0) {
           const entry = this.nativeCalendar.save({ ...body.entry, tenantId }, body.expectedVersion);

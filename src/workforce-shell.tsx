@@ -7,9 +7,15 @@ import {
 } from "@phosphor-icons/react";
 import { WorkforceAdminPanel } from "./workforce-admin-panel";
 import { EMP002CalendarDashboard } from "./emp002-calendar-dashboard";
+import { EMP001SalesDashboard } from "./emp001-sales-dashboard";
 import { EMP003CampaignDashboard } from "./emp003-campaign-dashboard";
 
-export type WorkforceView = "assistant" | "admin" | "marketer" | "calendar";
+export type WorkforceView =
+  | "assistant"
+  | "admin"
+  | "marketer"
+  | "calendar"
+  | "sales";
 
 export function WorkforceShell({ assistant }: { assistant: ReactNode }) {
   const [view, setView] = useState<WorkforceView>("assistant");
@@ -23,9 +29,16 @@ export function WorkforceShell({ assistant }: { assistant: ReactNode }) {
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <strong className="text-kumo-default">HerreB AI Workforce</strong>
-            <Badge variant="secondary">Client 0</Badge>
+            <Badge variant="secondary">Workforce</Badge>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant={view === "sales" ? "primary" : "secondary"}
+              onClick={() => setView("sales")}
+            >
+              EMP-001
+            </Button>
             <Button
               size="sm"
               variant={view === "assistant" ? "primary" : "secondary"}
@@ -63,6 +76,10 @@ export function WorkforceShell({ assistant }: { assistant: ReactNode }) {
       <main className="min-h-0 flex-1">
         {view === "assistant" ? (
           assistant
+        ) : view === "sales" ? (
+          <div className="max-w-5xl mx-auto p-5 overflow-y-auto h-full">
+            <EMP001SalesDashboard />
+          </div>
         ) : view === "calendar" ? (
           <div className="max-w-5xl mx-auto p-5 overflow-y-auto h-full">
             <EMP002CalendarDashboard />

@@ -128,6 +128,8 @@ const stagingRequest = async (path: string, init?: RequestInit) =>
   fetch(base + "/staging" + path, init);
 for (const path of [
   "/api/internal/emp003/drafts",
+  "/api/emp001/operations",
+  "/api/emp002/calendar",
   "/agents/ChatAgent/tenant",
   "/cdn-cgi/preview",
   "/api/admin/workforce",

@@ -78,7 +78,7 @@ jobs:
       - name: Sales Ops authority and adapter contract regression
         run: |
           node --test services/sales-ops/worker.test.mjs
-          npx --yes tsx@4.23.13 --test src/adapters/sales-ops-contract.test.ts
+          npx --yes tsx@4.23.13 --test src/adapters/sales-ops-contract.test.ts src/runtime/emp001-browser-sales.test.ts
       - name: Build Workforce portal
         run: npm run build:console
       - name: Core tests

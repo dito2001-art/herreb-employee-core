@@ -7,13 +7,14 @@ const entrySchema = z.object({
   title: z.string().trim().min(1).max(500),
   startsAt: z.string(),
   endsAt: z.string().optional(),
+  reminderAt: z.string().datetime({ offset: true }).optional(),
   status: z.enum(["ACTIVE", "CANCELLED"]),
   updatedAt: z.string(),
   version: z.number().int().positive()
 });
 const inputSchema = z
   .object({
-    operation: z.enum(["get", "list", "save"]),
+    operation: z.enum(["get", "list", "save", "reminders"]),
     id: z
       .string()
       .regex(/^[a-zA-Z0-9_-]{1,100}$/)
@@ -121,7 +122,7 @@ export async function handleEMP002BrowserCalendar(
       );
     const body = (await response.json()) as Record<string, unknown>;
     if (body.ok !== true) return fail(503, "NATIVE_CALENDAR_INVALID_RESPONSE");
-    if (input.operation === "list") {
+    if (input.operation === "list" || input.operation === "reminders") {
       const parsed = z.array(entrySchema).safeParse(body.entries);
       if (
         !parsed.success ||

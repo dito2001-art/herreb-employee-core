@@ -7,6 +7,7 @@ const entrySchema = z.object({
   title: z.string(),
   startsAt: z.string(),
   endsAt: z.string().optional(),
+  reminderAt: z.string().optional(),
   status: z.enum(["ACTIVE", "CANCELLED"]),
   updatedAt: z.string(),
   version: z.number().int().positive()
@@ -37,6 +38,8 @@ async function call(input: unknown) {
 }
 export function EMP002CalendarDashboard() {
   const [entries, setEntries] = useState<Entry[]>([]);
+  const [reminders, setReminders] = useState<Entry[]>([]);
+  const [reminderError, setReminderError] = useState("");
   const [canWrite, setCanWrite] = useState(false);
   const [date, setDate] = useState(() => day(new Date()));
   const [draft, setDraft] = useState({
@@ -45,6 +48,7 @@ export function EMP002CalendarDashboard() {
     title: "",
     startsAt: "",
     endsAt: "",
+    reminderAt: "",
     version: 0
   });
   const [busy, setBusy] = useState(false);
@@ -72,6 +76,31 @@ export function EMP002CalendarDashboard() {
   };
   useEffect(() => {
     let active = true;
+    const refresh = async () => {
+      try {
+        const data = z
+          .object({ ok: z.literal(true), entries: z.array(entrySchema) })
+          .parse(await call({ operation: "reminders" }));
+        if (active) {
+          setReminders(data.entries);
+          setReminderError("");
+        }
+      } catch {
+        if (active) {
+          setReminders([]);
+          setReminderError("Non è stato possibile caricare i promemoria.");
+        }
+      }
+    };
+    void refresh();
+    const timer = setInterval(() => void refresh(), 60000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, []);
+  useEffect(() => {
+    let active = true;
     void read(date)
       .then((data) => {
         if (active) {
@@ -92,6 +121,11 @@ export function EMP002CalendarDashboard() {
     try {
       const data = await read(date);
       setEntries(data.entries);
+      setReminders(
+        z
+          .object({ entries: z.array(entrySchema) })
+          .parse(await call({ operation: "reminders" })).entries
+      );
       setCanWrite(data.canWrite);
       setDraft({
         id: "",
@@ -99,6 +133,7 @@ export function EMP002CalendarDashboard() {
         title: "",
         startsAt: "",
         endsAt: "",
+        reminderAt: "",
         version: 0
       });
       setReloadRequired(false);
@@ -122,6 +157,9 @@ export function EMP002CalendarDashboard() {
         ...(draft.endsAt
           ? { endsAt: new Date(draft.endsAt).toISOString() }
           : {}),
+        ...(draft.reminderAt
+          ? { reminderAt: new Date(draft.reminderAt).toISOString() }
+          : {}),
         status: cancel ? "CANCELLED" : "ACTIVE"
       };
       const receipt = z
@@ -144,12 +182,18 @@ export function EMP002CalendarDashboard() {
         throw new Error("La lectura posterior no coincide.");
       const data = await read(date);
       setEntries(data.entries);
+      setReminders(
+        z
+          .object({ entries: z.array(entrySchema) })
+          .parse(await call({ operation: "reminders" })).entries
+      );
       setDraft({
         id: "",
         kind: "MEETING",
         title: "",
         startsAt: "",
         endsAt: "",
+        reminderAt: "",
         version: 0
       });
       setNotice(
@@ -171,6 +215,7 @@ export function EMP002CalendarDashboard() {
       title: entry.title,
       startsAt: local(entry.startsAt),
       endsAt: entry.endsAt ? local(entry.endsAt) : "",
+      reminderAt: entry.reminderAt ? local(entry.reminderAt) : "",
       version: entry.version
     });
     setNotice("");
@@ -199,6 +244,30 @@ export function EMP002CalendarDashboard() {
       {busy && <output>Procesando…</output>}
       {error && <p role="alert">{error}</p>}
       {notice && <output>{notice}</output>}
+      <aside
+        className="rounded border p-3 space-y-2"
+        aria-label="Recordatorios nativos"
+      >
+        <h2 className="font-semibold">Recordatorios</h2>
+        <p>
+          Se actualizan cada minuto mientras el portal está abierto. No se
+          envían mensajes externos.
+        </p>
+        {reminderError && <p role="alert">{reminderError}</p>}
+        {reminders.map((entry) => (
+          <p key={entry.id}>
+            {entry.title} · {new Date(entry.reminderAt!).toLocaleString()}
+            {canWrite && (
+              <button
+                disabled={busy || reloadRequired}
+                onClick={() => edit(entry)}
+              >
+                Editar o quitar recordatorio
+              </button>
+            )}
+          </p>
+        ))}
+      </aside>
       <ul>
         {entries.map((entry) => (
           <li className="rounded border p-3" key={entry.id}>

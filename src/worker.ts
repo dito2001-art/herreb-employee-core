@@ -1,4 +1,5 @@
 import employeeServer from './server';
+import { handleEMP001BrowserSales } from './runtime/emp001-browser-sales';
 import { handleEMP002BrowserCalendar } from './runtime/emp002-browser-calendar';
 import { handleEMP003BrowserCampaign } from './runtime/emp003-browser-campaign';
 import { handleEMP003BrowserDraftWrite } from './runtime/emp003-browser-draft-write';
@@ -40,6 +41,7 @@ export { EMP003CampaignState } from './runtime/emp003-campaign-state';
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url); const runtimeEnv = env as WorkerEnv;
+    if (url.pathname === '/api/emp001/operations') return handleEMP001BrowserSales(request, runtimeEnv);
     if (url.pathname === '/api/emp002/calendar') return handleEMP002BrowserCalendar(request, runtimeEnv);
     if (url.pathname === '/api/emp003/review' || url.pathname === '/api/emp003/drafts' && request.method === 'GET') return handleEMP003BrowserCampaign(request, runtimeEnv);
     if (url.pathname === '/api/emp003/drafts') return handleEMP003BrowserDraftWrite(request, runtimeEnv);

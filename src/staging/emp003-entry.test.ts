@@ -52,7 +52,7 @@ test("preview, agents and websocket paths remain denied; static assets fail clos
 
 test("non-GET and forged email header are denied", async () => {
   assert.equal((await call("/api/emp003/operations", { method: "POST" })).status, 404);
-  assert.equal((await call("/api/emp003/drafts", { method: "GET" })).status, 404);
+  assert.equal((await call("/api/emp003/drafts", { method: "GET" })).status, 503);
   assert.equal((await call("/api/emp003/drafts", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status, 503);
   const response = await call("/api/emp003/operations", {
     headers: { "cf-access-authenticated-user-email": "owner@example.com" }
@@ -78,7 +78,7 @@ test("asset reads require a verified Access JWT even with configured staging ide
 test("static asset allowlist never opens internal, preview or mutation routes", async () => {
   for (const path of ["/assets", "/assets/../api/internal/emp003/drafts",
     "/assets/%2e%2e/api/emp003/operations", "/assets/app.js%2fsecret",
-    "/api/emp003/drafts", "/api/emp003/operations/extra"]) {
+    "/api/emp001/operations", "/api/emp002/calendar", "/api/emp003/operations/extra"]) {
     assert.equal((await call(path)).status, 404, path);
   }
   assert.equal((await call("/assets/app.js", { method: "POST" })).status, 404);
