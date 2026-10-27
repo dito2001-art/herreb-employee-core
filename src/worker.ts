@@ -1,4 +1,5 @@
 import employeeServer from './server';
+import { handleEMP002BrowserCalendar } from './runtime/emp002-browser-calendar';
 import { handleEMP003BrowserOperations } from './runtime/emp003-browser-operations';
 import { resolvePlatformAdminCredential } from './runtime/workforce-platform-admin-auth';
 import { resolveScopedM2MOwner } from './runtime/workforce-admin-tenant-owner';
@@ -36,6 +37,7 @@ export { EMP003CampaignState } from './runtime/emp003-campaign-state';
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url); const runtimeEnv = env as WorkerEnv;
+    if (url.pathname === '/api/emp002/calendar') return handleEMP002BrowserCalendar(request, runtimeEnv);
     if (url.pathname === '/api/emp003/operations') return handleEMP003BrowserOperations(request, runtimeEnv);
     if (url.pathname === '/api/internal/emp003/review') {
       if (!['GET', 'POST'].includes(request.method)) return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405 });
