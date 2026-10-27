@@ -1,5 +1,5 @@
 import employeeServer from './server';
-import { parseEMP003M2MDraftRevision } from './runtime/emp003-m2m-draft-revision';
+import { isEMP003M2MBlueprintTenant, parseEMP003M2MDraftRevision } from './runtime/emp003-m2m-draft-revision';
 import { handleEMP003BrowserOperations } from './runtime/emp003-browser-operations';
 import { resolvePlatformAdminCredential } from './runtime/workforce-platform-admin-auth';
 import { resolveScopedM2MOwner } from './runtime/workforce-admin-tenant-owner';
@@ -83,6 +83,8 @@ export default {
       if (!owner || owner.actorId !== 'fernando') return Response.json({ ok: false, error: 'EMP003_DRAFT_SCOPE_REJECTED' }, { status: 403 });
       if (!runtimeEnv.EMP003_CAMPAIGN_STATE) return Response.json({ ok: false, error: 'EMP003_DRAFT_STORAGE_UNAVAILABLE' }, { status: 503 });
       if (request.method === 'POST' && (!campaignId || !body?.blueprint)) return Response.json({ ok: false, error: 'EMP003_DRAFT_INPUT_REQUIRED' }, { status: 400 });
+      if (request.method === 'POST' && !isEMP003M2MBlueprintTenant(body?.blueprint, owner.tenantId))
+        return Response.json({ ok: false, error: 'EMP003_DRAFT_SCOPE_REJECTED' }, { status: 403 });
       const revision = request.method === 'POST' ? parseEMP003M2MDraftRevision(body) : null;
       if (request.method === 'POST' && !revision)
         return Response.json({ ok: false, error: 'EMP003_DRAFT_REVISION_REQUIRED' }, { status: 400 });
