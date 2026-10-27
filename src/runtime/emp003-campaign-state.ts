@@ -44,7 +44,9 @@ export class EMP003CampaignState extends DurableObject<Env> {
         const payload: unknown = await request.json();
         // Keep duplicate protection and review-state immutability in one atomic transaction.
         const createOnly = url.searchParams.get("createOnly") === "1";
-        const hasRevisionControl = createOnly || url.searchParams.has("expectedRevision");
+        const hasExpectedRevision = url.searchParams.has("expectedRevision");
+        if (createOnly === hasExpectedRevision || (url.searchParams.has("createOnly") && !createOnly))
+          return Response.json({ ok: false, error: "EMP003_DRAFT_REVISION_REQUIRED" }, { status: 428, headers: { "cache-control": "no-store" } });
         const expectedRevisionRaw = url.searchParams.get("expectedRevision");
         const expectedRevision = expectedRevisionRaw === null ? null : Number(expectedRevisionRaw);
         if (url.searchParams.has("expectedRevision") && (expectedRevision === null || !Number.isSafeInteger(expectedRevision) || expectedRevision < 1))
@@ -56,7 +58,7 @@ export class EMP003CampaignState extends DurableObject<Env> {
           if (!createOnly && !current) return "MISSING" as const;
           const revisionKey = `emp003:draft-revision:${tenantId}:${campaignId}`;
           const currentRevision = (await txn.get<number>(revisionKey)) ?? (current ? 1 : 0);
-          if (hasRevisionControl && !createOnly && currentRevision !== expectedRevision) return "CONFLICT" as const;
+          if (!createOnly && currentRevision !== expectedRevision) return "CONFLICT" as const;
           const state = await txn.get<unknown>(reviewKey(tenantId, campaignId));
           if (state !== undefined && EMP003ReviewStateSchema.parse(state).state !== "DRAFT") {
             throw new Error("EMP003_REVIEWED_DRAFT_IMMUTABLE");
