@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { generateKeyPairSync, createSign, randomBytes } from "node:crypto";
+import { generateKeyPairSync, createSign } from "node:crypto";
 import { verifyWorkforceAccessJwt } from "../runtime/workforce-admin-access-jwt";
 import { resolveVerifiedAccessAdminReadActor } from "../runtime/workforce-admin-access-principal";
 
