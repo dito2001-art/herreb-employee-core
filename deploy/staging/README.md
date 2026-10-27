@@ -1,6 +1,6 @@
 # WF-01 / EMP-003 staging — PREPARED, NOT APPROVED
 
-This change **does not deploy or migrate anything**. It does not modify the existing Cloudflare Hello World gateway, production wrangler.jsonc, CI workflows, credentials, DNS or Access policy.
+This change **does not deploy or migrate anything**. It does not modify the existing Cloudflare Hello World gateway, production wrangler.jsonc, credentials, DNS or Access policy. The delivery candidate extends validation-only CI; it does not add a publication workflow.
 
 ## Verified starting point
 
@@ -34,3 +34,30 @@ In Cloudflare Workers & Pages open `herreb-workforce-staging-gateway` -> Product
 ## Status
 
 All seven Stage-0 certification gates remain BLOCKED pending effective Cloudflare state and real A/B tests. This PR is PREPARED only; it does not close Stage 0.
+
+
+## Integrated delivery candidate — 2026-10-27
+
+The delivery branch combines EMP-003 browser persistence with the separately reviewable EMP-002 native calendar portal (#302) and EMP-001 Sales Ops authority correction (#303). The EMP-003 staging entry still deliberately exposes only EMP-003: it is **not** a staging deployment manifest for all three employees. No new deployment is authorized by these changes.
+
+### Short operator manual (candidate, not currently deployed)
+
+- EMP-002: open **Agenda y tareas**, load the date range, create a meeting or task, then load it again independently. Select an existing entry to edit or cancel it. A conflict/error requires reloading before retry; never overwrite a stale version. Native reminder delivery remains uncertified and is not simulated by this UI.
+- EMP-003: open **EMP-003**, create or select a campaign, complete its content, save, and verify the independent read-back confirmation. Reload the page and reopen it. Review transitions require the server-authorized owner; APPROVED campaigns cannot be edited. External publication is disabled. Two-tenant browser certification and the complete existing six-stage flow remain release gates.
+- EMP-001: the actual selling channel is Meta WhatsApp. This candidate hardens Sales Ops and its adapter; it does not claim a finished sales portal or a real sale. The runtime/adapter deployment dependency in herreb-runtime #27 is not changed here. Its connected Builds have historically published non-main commits: no runtime branch may be pushed until the operator verifies publication is fenced.
+- Tenant/user administration must use the authorized Workforce administrative interface and separate identities. Do not add the B identity to HerreB Owner or the platform administrator allowlist. Current candidate user roles are read-only; tenant A needs an explicitly approved owner identity for write certification.
+
+### Prior preflight and required decisions
+
+1. **WF-01 SECURITY** must approve the exact candidate SHA, dedicated EMP-003 application, hostname, issuer, AUD and server identity map: A maps to herreb-client-0; B dito37@hotmail.com maps only to provisional herreb-emp003-test-b with role user. Read back B's effective exclusion from HerreB Owner without changing that application. A login screen or a JSON proposal is not effective-policy evidence.
+2. **Cloudflare operator** must inventory actual API/Builds/Git/deploy-hook publishers and effective token metadata without exposing values. Do not reuse GitHub HerreB Deploy. Workers Scripts Edit is account authority; do not describe account-scoped credentials as cryptographically restricted to one Worker. Decide between stronger account isolation and an explicitly reviewed, short-lived operator credential constrained by expiry/source IP and operational script allowlist. Omit DNS/routes and D1/KV data-write authority from the initial code-publication credential. Review any unavoidable permission expansion explicitly.
+3. **WF-04 RELEASE** must approve separate resource names/IDs, migration tags and the first-deploy recovery plan. New staging DO namespaces must belong to the new staging Worker; do not bind production namespaces. D1/KV IDs above are inventory candidates until effective read-back; the separate Sales Ops schema candidate in services/sales-ops/migrations has never been applied. Check legacy duplicate quote orders and backup feasibility before approving it.
+4. Record two independent formal decisions for **staging creation/certification**, exact SHA and exact environment. This is distinct from a later product release approval. Until both decisions and operator authorization exist: no merge, deploy, migration, secret or Access changes.
+
+### Later authorized execution and read-back (not performed)
+
+1. Fence all automatic publication paths, approve the environment and credential custody, and establish dedicated Access and server-side identity configuration through the authorized operator. Never place credentials in issue comments.
+2. Initial EMP-003 publication uses the dedicated manifest with no routes, workers.dev=false and preview_urls=false. The script is initially unreachable. Record upload/deployment ID and exact source SHA. Read back all four staging DO namespace IDs, v1-v4 migration state, D1/KV bindings, absence of production service bindings/queues/triggers and absence of public URLs **before** attaching the approved Access hostname. Do not attach an unprotected route even temporarily.
+3. After the approved protected route is attached, verify unauthenticated/unauthorized denial, correct issuer/AUD, tenant A access, tenant B isolation and HerreB Owner denial. Execute a single EMP-003 E2E session covering create, CAS edit, reload, independent GET, immutable APPROVED and read-back failure behavior; publish no external campaign.
+4. Sales Ops and native calendar need their separately approved isolated manifests/resources and credentials before their real E2Es. EMP-001 requires a real Meta conversation, duplicate/retry handling and a single authoritative order independently recovered by GET. EMP-002 requires native persisted meeting/task CRUD and tenant isolation, plus actual reminder/conversation certification. Local SQLite/CI results do not substitute for these.
+5. For an initial incident, stop only staging ingress/publication and consumers as applicable; preserve the staging Worker, DO namespaces, D1 and KV. Do not delete resources, remove DO classes or replay ambiguous Meta sends. There is no previously deployed app version to roll back to on the first deployment. Review and publish a forward-fix against the retained data after renewed applicable GO. A code rollback does not undo DO/schema migrations. Record restoration evidence before calling recovery tested.

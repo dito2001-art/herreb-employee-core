@@ -32,15 +32,19 @@ function mapProductToOffering(
     tenantId,
     type: "PHYSICAL_PRODUCT" as const,
     name: String(product.name ?? ""),
-    active: product.active !== false,
+    active: product.active !== false && product.active !== 0,
     description:
       typeof product.description === "string" ? product.description : undefined,
-    currency:
-      typeof product.currency === "string" ? product.currency : undefined,
-    price: typeof product.price === "number" ? product.price : undefined,
+    currency: typeof product.currency === "string" ? product.currency : "PYG",
+    price:
+      typeof product.price === "number"
+        ? product.price
+        : typeof product.price_gs === "number"
+          ? product.price_gs
+          : undefined,
     metadata: {
       legacySku: product.sku,
-      stock: product.stock,
+      stock: product.stock ?? product.stock_qty,
       imageUrl: product.imageUrl,
       source: "sales-ops-v1"
     }
@@ -155,7 +159,23 @@ export function createSalesOpsAdapter(
           if (typeof input.quoteId === "string") {
             return request(req, "/api/v1/orders", {
               method: "POST",
-              body: JSON.stringify({ quote_id: input.quoteId })
+              body: JSON.stringify({
+                quote_id: input.quoteId,
+                operation_id:
+                  "quote:" +
+                  Array.from(
+                    new Uint8Array(
+                      await crypto.subtle.digest(
+                        "SHA-256",
+                        new TextEncoder().encode(
+                          JSON.stringify([req.context.tenantId, input.quoteId])
+                        )
+                      )
+                    )
+                  )
+                    .map((x) => x.toString(16).padStart(2, "0"))
+                    .join("")
+              })
             });
           }
           if (typeof input.transactionId === "string") {

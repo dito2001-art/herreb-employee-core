@@ -1,4 +1,5 @@
 import employeeServer from './server';
+import { handleEMP002BrowserCalendar } from './runtime/emp002-browser-calendar';
 import { handleEMP003BrowserCampaign } from './runtime/emp003-browser-campaign';
 import { handleEMP003BrowserDraftWrite } from './runtime/emp003-browser-draft-write';
 import { isEMP003M2MBlueprintTenant, parseEMP003M2MDraftRevision } from './runtime/emp003-m2m-draft-revision';
@@ -39,6 +40,7 @@ export { EMP003CampaignState } from './runtime/emp003-campaign-state';
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url); const runtimeEnv = env as WorkerEnv;
+    if (url.pathname === '/api/emp002/calendar') return handleEMP002BrowserCalendar(request, runtimeEnv);
     if (url.pathname === '/api/emp003/review' || url.pathname === '/api/emp003/drafts' && request.method === 'GET') return handleEMP003BrowserCampaign(request, runtimeEnv);
     if (url.pathname === '/api/emp003/drafts') return handleEMP003BrowserDraftWrite(request, runtimeEnv);
     if (url.pathname === '/api/emp003/operations') return handleEMP003BrowserOperations(request, runtimeEnv);
