@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   validate:
-    name: TypeScript, lint and tests
+    name: Validate Employee Core
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -56,6 +56,23 @@ jobs:
         continue-on-error: true
         run: npx tsc --noEmit
 
+      - name: EMP-003 M2M fail-closed revision negative tests
+        run: npx tsx --test src/runtime/emp003-m2m-draft-revision.test.ts src/runtime/emp003-cas-contract.test.ts
+
+      - name: EMP-003 real Worker and Durable Object negative integration (local workerd only)
+        run: |
+          npx wrangler dev --local --config tests/workerd/wrangler.toml --port 8791 > /tmp/wf00-workerd.log 2>&1 &
+          WORKERD_PID=$!
+          trap 'kill "$WORKERD_PID" 2>/dev/null || true' EXIT
+          READY=0
+          for i in $(seq 1 45); do
+            if curl --silent --max-time 1 http://127.0.0.1:8791/fixture/health >/dev/null; then READY=1; break; fi
+            sleep 2
+          done
+          if [ "$READY" != 1 ]; then cat /tmp/wf00-workerd.log; exit 1; fi
+          npx tsx tests/workerd/emp003-local-e2e.ts || { cat /tmp/wf00-workerd.log; exit 1; }
+      - name: EMP-003 browser campaign API regression
+        run: npx tsx --test src/runtime/emp003-browser-campaign.test.ts src/runtime/emp003-browser-draft-write.test.ts src/runtime/emp003-browser-operations.test.ts
       - name: Core tests
         id: tests
         continue-on-error: true

@@ -1,4 +1,7 @@
 import employeeServer from './server';
+import { handleEMP003BrowserCampaign } from './runtime/emp003-browser-campaign';
+import { handleEMP003BrowserDraftWrite } from './runtime/emp003-browser-draft-write';
+import { isEMP003M2MBlueprintTenant, parseEMP003M2MDraftRevision } from './runtime/emp003-m2m-draft-revision';
 import { handleEMP003BrowserOperations } from './runtime/emp003-browser-operations';
 import { resolvePlatformAdminCredential } from './runtime/workforce-platform-admin-auth';
 import { resolveScopedM2MOwner } from './runtime/workforce-admin-tenant-owner';
@@ -36,6 +39,8 @@ export { EMP003CampaignState } from './runtime/emp003-campaign-state';
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url); const runtimeEnv = env as WorkerEnv;
+    if (url.pathname === '/api/emp003/review' || url.pathname === '/api/emp003/drafts' && request.method === 'GET') return handleEMP003BrowserCampaign(request, runtimeEnv);
+    if (url.pathname === '/api/emp003/drafts') return handleEMP003BrowserDraftWrite(request, runtimeEnv);
     if (url.pathname === '/api/emp003/operations') return handleEMP003BrowserOperations(request, runtimeEnv);
     if (url.pathname === '/api/internal/emp003/review') {
       if (!['GET', 'POST'].includes(request.method)) return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405 });
@@ -75,18 +80,25 @@ export default {
     if (url.pathname === '/api/internal/emp003/drafts') {
       if (!['GET', 'POST'].includes(request.method)) return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405 });
       if (!isValidM2M(request, runtimeEnv)) return Response.json({ ok: false, error: 'UNAUTHORIZED' }, { status: 401 });
-      const body = request.method === 'POST' ? await request.json().catch(() => undefined) as { tenantId?: string; campaignId?: string; blueprint?: unknown } | undefined : undefined;
+      const body = request.method === 'POST' ? await request.json().catch(() => undefined) as { tenantId?: string; campaignId?: string; blueprint?: unknown; expectedRevision?: unknown; createOnly?: unknown } | undefined : undefined;
       const tenantId = request.method === 'GET' ? url.searchParams.get('tenantId')?.trim() : body?.tenantId?.trim();
       const campaignId = request.method === 'GET' ? url.searchParams.get('campaignId')?.trim() : body?.campaignId?.trim();
       const owner = resolveTenantOwner(request, runtimeEnv, tenantId);
       if (!owner || owner.actorId !== 'fernando') return Response.json({ ok: false, error: 'EMP003_DRAFT_SCOPE_REJECTED' }, { status: 403 });
       if (!runtimeEnv.EMP003_CAMPAIGN_STATE) return Response.json({ ok: false, error: 'EMP003_DRAFT_STORAGE_UNAVAILABLE' }, { status: 503 });
       if (request.method === 'POST' && (!campaignId || !body?.blueprint)) return Response.json({ ok: false, error: 'EMP003_DRAFT_INPUT_REQUIRED' }, { status: 400 });
+      if (request.method === 'POST' && !isEMP003M2MBlueprintTenant(body?.blueprint, owner.tenantId))
+        return Response.json({ ok: false, error: 'EMP003_DRAFT_SCOPE_REJECTED' }, { status: 403 });
+      const revision = request.method === 'POST' ? parseEMP003M2MDraftRevision(body) : null;
+      if (request.method === 'POST' && !revision)
+        return Response.json({ ok: false, error: 'EMP003_DRAFT_REVISION_REQUIRED' }, { status: 400 });
       const stub = runtimeEnv.EMP003_CAMPAIGN_STATE.get(runtimeEnv.EMP003_CAMPAIGN_STATE.idFromName(owner.tenantId));
       const path = request.method === 'POST' || campaignId ? '/draft' : '/drafts';
       const destination = new URL('https://emp003-campaign-state.internal' + path);
       destination.searchParams.set('tenantId', owner.tenantId);
       if (campaignId) destination.searchParams.set('campaignId', campaignId);
+      if (revision?.createOnly) destination.searchParams.set('createOnly', '1');
+      if (revision?.expectedRevision) destination.searchParams.set('expectedRevision', String(revision.expectedRevision));
       const response = await stub.fetch(new Request(destination, { method: request.method, headers: { 'content-type': 'application/json' }, ...(request.method === 'POST' ? { body: JSON.stringify(body?.blueprint) } : {}) }));
       return new Response(response.body, { status: response.status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
     }
