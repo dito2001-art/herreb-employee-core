@@ -52,6 +52,8 @@ test("preview, agents and websocket paths remain denied; static assets fail clos
 
 test("non-GET and forged email header are denied", async () => {
   assert.equal((await call("/api/emp003/operations", { method: "POST" })).status, 404);
+  assert.equal((await call("/api/emp003/drafts", { method: "GET" })).status, 404);
+  assert.equal((await call("/api/emp003/drafts", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })).status, 503);
   const response = await call("/api/emp003/operations", {
     headers: { "cf-access-authenticated-user-email": "owner@example.com" }
   });
