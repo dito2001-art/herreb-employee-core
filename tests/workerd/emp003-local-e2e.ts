@@ -24,6 +24,26 @@ async function read() {
   assert.equal(response.status, 200);
   return response.json() as Promise<Record<string, any>>;
 }
+const missingCAS = await write("without-cas", "");
+assert.equal(missingCAS.status, 428, JSON.stringify(missingCAS));
+assert.equal(missingCAS.body.error, "EMP003_DRAFT_REVISION_REQUIRED");
+assert.equal((await read()).found, false, "rejected write must not persist");
+const ambiguousCAS = await write("ambiguous", "&createOnly=1&expectedRevision=1");
+assert.equal(ambiguousCAS.status, 428, JSON.stringify(ambiguousCAS));
+assert.equal((await read()).found, false, "ambiguous write must not persist");
+console.log("WORKERD_DO_NEGATIVE_PASS: real DO POST missing/ambiguous CAS returns 428 without persistence");
+
+const m2mPost = (payload: Record<string, unknown>) => fetch(base + "/fixture/m2m-drafts", {
+  method: "POST", headers: { "content-type": "application/json", "x-herreb-workforce-admin-token": "wf00-local-only-token" },
+  body: JSON.stringify(payload)
+});
+const foreignCampaign = "cross-" + randomUUID().replaceAll("-", "").slice(0,12);
+const foreign = await m2mPost({ tenantId: "tenant-a", campaignId: foreignCampaign,
+  createOnly: true, blueprint: { ...blueprint("cross-tenant"), tenantId: "tenant-b" } });
+assert.equal(foreign.status, 403, await foreign.text());
+assert.equal((await (await fetch(`${base}/fixture/draft?tenantId=tenant-a&campaignId=${foreignCampaign}`)).json() as {found:boolean}).found, false);
+console.log("WORKERD_M2M_NEGATIVE_PASS: real Worker POST cross-tenant returns 403 without persistence");
+
 const initial = await write("initial", "&createOnly=1");
 assert.equal(initial.status, 200, JSON.stringify(initial));
 assert.equal(initial.body.revision, 1);
