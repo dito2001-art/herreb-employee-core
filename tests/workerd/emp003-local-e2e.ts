@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { request as httpRequest } from "node:http";
 
 const base = process.env.WF00_WORKERD_URL ?? "http://127.0.0.1:8791";
 const tenant = "wf00-" + randomUUID().replaceAll("-", "").slice(0,12);
@@ -58,7 +59,13 @@ for (const path of ["/api/internal/emp003/drafts", "/agents/ChatAgent/tenant",
 assert.equal((await stagingRequest("/api/emp003/operations")).status, 503);
 assert.equal((await stagingRequest("/api/emp003/drafts", { method: "POST",
   headers: { "content-type": "application/json" }, body: "{}" })).status, 503);
-assert.equal((await stagingRequest("/api/emp003/operations", {
-  headers: { upgrade: "websocket", connection: "Upgrade" }
-})).status, 403);
+const websocketStatus = await new Promise<number>((resolve, reject) => {
+  const req = httpRequest(base + "/staging/api/emp003/operations", {
+    headers: { upgrade: "websocket", connection: "Upgrade" }
+  }, response => { resolve(response.statusCode ?? 0); response.resume(); });
+  req.on("upgrade", () => reject(new Error("STAGING_WEBSOCKET_UPGRADE_ACCEPTED")));
+  req.on("error", reject);
+  req.end();
+});
+assert.equal(websocketStatus, 403);
 console.log("WORKERD_STAGING_NEGATIVE_PASS: routes, missing Access config, WebSocket");
