@@ -28,7 +28,7 @@ export async function handleEMP003BrowserDraftWrite(request: Request, env: Env, 
   } catch { return fail(400, "EMP003_DRAFT_INVALID_JSON"); }
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return fail(400, "EMP003_DRAFT_INVALID_INPUT");
   const input = raw as Record<string, unknown>;
-  if (Object.keys(input).some(k => !["campaignId", "blueprint"].includes(k)))
+  if (Object.keys(input).some(k => !["campaignId", "blueprint", "expectedRevision"].includes(k)))
     return fail(400, "EMP003_DRAFT_UNEXPECTED_FIELD");
   const campaignId = input.campaignId;
   if (typeof campaignId !== "string" || !/^[a-zA-Z0-9_-]{1,100}$/.test(campaignId))
@@ -41,23 +41,28 @@ export async function handleEMP003BrowserDraftWrite(request: Request, env: Env, 
   destination.searchParams.set("tenantId", actor.tenantId);
   destination.searchParams.set("campaignId", campaignId);
   // No revision/CAS contract exists for edits yet. Creation is atomic and fail-closed.
-  destination.searchParams.set("createOnly", "1");
+  if (input.expectedRevision === undefined) destination.searchParams.set("createOnly", "1");
+  else if (typeof input.expectedRevision === "number" && Number.isSafeInteger(input.expectedRevision) && input.expectedRevision >= 1)
+    destination.searchParams.set("expectedRevision", String(input.expectedRevision));
+  else return fail(400, "EMP003_DRAFT_REVISION_INVALID");
   try {
     const response = await stub.fetch(new Request(destination, {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify(parsed.data)
     }));
-    if (!response.ok) return fail(response.status === 409 ? 409 : 503, "EMP003_DRAFT_WRITE_REJECTED");
+    if (!response.ok) return fail(response.status === 409 ? 409 : response.status === 404 ? 404 : 503, "EMP003_DRAFT_WRITE_REJECTED");
+    const writeReceipt = await response.json() as { revision?: unknown };
+    if (!Number.isSafeInteger(writeReceipt.revision)) return fail(503, "EMP003_DRAFT_WRITE_RECEIPT_INVALID");
     const readBack = await stub.fetch(new Request(destination, { method: "GET" }));
     if (!readBack.ok) return fail(503, "EMP003_DRAFT_READBACK_FAILED");
     const payload: unknown = await readBack.json();
     if (!payload || typeof payload !== "object") return fail(503, "EMP003_DRAFT_READBACK_FAILED");
     const result = payload as Record<string, unknown>;
     const saved = MarketingCampaignBlueprintSchema.safeParse(result.campaign);
-    if (result.ok !== true || result.found !== true || !saved.success ||
+    if (result.ok !== true || result.found !== true || result.revision !== writeReceipt.revision || !saved.success ||
         JSON.stringify(saved.data) !== JSON.stringify(parsed.data))
       return fail(503, "EMP003_DRAFT_READBACK_MISMATCH");
-    return Response.json({ ok: true, persisted: true, tenantId: actor.tenantId, campaignId, readBackConfirmed: true },
+    return Response.json({ ok: true, persisted: true, tenantId: actor.tenantId, campaignId, revision: writeReceipt.revision, readBackConfirmed: true },
       { headers: { "cache-control": "no-store" } });
   } catch { return fail(503, "EMP003_DRAFT_STORAGE_UNAVAILABLE"); }
 }
