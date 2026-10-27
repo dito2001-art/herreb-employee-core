@@ -16,7 +16,8 @@ export class EMP003CampaignState extends DurableObject<Env> {
     try {
       if (request.method === "GET" && url.pathname === "/draft") {
         const campaign = await repo.get(tenantId, campaignId);
-        return Response.json({ ok: true, found: Boolean(campaign), campaign: campaign ?? null }, { headers: { "cache-control": "no-store" } });
+        const revision = await this.ctx.storage.get<number>(`emp003:draft-revision:${tenantId}:${campaignId}`);
+        return Response.json({ ok: true, found: Boolean(campaign), campaign: campaign ?? null, revision: revision ?? (campaign ? 1 : 0) }, { headers: { "cache-control": "no-store" } });
       }
       if (request.method === "GET" && url.pathname === "/drafts") {
         const campaigns = await repo.list(tenantId);
@@ -43,21 +44,34 @@ export class EMP003CampaignState extends DurableObject<Env> {
         const payload: unknown = await request.json();
         // Keep duplicate protection and review-state immutability in one atomic transaction.
         const createOnly = url.searchParams.get("createOnly") === "1";
+        const expectedRevisionRaw = url.searchParams.get("expectedRevision");
+        const expectedRevision = expectedRevisionRaw === null ? null : Number(expectedRevisionRaw);
+        if (!createOnly && (expectedRevision === null || !Number.isSafeInteger(expectedRevision) || expectedRevision < 1))
+          return Response.json({ ok: false, error: "EMP003_DRAFT_REVISION_REQUIRED" }, { status: 428, headers: { "cache-control": "no-store" } });
         const result = await this.ctx.storage.transaction(async (txn) => {
           const transactionalRepo = createPersistentBlueprintRepository(createEMP003DurableStorageAdapter(txn));
-          if (createOnly && await transactionalRepo.get(tenantId, campaignId)) return "EXISTS" as const;
+          const current = await transactionalRepo.get(tenantId, campaignId);
+          if (createOnly && current) return "EXISTS" as const;
+          if (!createOnly && !current) return "MISSING" as const;
+          const revisionKey = `emp003:draft-revision:${tenantId}:${campaignId}`;
+          const currentRevision = (await txn.get<number>(revisionKey)) ?? (current ? 1 : 0);
+          if (!createOnly && currentRevision !== expectedRevision) return "CONFLICT" as const;
           const state = await txn.get<unknown>(reviewKey(tenantId, campaignId));
           if (state !== undefined && EMP003ReviewStateSchema.parse(state).state !== "DRAFT") {
             throw new Error("EMP003_REVIEWED_DRAFT_IMMUTABLE");
           }
           await transactionalRepo.put(tenantId, campaignId, payload as never);
+          await txn.put(revisionKey, currentRevision + 1);
           return "CREATED" as const;
         });
+        if (result === "MISSING") return Response.json({ ok: false, error: "EMP003_DRAFT_NOT_FOUND" }, { status: 404 });
+        if (result === "CONFLICT") return Response.json({ ok: false, error: "EMP003_DRAFT_REVISION_CONFLICT" }, { status: 409 });
         if (result === "EXISTS") {
           return Response.json({ ok: false, error: "EMP003_DRAFT_ALREADY_EXISTS" }, { status: 409, headers: { "cache-control": "no-store" } });
         }
         const campaign = await repo.get(tenantId, campaignId);
-        return Response.json({ ok: true, persisted: true, campaign }, { headers: { "cache-control": "no-store" } });
+        const revision = await this.ctx.storage.get<number>(`emp003:draft-revision:${tenantId}:${campaignId}`);
+        return Response.json({ ok: true, persisted: true, campaign, revision }, { headers: { "cache-control": "no-store" } });
       }
       if (request.method === "GET" && url.pathname === "/review") {
         const state = await this.ctx.storage.get<unknown>(reviewKey(tenantId, campaignId));
