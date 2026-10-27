@@ -1,5 +1,5 @@
 import { EMP003CampaignState } from "../../src/runtime/emp003-campaign-state";
-import staging from "../../src/staging/emp003-entry";
+import staging, { createEMP003StagingEntry } from "../../src/staging/emp003-entry";
 export { EMP003CampaignState };
 type FixtureEnv = { EMP003_CAMPAIGN_STATE: DurableObjectNamespace };
 export default {
@@ -8,6 +8,23 @@ export default {
     if (incoming.pathname.startsWith("/staging/")) {
       const stagingUrl = new URL(request.url);
       stagingUrl.pathname = stagingUrl.pathname.slice("/staging".length);
+      if (incoming.pathname.startsWith("/staging/fixture-auth/")) {
+        stagingUrl.pathname = stagingUrl.pathname.replace("/fixture-auth", "");
+        const jwks = request.headers.get("x-fixture-jwks") ?? "";
+        const identities = request.headers.get("x-fixture-identities") ?? "";
+        const fixtureEnv = {
+          ...env,
+          EMP003_STAGING_ACCESS_TEAM_DOMAIN: "wf00-test.cloudflareaccess.com",
+          EMP003_STAGING_ACCESS_AUDIENCE: "wf00-test-audience",
+          EMP003_STAGING_IDENTITY_MAP_JSON: identities
+        };
+        const fetcher: typeof fetch = async (input) => {
+          if (String(input) !== "https://wf00-test.cloudflareaccess.com/cdn-cgi/access/certs")
+            throw new Error("FIXTURE_JWKS_UNEXPECTED_ENDPOINT");
+          return new Response(jwks, { headers: { "content-type": "application/json" } });
+        };
+        return createEMP003StagingEntry(fetcher).fetch(new Request(stagingUrl, request), fixtureEnv as never, {} as ExecutionContext);
+      }
       return staging.fetch(new Request(stagingUrl, request), env as never, {} as ExecutionContext);
     }
     if (incoming.pathname !== "/fixture/draft" && incoming.pathname !== "/fixture/review" && incoming.pathname !== "/fixture/transition")
