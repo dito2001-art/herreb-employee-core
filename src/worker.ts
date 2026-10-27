@@ -1,4 +1,5 @@
 import employeeServer from './server';
+import { parseEMP003M2MDraftRevision } from './runtime/emp003-m2m-draft-revision';
 import { handleEMP003BrowserOperations } from './runtime/emp003-browser-operations';
 import { resolvePlatformAdminCredential } from './runtime/workforce-platform-admin-auth';
 import { resolveScopedM2MOwner } from './runtime/workforce-admin-tenant-owner';
@@ -82,21 +83,16 @@ export default {
       if (!owner || owner.actorId !== 'fernando') return Response.json({ ok: false, error: 'EMP003_DRAFT_SCOPE_REJECTED' }, { status: 403 });
       if (!runtimeEnv.EMP003_CAMPAIGN_STATE) return Response.json({ ok: false, error: 'EMP003_DRAFT_STORAGE_UNAVAILABLE' }, { status: 503 });
       if (request.method === 'POST' && (!campaignId || !body?.blueprint)) return Response.json({ ok: false, error: 'EMP003_DRAFT_INPUT_REQUIRED' }, { status: 400 });
-      // Fail closed for M2M writes: creation must be explicit, edits require CAS.
-      if (request.method === 'POST') {
-        const createOnly = body?.createOnly === true;
-        const revision = body?.expectedRevision;
-        const hasRevision = typeof revision === 'number' && Number.isSafeInteger(revision) && revision >= 1;
-        if (createOnly === hasRevision || (revision !== undefined && !hasRevision) || (body?.createOnly !== undefined && body.createOnly !== true))
-          return Response.json({ ok: false, error: 'EMP003_DRAFT_REVISION_REQUIRED' }, { status: 400 });
-      }
+      const revision = request.method === 'POST' ? parseEMP003M2MDraftRevision(body) : null;
+      if (request.method === 'POST' && !revision)
+        return Response.json({ ok: false, error: 'EMP003_DRAFT_REVISION_REQUIRED' }, { status: 400 });
       const stub = runtimeEnv.EMP003_CAMPAIGN_STATE.get(runtimeEnv.EMP003_CAMPAIGN_STATE.idFromName(owner.tenantId));
       const path = request.method === 'POST' || campaignId ? '/draft' : '/drafts';
       const destination = new URL('https://emp003-campaign-state.internal' + path);
       destination.searchParams.set('tenantId', owner.tenantId);
       if (campaignId) destination.searchParams.set('campaignId', campaignId);
-      if (request.method === 'POST' && body?.createOnly === true) destination.searchParams.set('createOnly', '1');
-      if (request.method === 'POST' && typeof body?.expectedRevision === 'number') destination.searchParams.set('expectedRevision', String(body.expectedRevision));
+      if (revision?.createOnly) destination.searchParams.set('createOnly', '1');
+      if (revision?.expectedRevision) destination.searchParams.set('expectedRevision', String(revision.expectedRevision));
       const response = await stub.fetch(new Request(destination, { method: request.method, headers: { 'content-type': 'application/json' }, ...(request.method === 'POST' ? { body: JSON.stringify(body?.blueprint) } : {}) }));
       return new Response(response.body, { status: response.status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
     }
