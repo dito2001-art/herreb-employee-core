@@ -90,10 +90,13 @@ jobs:
           NODE
           post "$endpoint/drafts" "$work/edited-draft.json" "$work/edited-response.json"
           get "$endpoint/drafts?tenantId=$tenant&campaignId=$campaign" "$work/edited-readback.json"
-          node - "$work/edited-draft.json" "$work/edited-response.json" "$work/edited-readback.json" <<'NODE'
+          node - "$work/edited-draft.json" "$work/edited-response.json" "$work/edited-readback.json" "$work/pre-edit-readback.json" <<'NODE'
           const fs = require('node:fs');
           const [input, saved, reread] = process.argv.slice(2).map(p => JSON.parse(fs.readFileSync(p, 'utf8')));
+          const preEdit = JSON.parse(fs.readFileSync(process.argv[5], 'utf8'));
+          if (!Number.isSafeInteger(preEdit.revision) || preEdit.revision < 1) process.exit(1);
           if (saved.persisted !== true || reread.ok !== true || reread.found !== true) process.exit(1);
+          if (saved.revision !== preEdit.revision + 1 || reread.revision !== preEdit.revision + 1) process.exit(1);
           if (JSON.stringify(saved.campaign) !== JSON.stringify(input.blueprint)) process.exit(1);
           if (JSON.stringify(reread.campaign) !== JSON.stringify(input.blueprint)) process.exit(1);
           if (reread.campaign.publishApproved !== false || reread.campaign.status !== 'DRAFT') process.exit(1);
