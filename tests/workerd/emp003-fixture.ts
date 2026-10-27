@@ -1,10 +1,21 @@
 import { EMP003CampaignState } from "../../src/runtime/emp003-campaign-state";
 import staging, { createEMP003StagingEntry } from "../../src/staging/emp003-entry";
+import workforce from "../../src/worker";
 export { EMP003CampaignState };
 type FixtureEnv = { EMP003_CAMPAIGN_STATE: DurableObjectNamespace };
 export default {
   async fetch(request: Request, env: FixtureEnv): Promise<Response> {
     const incoming = new URL(request.url);
+    if (incoming.pathname === "/fixture/m2m-drafts") {
+      const forwarded = new URL(request.url);
+      forwarded.pathname = "/api/internal/emp003/drafts";
+      return workforce.fetch(new Request(forwarded, request), {
+        ...env,
+        WORKFORCE_ADMIN_M2M_TOKEN: "wf00-local-only-token",
+        WORKFORCE_ADMIN_M2M_ACTOR_ID: "fernando",
+        WORKFORCE_ADMIN_M2M_TENANT_ID: "tenant-a"
+      } as never, {} as ExecutionContext);
+    }
     if (incoming.pathname.startsWith("/staging/")) {
       const stagingUrl = new URL(request.url);
       stagingUrl.pathname = stagingUrl.pathname.slice("/staging".length);
