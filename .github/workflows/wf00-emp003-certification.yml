@@ -31,6 +31,8 @@ jobs:
         run: npx tsx --test src/runtime/emp003-browser-draft-write.test.ts
       - name: EMP-003 CAS contract model tests (not workerd)
         run: npx tsx --test src/runtime/emp003-cas-contract.test.ts
+      - name: Access RS256 JWT cryptographic and tenant identity tests (unit)
+        run: npx tsx --test src/runtime/workforce-admin-access-jwt.test.ts src/runtime/workforce-admin-access-principal.test.ts
       - name: Local workerd Durable Object integration (no deploy)
         run: |
           npx wrangler dev --local --config tests/workerd/wrangler.toml --port 8791 > /tmp/wf00-workerd.log 2>&1 &
