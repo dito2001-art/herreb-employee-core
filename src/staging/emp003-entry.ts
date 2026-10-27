@@ -10,7 +10,8 @@ import { handleEMP003BrowserDraftWrite } from "../runtime/emp003-browser-draft-w
  * Only the read-only browser operations API and explicitly allowlisted authenticated
  * static assets are permitted. Mutations, agents and WebSockets remain disabled.
  */
-export default {
+export function createEMP003StagingEntry(jwksFetcher: typeof fetch = fetch) {
+ return {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const deny = (status: number, error: string) =>
       Response.json({ ok: false, error }, { status, headers: { "cache-control": "no-store" } });
@@ -50,13 +51,13 @@ export default {
       WORKFORCE_PLATFORM_ADMIN_ACTOR_ID: undefined
     };
     try {
-      const actor = await readWorkforceAdminAccessActor(request, isolatedEnv);
+      const actor = await readWorkforceAdminAccessActor(request, isolatedEnv, jwksFetcher);
       if ((actor.role !== "owner" && actor.role !== "user") || !actor.actorId || !actor.tenantId)
         return deny(403, "EMP003_STAGING_ACTOR_FORBIDDEN");
     } catch {
       return deny(401, "EMP003_STAGING_ACCESS_DENIED");
     }
-    if (draftWrite) return handleEMP003BrowserDraftWrite(request, isolatedEnv);
+    if (draftWrite) return handleEMP003BrowserDraftWrite(request, isolatedEnv, jwksFetcher);
     if (assetRead) {
       const assets = (env as Env & { ASSETS?: { fetch(request: Request): Promise<Response> } }).ASSETS;
       if (!assets) return deny(503, "EMP003_STAGING_ASSETS_UNAVAILABLE");
@@ -69,4 +70,6 @@ export default {
     // the server-derived tenant, rejecting cross-tenant response payloads.
     return employeeWorker.fetch(request, isolatedEnv as Env, ctx);
   }
-};
+ };
+}
+export default createEMP003StagingEntry();
