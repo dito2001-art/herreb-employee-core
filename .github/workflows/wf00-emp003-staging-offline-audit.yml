@@ -1,0 +1,68 @@
+name: WF-00 EMP-003 staging offline build audit (manual only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wf00-emp003-offline-audit
+  cancel-in-progress: false
+
+jobs:
+  offline-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: "true"
+      CLOUDFLARE_VITE_WRANGLER_CONFIG_PATH: deploy/staging/wrangler.emp003.jsonc
+      WRANGLER_SEND_METRICS: "false"
+      CLOUDFLARE_SEND_METRICS: "false"
+      # No Cloudflare API token, account ID, secrets, deployment environment or remote resource access.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: e6b2f8ffaa1386a638b82a6d587f7e9e1acd9dc9
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Enforce immutable source SHA and candidate manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "e6b2f8ffaa1386a638b82a6d587f7e9e1acd9dc9" || { echo "This workflow is a review candidate: source must be the exact approved #295 SHA; do not run on an unapproved merge"; exit 1; }
+          node -e 'const fs=require("fs"),c=JSON.parse(fs.readFileSync("deploy/staging/wrangler.emp003.jsonc","utf8"));if(c.name!=="herreb-emp003-staging"||c.workers_dev!==false||c.routes||c.route||c.queues||c.triggers)process.exit(1)'
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Offline Vite build (never publish)
+        run: npm run build:console
+      - name: Verify assets, generated manifest and DO exports
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist/client/index.html
+          test -f .wrangler/deploy/config.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+          const redirect=JSON.parse(fs.readFileSync('.wrangler/deploy/config.json','utf8'));
+          const generated=path.resolve('.wrangler/deploy',redirect.configPath);
+          const cfg=JSON.parse(fs.readFileSync(generated,'utf8'));
+          const fail=(s)=>{throw Error(s)};
+          if(cfg.name!=='herreb-emp003-staging'||cfg.workers_dev!==false||cfg.routes||cfg.route||cfg.queues||cfg.triggers)fail('Wrong worker or publication path');
+          if(cfg.assets?.run_worker_first!==true)fail('Assets must run Worker first');
+          if(cfg.d1_databases?.find(x=>x.binding==='DB')?.database_id!=='488f4829-bee4-4e0a-8ecd-bd4a1ced71b4')fail('D1 mismatch');
+          if(cfg.kv_namespaces?.find(x=>x.binding==='STAGING_KV')?.id!=='0c24a032442d47adb30dfc8dbf72b010')fail('KV mismatch');
+          const names=new Set((cfg.durable_objects?.bindings||[]).map(x=>x.name+':'+x.class_name));
+          for(const n of ['ChatAgent:ChatAgent','EMP002_OPERATIONS:EMP002Operations','WORKFORCE_ADMIN_STATE:WorkforceAdminState','EMP003_CAMPAIGN_STATE:EMP003CampaignState'])if(!names.has(n))fail('DO binding missing '+n);
+          console.log('Static generated-config guard PASS',generated);
+          NODE
+      - name: Wrangler dry-run only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --no-install wrangler deploy --dry-run --outdir /tmp/wf00-emp003-staging-dryrun
+          test -d /tmp/wf00-emp003-staging-dryrun
