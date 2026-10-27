@@ -20,7 +20,7 @@ npm ci
 node -e 'const fs=require("fs"),p="deploy/staging/wrangler.emp003.jsonc",c=JSON.parse(fs.readFileSync(p,"utf8"));if(c.name!=="herreb-emp003-staging"||c.main!=="../../src/staging/emp003-entry.ts"||c.workers_dev!==false||c.routes||c.route||c.triggers||c.queues||c.assets?.run_worker_first!==true)process.exit(1);console.log("manifest static guard PASS")'
 test -f src/staging/emp003-entry.ts
 test -f deploy/staging/wrangler.emp003.jsonc
-npm run build:console
+CLOUDFLARE_VITE_WRANGLER_CONFIG_PATH=deploy/staging/wrangler.emp003.jsonc npm run build:console
 test -f dist/client/index.html
 npx wrangler deploy --config deploy/staging/wrangler.emp003.jsonc --dry-run --outdir /tmp/wf00-emp003-staging-dryrun
 ```
