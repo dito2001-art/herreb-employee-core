@@ -12,7 +12,7 @@ export async function handleEMP003BrowserDraftWrite(request: Request, env: Env, 
   if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json"))
     return fail(415, "EMP003_DRAFT_JSON_REQUIRED");
   const length = request.headers.get("content-length");
-  if (length && (!/^\\d+$/.test(length) || Number(length) > 65536))
+  if (length && (!/^[0-9]+$/.test(length) || Number(length) > 65536))
     return fail(413, "EMP003_DRAFT_TOO_LARGE");
   let actor: Awaited<ReturnType<typeof readWorkforceAdminAccessActor>>;
   try { actor = await readWorkforceAdminAccessActor(request, env, fetcher); }
