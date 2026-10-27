@@ -1,0 +1,31 @@
+name: WF-00 EMP-003 isolated certification
+on:
+  pull_request:
+    branches:
+      - wf01/emp003-staging-failclosed-guard-20261025
+    paths:
+      - 'src/runtime/emp003-*'
+      - 'src/staging/emp003-*'
+      - '.github/workflows/wf00-emp003-certification.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  emp003-certification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: TypeScript exact HEAD
+        run: npx tsc --noEmit
+      - name: EMP-003 staging and BFF negative tests
+        run: npx tsx --test src/staging/emp003-entry.test.ts src/runtime/emp003-browser-draft-write.test.ts
+      - name: EMP-003 persistence and review tests
+        run: npx tsx --test src/runtime/emp003-durable-storage.test.ts src/runtime/emp003-review-transaction.test.ts src/runtime/emp003-review-state.test.ts
