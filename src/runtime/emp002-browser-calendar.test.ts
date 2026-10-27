@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { webcrypto } from "node:crypto";
 import { EMP002Operations } from "./emp002-operations";
 import { handleEMP002BrowserCalendar } from "./emp002-browser-calendar";
+import { createNativeCalendarReadTransport } from "./emp002-native-calendar-read";
 const encode = (v: unknown) =>
   Buffer.from(JSON.stringify(v)).toString("base64url");
 async function fixture() {
@@ -119,7 +120,7 @@ async function fixture() {
       env,
       fetcher
     );
-  return { call, a, b };
+  return { call, a, b, namespace: env.EMP002_OPERATIONS };
 }
 const entry = {
   id: "meeting",
@@ -285,4 +286,69 @@ test("native portal reminders persist independently, isolate tenants and clear u
   );
   due = await f.call({ operation: "reminders" });
   assert.deepEqual(((await due.json()) as { entries: unknown[] }).entries, []);
+});
+
+test("portal chat reads the same persisted native agenda and long-running availability", async () => {
+  const f = await fixture();
+  assert.equal(
+    (
+      await f.call({
+        operation: "save",
+        entry: {
+          ...entry,
+          id: "long",
+          startsAt: "2026-10-26T12:00:00Z",
+          endsAt: "2026-11-02T12:00:00Z"
+        },
+        expectedVersion: 0
+      })
+    ).status,
+    200
+  );
+  const transport = createNativeCalendarReadTransport(f.namespace, "tenant-a");
+  const availability = {
+    tenantId: "tenant-a",
+    correlationId: "chat-read",
+    request: {
+      operation: "availability" as const,
+      timeMin: "2026-11-01T12:00:00Z",
+      timeMax: "2026-11-01T13:00:00Z",
+      calendarIds: [],
+      timezone: "America/Asuncion"
+    }
+  };
+  let result = await transport.execute(availability);
+  assert.equal(result.ok, true);
+  assert.equal((result.output as { available: boolean }).available, false);
+  assert.equal((result.output as { busy: unknown[] }).busy.length, 1);
+  result = await transport.execute({ ...availability, tenantId: "tenant-b" });
+  assert.equal(result.ok, false);
+  result = await transport.execute({
+    tenantId: "tenant-a",
+    correlationId: "write-denied",
+    request: { operation: "delete", eventId: "long" }
+  });
+  assert.equal(result.ok, false);
+  result = await transport.execute({
+    tenantId: "tenant-a",
+    correlationId: "chat-list",
+    request: {
+      operation: "search",
+      timeMin: "2026-10-26T00:00:00Z",
+      timeMax: "2026-10-27T00:00:00Z"
+    }
+  });
+  assert.equal(result.ok, true);
+  assert.equal((result.output as { entries: unknown[] }).entries.length, 1);
+  const corrupt = createNativeCalendarReadTransport(
+    {
+      idFromName: (n) => n,
+      get: () => ({
+        fetch: async () =>
+          Response.json({ ok: true, entries: [{ tenantId: "tenant-b" }] })
+      })
+    },
+    "tenant-a"
+  );
+  assert.equal((await corrupt.execute(availability)).ok, false);
 });

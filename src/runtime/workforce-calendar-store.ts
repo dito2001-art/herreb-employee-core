@@ -66,6 +66,32 @@ export class WorkforceCalendarStore {
       );
   }
 
+  busy(tenantId: string, from: string, to: string): WorkforceCalendarEntry[] {
+    if (
+      !tenantId.trim() ||
+      !Number.isFinite(Date.parse(from)) ||
+      !Number.isFinite(Date.parse(to)) ||
+      Date.parse(from) >= Date.parse(to)
+    )
+      throw new Error("INVALID_CALENDAR_QUERY");
+    return Array.from(
+      this.sql.exec(
+        "SELECT payload FROM workforce_calendar_entries WHERE tenant_id = ? AND starts_at < ? ORDER BY starts_at",
+        tenantId,
+        new Date(to).toISOString()
+      )
+    )
+      .map((row) => JSON.parse(String(row.payload)) as WorkforceCalendarEntry)
+      .filter(
+        (e) =>
+          e.tenantId === tenantId &&
+          e.status === "ACTIVE" &&
+          e.kind !== "TASK" &&
+          !!e.endsAt &&
+          Date.parse(e.endsAt) > Date.parse(from)
+      );
+  }
+
   reminders(tenantId: string, now: string): WorkforceCalendarEntry[] {
     if (!tenantId.trim() || !Number.isFinite(Date.parse(now)))
       throw new Error("INVALID_CALENDAR_QUERY");
