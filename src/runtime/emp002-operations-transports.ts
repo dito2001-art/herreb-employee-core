@@ -22,6 +22,7 @@ export interface EMP002OperationsTransportEnv {
   AG002_TENANT_ID?: string;
   CALENDAR_TENANT_ID?: string;
   TENANT_MANIFESTS_JSON?: string;
+  EMP002_RECONCILIATION_TOKEN?: string;
   META_ACCESS_TOKEN?: string;
   META_PHONE_NUMBER_ID?: string;
   META_GRAPH_VERSION?: string;
@@ -42,7 +43,20 @@ function crmDate(value: string): string {
 
 /** WhatsApp-only transport for general EMP-002 conversations. */
 export function buildEMP002WhatsAppTransport(env: EMP002OperationsTransportEnv, tenantId: string) {
-  assertTenantScope(env, tenantId);
+  // WhatsApp is a Workforce tenant capability, not a personal CRM capability.
+  // Until credentials are resolved per tenant, fail closed for non-Client0 tenants.
+  const manifests = (() => {
+    try { return JSON.parse(env.TENANT_MANIFESTS_JSON ?? '[]') as Array<{ tenantId?: string; whatsappOwners?: string[] }>; }
+    catch { return []; }
+  })();
+  const manifest = manifests.find(item => item.tenantId === tenantId);
+  if (!manifest || !Array.isArray(manifest.whatsappOwners) || manifest.whatsappOwners.length === 0) {
+    throw new Error('EMP002_WHATSAPP_TENANT_NOT_CONFIGURED');
+  }
+  const configuredTenant = (env.CRM_TENANT_ID ?? env.AG002_TENANT_ID)?.trim();
+  if (configuredTenant && configuredTenant !== tenantId) {
+    throw new Error('EMP002_WHATSAPP_CREDENTIAL_TENANT_MISMATCH');
+  }
   if (!env.META_ACCESS_TOKEN?.trim() || !env.META_PHONE_NUMBER_ID?.trim()) {
     throw new Error('EMP002_WHATSAPP_TRANSPORT_MISSING');
   }

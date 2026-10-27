@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   validate:
-    name: TypeScript, lint and tests
+    name: Validate Employee Core
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -56,6 +56,8 @@ jobs:
         continue-on-error: true
         run: npx tsc --noEmit
 
+      - name: Native Workforce calendar API regression
+        run: npx --yes tsx@4.23.13 --test src/runtime/emp002-browser-calendar.test.ts src/runtime/workforce-calendar-store.test.ts src/runtime/emp002-calendar-production-certification.test.ts
       - name: Core tests
         id: tests
         continue-on-error: true
