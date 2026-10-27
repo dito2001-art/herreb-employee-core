@@ -22,10 +22,25 @@ test -f src/staging/emp003-entry.ts
 test -f deploy/staging/wrangler.emp003.jsonc
 CLOUDFLARE_VITE_WRANGLER_CONFIG_PATH=deploy/staging/wrangler.emp003.jsonc npm run build:console
 test -f dist/client/index.html
-npx wrangler deploy --config deploy/staging/wrangler.emp003.jsonc --dry-run --outdir /tmp/wf00-emp003-staging-dryrun
+# Vite generates a deploy config; verify it before any Wrangler invocation.
+test -f .wrangler/deploy/config.json
+node --input-type=module -e '
+import fs from "node:fs"; import path from "node:path";
+const redirect=JSON.parse(fs.readFileSync(".wrangler/deploy/config.json","utf8"));
+const file=path.resolve(".wrangler/deploy",redirect.configPath);
+const cfg=JSON.parse(fs.readFileSync(file,"utf8"));
+if(cfg.name!=="herreb-emp003-staging"||cfg.workers_dev!==false||cfg.routes||cfg.route||cfg.assets?.run_worker_first!==true)throw Error("Unsafe generated config");
+const d1=cfg.d1_databases?.find(x=>x.binding==="DB");
+const kv=cfg.kv_namespaces?.find(x=>x.binding==="STAGING_KV");
+const dob=cfg.durable_objects?.bindings?.find(x=>x.name==="EMP003_CAMPAIGN_STATE"&&x.class_name==="EMP003CampaignState");
+if(d1?.database_id!=="488f4829-bee4-4e0a-8ecd-bd4a1ced71b4"||kv?.id!=="0c24a032442d47adb30dfc8dbf72b010"||!dob)throw Error("Wrong staging bindings");
+console.log("Generated config PASS:",file,"main:",cfg.main);
+'
+# Only after inspecting the generated manifest: dry-run the generated Vite output.
+npx wrangler deploy --dry-run --outdir /tmp/wf00-emp003-staging-dryrun
 ```
 
-**Confirmed P0 build selection:** `vite.config.ts` invokes `cloudflare()` with no `configPath`. Per Cloudflare Vite plugin API, `CLOUDFLARE_VITE_WRANGLER_CONFIG_PATH` selects the entry Wrangler config ahead of the root fallback. The command above sets it for this process only. Confirm the generated Vite output configuration names `herreb-emp003-staging` and points to `src/staging/emp003-entry.ts` (or its built entry), with staging-only bindings and assets; fail closed on mismatch. The later Wrangler `--config` argument does not retroactively fix a Vite build performed with the root manifest. Review any Vite-generated output manifest before considering deployment. Source: https://developers.cloudflare.com/workers/vite-plugin/reference/api/ . Do **not** replace `--dry-run` with a normal deploy.
+**Confirmed P0 build selection:** `vite.config.ts` invokes `cloudflare()` with no `configPath`. Per Cloudflare Vite plugin API, `CLOUDFLARE_VITE_WRANGLER_CONFIG_PATH` selects the entry Wrangler config ahead of the root fallback. The command above sets it for this process only. Confirm the generated Vite output configuration names `herreb-emp003-staging` and points to `src/staging/emp003-entry.ts` (or its built entry), with staging-only bindings and assets; fail closed on mismatch. Wrangler may follow Vite's `.wrangler/deploy/config.json` redirect; validate its generated target explicitly. The old command using `--config deploy/staging/wrangler.emp003.jsonc` could inadvertently rebuild or validate the source rather than the generated bundle and is replaced above. Review any Vite-generated output manifest before considering deployment. Source: https://developers.cloudflare.com/workers/vite-plugin/reference/api/ . Do **not** replace `--dry-run` with a normal deploy.
 
 ## Candidate manifest inventory — verify against Cloudflare before GO
 
