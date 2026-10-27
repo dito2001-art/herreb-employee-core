@@ -1,0 +1,50 @@
+name: WF-00 EMP-003 isolated certification
+on:
+  pull_request:
+    branches:
+      - wf01/emp003-staging-failclosed-guard-20261025
+    paths:
+      - 'src/runtime/emp003-*'
+      - 'src/staging/emp003-*'
+      - '.github/workflows/wf00-emp003-certification.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  emp003-certification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: TypeScript exact HEAD
+        run: npx tsc --noEmit
+      # Staging entry imports cloudflare:workers via worker.ts; Node ESM cannot load it.
+      # This job does not certify staging ingress. Run those tests in workerd separately.
+      - name: EMP-003 browser BFF negative tests (Node-compatible)
+        run: npx tsx --test src/runtime/emp003-browser-draft-write.test.ts
+      - name: EMP-003 CAS contract model tests (not workerd)
+        run: npx tsx --test src/runtime/emp003-cas-contract.test.ts
+      - name: Access RS256 JWT cryptographic and tenant identity tests (unit)
+        run: npx tsx --test src/runtime/workforce-admin-access-jwt.test.ts src/runtime/workforce-admin-access-principal.test.ts
+      - name: Local workerd Durable Object integration (no deploy)
+        run: |
+          npx wrangler dev --local --config tests/workerd/wrangler.toml --port 8791 > /tmp/wf00-workerd.log 2>&1 &
+          WORKERD_PID=$!
+          trap 'kill "$WORKERD_PID" 2>/dev/null || true' EXIT
+          READY=0
+          for i in $(seq 1 45); do
+            if curl --silent --fail --max-time 1 http://127.0.0.1:8791/fixture/health >/dev/null; then READY=1; break; fi
+            if curl --silent --max-time 1 http://127.0.0.1:8791/fixture/health >/dev/null; then READY=1; break; fi
+            sleep 2
+          done
+          if [ "$READY" != 1 ]; then cat /tmp/wf00-workerd.log; exit 1; fi
+          npx tsx tests/workerd/emp003-local-e2e.ts || { cat /tmp/wf00-workerd.log; exit 1; }
+      - name: EMP-003 persistence and review tests
+        run: npx tsx --test src/runtime/emp003-durable-storage.test.ts src/runtime/emp003-review-transaction.test.ts src/runtime/emp003-review-state.test.ts

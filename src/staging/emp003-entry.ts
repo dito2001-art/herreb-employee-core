@@ -3,18 +3,28 @@ import employeeWorker from "../worker";
 // by this entrypoint; forwarding these exports does not expose additional routes.
 export { ChatAgent, EMP002Operations, WorkforceAdminState, EMP003CampaignState } from "../worker";
 import { readWorkforceAdminAccessActor } from "../runtime/workforce-admin-access-read";
+import { handleEMP003BrowserDraftWrite } from "../runtime/emp003-browser-draft-write";
 
 /**
  * EMP-003 staging-only ingress. Never use the shared production Access policy.
- * Only the read-only browser operations API is permitted until WF-04 certifies
- * a safe agent/WS and console route integration. All other routes fail closed.
+ * Only the read-only browser operations API and explicitly allowlisted authenticated
+ * static assets are permitted. Mutations, agents and WebSockets remain disabled.
  */
-export default {
+export function createEMP003StagingEntry(jwksFetcher: typeof fetch = fetch) {
+ return {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const deny = (status: number, error: string) =>
       Response.json({ ok: false, error }, { status, headers: { "cache-control": "no-store" } });
     const url = new URL(request.url);
-    if (request.method !== "GET" || url.pathname !== "/api/emp003/operations")
+    const operationsRead = request.method === "GET" && url.pathname === "/api/emp003/operations";
+    // Do not treat SPA fallback as an authorization decision. Explicit paths only.
+    const assetRead = (request.method === "GET" || request.method === "HEAD") &&
+      (url.pathname === "/" || url.pathname === "/index.html" ||
+       url.pathname.startsWith("/assets/") && /^[a-zA-Z0-9_./-]+$/.test(url.pathname.slice(8))) &&
+      !url.pathname.split("/").some(segment => segment === "." || segment === "..") &&
+      !/%2f|%5c|%2e/i.test(url.pathname);
+    const draftWrite = request.method === "POST" && url.pathname === "/api/emp003/drafts";
+    if (!operationsRead && !assetRead && !draftWrite)
       return deny(404, "EMP003_STAGING_ROUTE_DISABLED");
     if (request.headers.get("upgrade") || request.headers.get("connection")?.toLowerCase().includes("upgrade"))
       return deny(403, "EMP003_STAGING_WEBSOCKET_DISABLED");
@@ -41,14 +51,25 @@ export default {
       WORKFORCE_PLATFORM_ADMIN_ACTOR_ID: undefined
     };
     try {
-      const actor = await readWorkforceAdminAccessActor(request, isolatedEnv);
+      const actor = await readWorkforceAdminAccessActor(request, isolatedEnv, jwksFetcher);
       if ((actor.role !== "owner" && actor.role !== "user") || !actor.actorId || !actor.tenantId)
         return deny(403, "EMP003_STAGING_ACTOR_FORBIDDEN");
     } catch {
       return deny(401, "EMP003_STAGING_ACCESS_DENIED");
     }
+    if (draftWrite) return handleEMP003BrowserDraftWrite(request, isolatedEnv, jwksFetcher);
+    if (assetRead) {
+      const assets = (env as Env & { ASSETS?: { fetch(request: Request): Promise<Response> } }).ASSETS;
+      if (!assets) return deny(503, "EMP003_STAGING_ASSETS_UNAVAILABLE");
+      const response = await assets.fetch(request);
+      const headers = new Headers(response.headers);
+      headers.set("cache-control", "private, no-store");
+      return new Response(response.body, { status: response.status, headers });
+    }
     // Downstream browser handler independently verifies JWT and scopes DO by
     // the server-derived tenant, rejecting cross-tenant response payloads.
     return employeeWorker.fetch(request, isolatedEnv as Env, ctx);
   }
-};
+ };
+}
+export default createEMP003StagingEntry();
