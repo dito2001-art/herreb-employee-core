@@ -47,3 +47,18 @@ assert.equal(review.status, 200, await review.text());
 assert.notEqual((await write("blocked", "&expectedRevision=2")).status, 200);
 assert.equal((await read()).campaign.objective, accepted);
 console.log("WORKERD_DO_PASS: create, duplicate, concurrent CAS, stale revision, readback, reviewed immutable");
+
+const stagingRequest = async (path: string, init?: RequestInit) =>
+  fetch(base + "/staging" + path, init);
+for (const path of ["/api/internal/emp003/drafts", "/agents/ChatAgent/tenant",
+  "/cdn-cgi/preview", "/api/admin/workforce", "/webhooks/meta/whatsapp",
+  "/api/emp003/operations/extra"]) {
+  assert.equal((await stagingRequest(path)).status, 404, path);
+}
+assert.equal((await stagingRequest("/api/emp003/operations")).status, 503);
+assert.equal((await stagingRequest("/api/emp003/drafts", { method: "POST",
+  headers: { "content-type": "application/json" }, body: "{}" })).status, 503);
+assert.equal((await stagingRequest("/api/emp003/operations", {
+  headers: { upgrade: "websocket", connection: "Upgrade" }
+})).status, 403);
+console.log("WORKERD_STAGING_NEGATIVE_PASS: routes, missing Access config, WebSocket");
