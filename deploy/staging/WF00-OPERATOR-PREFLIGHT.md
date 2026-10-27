@@ -25,7 +25,7 @@ test -f dist/client/index.html
 npx wrangler deploy --config deploy/staging/wrangler.emp003.jsonc --dry-run --outdir /tmp/wf00-emp003-staging-dryrun
 ```
 
-**Caveat:** `npm run build:console` invokes Vite; inspect `vite.config.*` and its Cloudflare plugin before interpreting the result. The build can use the root Worker configuration even when Wrangler dry-run later uses the dedicated staging manifest. Confirm bundled entrypoint, generated asset directory, class exports and effective binding inventory in dry-run output; fail the gate on mismatch. Do **not** replace `--dry-run` with a normal deploy.
+**Confirmed P0 build selection:** `vite.config.ts` invokes `cloudflare()` with no `configPath`. Per Cloudflare Vite plugin API, `CLOUDFLARE_VITE_WRANGLER_CONFIG_PATH` selects the entry Wrangler config ahead of the root fallback. The command above sets it for this process only. Confirm the generated Vite output configuration names `herreb-emp003-staging` and points to `src/staging/emp003-entry.ts` (or its built entry), with staging-only bindings and assets; fail closed on mismatch. The later Wrangler `--config` argument does not retroactively fix a Vite build performed with the root manifest. Review any Vite-generated output manifest before considering deployment. Source: https://developers.cloudflare.com/workers/vite-plugin/reference/api/ . Do **not** replace `--dry-run` with a normal deploy.
 
 ## Candidate manifest inventory — verify against Cloudflare before GO
 
