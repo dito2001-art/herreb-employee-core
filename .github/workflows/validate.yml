@@ -56,6 +56,9 @@ jobs:
         continue-on-error: true
         run: npx tsc --noEmit
 
+      - name: EMP-003 M2M fail-closed revision negative tests
+        run: npx tsx --test src/runtime/emp003-m2m-draft-revision.test.ts src/runtime/emp003-cas-contract.test.ts
+
       - name: Core tests
         id: tests
         continue-on-error: true
