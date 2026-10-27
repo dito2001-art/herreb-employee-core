@@ -47,7 +47,7 @@ export class EMP003CampaignState extends DurableObject<Env> {
         const hasRevisionControl = createOnly || url.searchParams.has("expectedRevision");
         const expectedRevisionRaw = url.searchParams.get("expectedRevision");
         const expectedRevision = expectedRevisionRaw === null ? null : Number(expectedRevisionRaw);
-        if (url.searchParams.has("expectedRevision") && (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1))
+        if (url.searchParams.has("expectedRevision") && (expectedRevision === null || !Number.isSafeInteger(expectedRevision) || expectedRevision < 1))
           return Response.json({ ok: false, error: "EMP003_DRAFT_REVISION_REQUIRED" }, { status: 428, headers: { "cache-control": "no-store" } });
         const result = await this.ctx.storage.transaction(async (txn) => {
           const transactionalRepo = createPersistentBlueprintRepository(createEMP003DurableStorageAdapter(txn));
