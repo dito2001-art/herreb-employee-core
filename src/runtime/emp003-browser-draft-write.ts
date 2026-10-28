@@ -101,11 +101,23 @@ export async function handleEMP003BrowserDraftWrite(
         body: JSON.stringify(parsed.data)
       })
     );
-    if (!response.ok)
+    if (!response.ok) {
+      if (response.status === 409) {
+        let code = "EMP003_DRAFT_WRITE_REJECTED";
+        try {
+          const error = (await response.json()) as { error?: unknown };
+          if (error.error === "EMP003_REVIEWED_DRAFT_IMMUTABLE")
+            code = error.error;
+        } catch {
+          /* Never reflect arbitrary storage errors. */
+        }
+        return fail(409, code);
+      }
       return fail(
-        response.status === 409 ? 409 : response.status === 404 ? 404 : 503,
+        response.status === 404 ? 404 : 503,
         "EMP003_DRAFT_WRITE_REJECTED"
       );
+    }
     const writeReceipt = (await response.json()) as { revision?: unknown };
     if (!Number.isSafeInteger(writeReceipt.revision))
       return fail(503, "EMP003_DRAFT_WRITE_RECEIPT_INVALID");

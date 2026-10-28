@@ -192,7 +192,7 @@ test("ambiguous STARTED never calls provider again, GENERATED can recover withou
       key,
       JSON.stringify({
         fingerprint,
-        state: "GENERATED",
+        state: "GENERATED", contextHash: await copyHash(JSON.stringify(copyContext)),
         createdAt: "2026-10-28T20:00:00Z",
         campaignId: "campaign",
         draft: {
@@ -309,7 +309,7 @@ test("two concurrent GENERATED recoveries register one revision and never call A
     const { copyHash } = await import("./emp003-copy-service");
     const fingerprint = await copyHash(JSON.stringify(copyRequest));
     await f.storage.put("emp003:copy:tenant-a:op:op-1", JSON.stringify({
-      fingerprint, state: "GENERATED", createdAt: "2026-10-28T20:00:00Z",
+      fingerprint, state: "GENERATED", contextHash: await copyHash(JSON.stringify(copyContext)), createdAt: "2026-10-28T20:00:00Z",
       campaignId: "campaign",
       draft: {
         tenantId: "tenant-a", offeringId: "offering", audienceId: "audience",
@@ -396,7 +396,7 @@ test("GENERATED recovery refuses a lock owned by another operation", async () =>
     const { copyHash } = await import("./emp003-copy-service");
     const fingerprint = await copyHash(JSON.stringify(copyRequest));
     await f.storage.put("emp003:copy:tenant-a:op:op-1", JSON.stringify({
-      fingerprint, state: "GENERATED", createdAt: "2026-10-28T20:00:00Z",
+      fingerprint, state: "GENERATED", contextHash: await copyHash(JSON.stringify(copyContext)), createdAt: "2026-10-28T20:00:00Z",
       campaignId: "campaign",
       draft: {
         tenantId: "tenant-a", offeringId: "offering", audienceId: "audience",
@@ -469,6 +469,45 @@ test("reservation-lost branch reads receipt once, never recursively generates", 
     assert.equal(result.state, "STARTED");
     assert.equal(providerCalls, 0);
     assert.equal(await f.storage.get("emp003:copy:tenant-a:quota:2026-10-28"), undefined);
+  } finally {
+    f.db.close();
+  }
+});
+
+test("GENERATED recovery rejects changed authoritative claims without invoking the provider", async () => {
+  const f = setup();
+  try {
+    const { copyHash } = await import("./emp003-copy-service");
+    await f.storage.put(
+      "emp003:copy:tenant-a:op:op-1",
+      JSON.stringify({
+        fingerprint: await copyHash(JSON.stringify(copyRequest)),
+        state: "GENERATED",
+        contextHash: "0".repeat(64),
+        createdAt: "2026-10-28T20:00:00Z",
+        campaignId: "campaign",
+        draft: {
+          tenantId: "tenant-a",
+          offeringId: "offering",
+          audienceId: "audience",
+          channel: "Email",
+          headline: "h",
+          body: "b",
+          claimIds: ["claim"],
+          sourceKnowledgeIds: ["knowledge"],
+          status: "DRAFT"
+        }
+      })
+    );
+    await assert.rejects(
+      () => f.service.generate("tenant-a", copyRequest),
+      /COPY_CONTEXT_CHANGED/
+    );
+    assert.equal(f.calls(), 0);
+    assert.equal(
+      await f.service.read("tenant-a", "campaign", "copy"),
+      undefined
+    );
   } finally {
     f.db.close();
   }
