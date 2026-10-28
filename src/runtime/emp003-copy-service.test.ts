@@ -275,3 +275,29 @@ test("authoritative context rejects missing config, cross-tenant knowledge, stal
     /MISMATCH/
   );
 });
+
+test("quota race across distinct assets reserves exactly one provider invocation", async () => {
+  const f = setup(1);
+  try {
+    const results = await Promise.allSettled([
+      f.service.generate("tenant-a", copyRequest),
+      f.service.generate("tenant-a", {
+        ...copyRequest,
+        assetId: "another",
+        operationId: "another"
+      })
+    ]);
+    assert.equal(results.filter((x) => x.status === "fulfilled").length, 1);
+    const rejected = results.find(
+      (x) => x.status === "rejected"
+    ) as PromiseRejectedResult;
+    assert.match(String(rejected.reason), /COPY_QUOTA_EXHAUSTED/);
+    assert.equal(f.calls(), 1);
+    assert.equal(
+      await f.storage.get("emp003:copy:tenant-a:quota:2026-10-28"),
+      "1"
+    );
+  } finally {
+    f.db.close();
+  }
+});
