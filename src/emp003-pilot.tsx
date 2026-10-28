@@ -1,3 +1,4 @@
+import { EMP003CopyLibrary } from "./emp003-copy-library";
 import { EMP003CampaignDashboard } from "./emp003-campaign-dashboard";
 
 export function EMP003Pilot() {
@@ -8,6 +9,7 @@ export function EMP003Pilot() {
       </header>
       <main className="mx-auto max-w-5xl p-5">
         <EMP003CampaignDashboard />
+        <EMP003CopyLibrary />
       </main>
     </div>
   );

@@ -1,3 +1,4 @@
+import { handleEMP003CopyDO } from "./emp003-copy-do";
 import { DurableObject } from "cloudflare:workers";
 import { createEMP003DurableStorageAdapter } from "./emp003-durable-storage";
 import { createPersistentBlueprintRepository } from "../core/marketing-blueprint-persistent";
@@ -10,6 +11,8 @@ import { CampaignTransitionSchema } from "../core/marketing-campaign-lifecycle";
 export class EMP003CampaignState extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname === "/copy-assets" || url.pathname.startsWith("/copy-assets/"))
+      return handleEMP003CopyDO(request, this.ctx.storage, this.env);
     const tenantId = url.searchParams.get("tenantId") ?? "";
     const campaignId = url.searchParams.get("campaignId") ?? "";
     const repo = createPersistentBlueprintRepository(createEMP003DurableStorageAdapter(this.ctx.storage));

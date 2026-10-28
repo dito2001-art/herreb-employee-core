@@ -1,3 +1,4 @@
+import { handleEMP003CopyAssets } from "../runtime/emp003-copy-routes";
 import employeeWorker from "../worker";
 import { handleEMP003BrowserGenerate } from "../runtime/emp003-browser-generate";
 // Wrangler requires every DO class bound in the staging manifest to be exported
@@ -30,6 +31,16 @@ export function createEMP003StagingEntry(jwksFetcher: typeof fetch = fetch) {
           { status, headers: { "cache-control": "no-store" } }
         );
       const url = new URL(request.url);
+      const copyAssets =
+        (request.method === "GET" &&
+          [
+            "/api/emp003/assets",
+            "/api/emp003/assets/content",
+            "/api/emp003/assets/context",
+            "/api/emp003/assets/status"
+          ].includes(url.pathname)) ||
+        (request.method === "POST" &&
+          url.pathname === "/api/emp003/assets/generate");
       const operationsRead =
         request.method === "GET" && url.pathname === "/api/emp003/operations";
       // Do not treat SPA fallback as an authorization decision. Explicit paths only.
@@ -53,6 +64,7 @@ export function createEMP003StagingEntry(jwksFetcher: typeof fetch = fetch) {
         request.method === "POST" &&
         url.pathname === "/api/emp003/generate-campaign";
       if (
+        !copyAssets &&
         !operationsRead &&
         !assetRead &&
         !draftWrite &&
@@ -105,6 +117,8 @@ export function createEMP003StagingEntry(jwksFetcher: typeof fetch = fetch) {
       } catch {
         return deny(401, "EMP003_STAGING_ACCESS_DENIED");
       }
+      if (copyAssets)
+        return handleEMP003CopyAssets(request, isolatedEnv, jwksFetcher);
       if (campaignRead || reviewWrite)
         return handleEMP003BrowserCampaign(request, isolatedEnv, jwksFetcher);
       if (generateProposal)
