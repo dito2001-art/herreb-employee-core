@@ -28,8 +28,13 @@ const responseSchema = z
     permissions: z.object({ canWrite: z.boolean() }).optional()
   })
   .passthrough();
-const json = async (response: Response) =>
-  responseSchema.parse(await response.json());
+const json = async (response: Response) => {
+  if (!response.headers.get("content-type")?.includes("application/json"))
+    throw new Error(
+      "La sesión o la respuesta no son válidas. Volvé a ingresar y recargá la campaña."
+    );
+  return responseSchema.parse(await response.json());
+};
 const message = (status: number) =>
   status === 409
     ? "La campaña cambió o ya no admite edición. Volvé a cargarla antes de guardar."
@@ -51,6 +56,7 @@ export function EMP003CampaignDashboard() {
   const [mustReload, setMustReload] = useState(false);
   const [reason, setReason] = useState("");
   const [topic, setTopic] = useState("");
+  const [generating, setGenerating] = useState(false);
   const selected = campaigns.find((c) => c.campaignId === selectedId);
   const editable =
     canWrite &&
@@ -84,7 +90,10 @@ export function EMP003CampaignDashboard() {
     let active = true;
     void loadList()
       .then((data) => {
-        if (active) applyList(data);
+        if (active) {
+          applyList(data);
+          if (data.canWrite && data.cards.length === 0) create(data.tenantId);
+        }
       })
       .catch((e) => {
         if (active) setError(e.message);
@@ -133,7 +142,7 @@ export function EMP003CampaignDashboard() {
       setBusy(false);
     }
   }
-  function create() {
+  function create(forTenant = tenantId) {
     setTopic("");
     setSelectedId(`campaign-${crypto.randomUUID()}`);
     setRevision(undefined);
@@ -141,8 +150,10 @@ export function EMP003CampaignDashboard() {
     setNotice("");
     setMustReload(false);
     setDraft({
-      tenantId,
+      tenantId: forTenant,
       correlationId: crypto.randomUUID(),
+      name: "",
+      schedule: { startDate: "", endDate: "" },
       objective: "",
       audiences: [],
       positioning: "",
@@ -158,6 +169,7 @@ export function EMP003CampaignDashboard() {
   async function generateProposal() {
     if (!draft || !editable || revision !== undefined) return;
     setBusy(true);
+    setGenerating(true);
     setError("");
     setNotice("");
     try {
@@ -165,6 +177,7 @@ export function EMP003CampaignDashboard() {
         method: "POST",
         credentials: "same-origin",
         cache: "no-store",
+        signal: AbortSignal.timeout(300000),
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           topic,
@@ -175,7 +188,7 @@ export function EMP003CampaignDashboard() {
       if (!response.ok)
         throw new Error(
           response.status === 400
-            ? "Revisá el tema, el objetivo y entre una y cinco fuentes HTTPS."
+            ? "Revisá el tema, el objetivo y una o dos fuentes HTTPS autorizadas."
             : response.status === 403 || response.status === 401
               ? "No tenés permiso para generar esta propuesta."
               : "No pudimos generar una propuesta verificada. Tu borrador no se guardó ni se publicó."
@@ -194,7 +207,11 @@ export function EMP003CampaignDashboard() {
         result.blueprint.tenantId !== tenantId
       )
         throw new Error("No se pudo verificar la propuesta para tu cuenta.");
-      setDraft(result.blueprint);
+      setDraft({
+        ...result.blueprint,
+        ...(draft.name !== undefined ? { name: draft.name } : {}),
+        ...(draft.schedule ? { schedule: draft.schedule } : {})
+      });
       setNotice(
         "Propuesta generada con las fuentes indicadas. Revisala y elegí Guardar para persistirla. No está aprobada ni publicada."
       );
@@ -203,15 +220,32 @@ export function EMP003CampaignDashboard() {
         e instanceof z.ZodError
           ? "No se pudo validar la propuesta. No se guardó ni se publicó."
           : e instanceof Error
-            ? e.message
+            ? e.name === "TimeoutError"
+              ? "La IA demoró demasiado. Conservamos tus datos; no se guardó ni publicó la propuesta."
+              : e.message
             : "No pudimos generar la propuesta."
       );
     } finally {
+      setGenerating(false);
       setBusy(false);
     }
   }
   async function save() {
     if (!draft || !editable) return;
+    if (!draft.name?.trim()) {
+      setError("Indicá el nombre de la campaña.");
+      return;
+    }
+    if (
+      !draft.schedule?.startDate ||
+      !draft.schedule.endDate ||
+      draft.schedule.endDate < draft.schedule.startDate
+    ) {
+      setError(
+        "Indicá las fechas de inicio y fin; el fin no puede ser anterior al inicio."
+      );
+      return;
+    }
     const parsed = MarketingCampaignBlueprintSchema.safeParse({
       ...draft,
       audiences: draft.audiences.map((s) => s.trim()).filter(Boolean),
@@ -329,21 +363,47 @@ export function EMP003CampaignDashboard() {
     </label>
   );
   return (
-    <section className="space-y-4" aria-label="EMP-003 Campañas">
+    <section
+      className="emp003-dashboard space-y-4"
+      aria-label="EMP-003 Campañas"
+      aria-busy={busy}
+    >
       <h1 className="text-2xl font-bold">EMP-003 · Campañas</h1>
       <p>
         Creá, guardá y revisá tus campañas. La publicación externa está
         deshabilitada.
       </p>
-      {busy && <output>Procesando…</output>}
+      {busy && (
+        <output>
+          {generating
+            ? "Generando propuesta con IA… Puede demorar unos minutos. No cierres esta página."
+            : "Procesando…"}
+        </output>
+      )}
       {error && <p role="alert">{error}</p>}
       {notice && <output>{notice}</output>}
-      <button disabled={!canWrite || busy} onClick={create}>
+      <button
+        className="emp003-primary"
+        disabled={!canWrite || busy}
+        onClick={() => create()}
+      >
         Nueva campaña
       </button>
+      {!busy && !error && !canWrite && (
+        <p>
+          Tu acceso permite consultar las campañas de tu cuenta. Solo el
+          propietario puede crear, editar y revisar.
+        </p>
+      )}
       <div className="grid gap-4 md:grid-cols-2">
         <nav className="space-y-2" aria-label="Listado de campañas">
-          {!busy && !campaigns.length && <p>Todavía no hay campañas.</p>}
+          {!busy && !error && !campaigns.length && (
+            <p>
+              {canWrite
+                ? "Creá tu primera campaña en el editor. Podés completarla vos o pedir una propuesta con IA."
+                : "Todavía no hay campañas."}
+            </p>
+          )}
           {campaigns.map((c) => (
             <button
               className="block w-full rounded border p-3 text-left"
@@ -352,17 +412,65 @@ export function EMP003CampaignDashboard() {
               aria-pressed={selectedId === c.campaignId}
               onClick={() => void open(c.campaignId)}
             >
-              {c.objective} · {labels[c.reviewState]}
+              <strong>{c.name ?? c.objective}</strong> · {labels[c.reviewState]}
             </button>
           ))}
         </nav>
         {draft && (
-          <article className="space-y-3 rounded border p-4">
+          <article
+            className="space-y-3 rounded border p-4"
+            aria-label="Editor de campaña"
+          >
             <p>
               {selected ? labels[selected.reviewState] : "Nuevo borrador"} ·{" "}
               {revision === undefined ? "Sin guardar" : `Versión ${revision}`}
             </p>
-            {field("Objetivo", "objective")}
+            <label className="block">
+              Nombre de la campaña
+              <input
+                className="block w-full rounded border p-2"
+                value={draft.name ?? ""}
+                maxLength={160}
+                disabled={!editable}
+                onChange={(e) => {
+                  const name = e.target.value;
+                  setDraft((d) => d && { ...d, name });
+                }}
+              />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(
+                [
+                  ["Fecha de inicio", "startDate"],
+                  ["Fecha de fin", "endDate"]
+                ] as const
+              ).map(([label, key]) => (
+                <label className="block" key={key}>
+                  {label}
+                  <input
+                    type="date"
+                    className="block w-full rounded border p-2"
+                    value={draft.schedule?.[key] ?? ""}
+                    disabled={!editable}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setDraft(
+                        (d) =>
+                          d && {
+                            ...d,
+                            schedule: {
+                              startDate: d.schedule?.startDate ?? "",
+                              endDate: d.schedule?.endDate ?? "",
+                              [key]: value
+                            }
+                          }
+                      );
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+            {field("Objetivo comercial", "objective")}
             {revision === undefined && (
               <div className="space-y-2 rounded border p-3">
                 <label className="block">
@@ -376,8 +484,10 @@ export function EMP003CampaignDashboard() {
                   />
                 </label>
                 <p>
-                  Indicá el objetivo y las fuentes HTTPS abajo. La IA prepara
-                  una propuesta; Guardar confirma la persistencia por separado.
+                  Indicá el objetivo y una o dos fuentes HTTPS abajo. En este
+                  piloto solo están autorizadas fuentes de
+                  developers.cloudflare.com. La IA prepara una propuesta;
+                  Guardar confirma la persistencia por separado.
                 </p>
                 <button
                   disabled={
@@ -560,8 +670,12 @@ export function EMP003CampaignDashboard() {
             >
               Agregar KPI
             </button>
-            <button disabled={!editable} onClick={() => void save()}>
-              Guardar y verificar
+            <button
+              className="emp003-primary"
+              disabled={!editable}
+              onClick={() => void save()}
+            >
+              Guardar borrador
             </button>
             {revision !== undefined || mustReload ? (
               <button disabled={busy} onClick={() => void open(selectedId)}>
