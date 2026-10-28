@@ -79,3 +79,32 @@ El orden no permite declarar la etapa siguiente certificada porque sus interface
 2. Elegir un canal y cuenta empresarial concretos; confirmar acceso API de escritura y lectura, contenido aprobado y ventana. No solicitar todavía credenciales de todos los canales.
 3. Autorizar almacenamiento multimedia/proveedor/modelo y límites de costo solo para la entrega que lo necesita.
 4. Definir después límites de optimización y política de consentimiento/atribución; no asumirlos de un prompt de generación.
+
+## Incremento: generación de copy y registro versionado
+
+`src/runtime/emp003-copy-generator.ts` implementa ContentGenerator con el proveedor/modelo Workers AI existente. Invoca IA únicamente al llamar generate: salida máxima 2048 tokens, timeout 60 segundos y sin reintentos automáticos. Valida JSON, longitudes y pertenencia de claim IDs. Esa validación no demuestra por sí sola la veracidad de cada frase; el resultado sigue siendo DRAFT y exige revisión humana. Los errores del proveedor se reducen a un código seguro.
+
+`src/core/marketing-copy-assets.ts` reutiliza el orquestador grounded: comprueba revisión antes de generar, registra mediante CAS atómico y realiza lectura independiente de la revisión exacta. Fallos de proveedor/claims no registran un asset. La generación completa aún no ofrece replay durable de llamadas al modelo; no reintentar automáticamente operaciones ambiguas. La biblioteca conserva su propia idempotencia transaccional de registro.
+
+No hay endpoint de assets ni controles de biblioteca conectados al portal. El BFF pendiente debe derivar tenant/rol de Access, aplicar autorización/cuota y resolver brain/campaign/objetivo desde almacenamiento autoritativo, nunca aceptar esos objetos completos del cliente. El puente entre el blueprint del editor y el modelo operacional/brain sigue pendiente: no inventar claims verificados para completarlo. Bucket/bindings aislados requieren autorización; este PR no los crea.
+
+### Rutas y fronteras actuales
+
+| Ruta piloto #304 | Implementación reutilizable | Límite |
+|---|---|---|
+| GET /api/emp003/operations | emp003-browser-operations.ts | Lista y permisos; sin analytics externos |
+| POST /api/emp003/generate-campaign | emp003-browser-generate.ts | Owner, JWT/origen, topic/objective/1–2 fuentes; propuesta sin persistir |
+| POST /api/emp003/drafts | emp003-browser-draft-write.ts | Creación/CAS; mantener contrato |
+| GET /api/emp003/drafts | emp003-browser-campaign.ts | Lectura independiente con tenant del actor |
+| POST /api/emp003/review | Transacciones de review | Aprobación editorial no autoriza publicación |
+| Assets/métricas/remarketing | Sin ruta habilitada en piloto | Core/diseño no equivalen a E2E |
+
+### Primer conector candidato: LinkedIn orgánico
+
+Sujeto a selección explícita de organización, producto API y permisos reales. El comando interno debe vincular actor/tenant/organización/campaña/asset/revisión/hash/aprobación/operationId/ventana. Host oficial fijo, versión explícita; ninguna URL arbitraria del usuario. Texto primero; multimedia requiere carga oficial y URN confirmado.
+
+Secuencia: aprobación exacta → outbox transaccional único → verificar ventana/revocación → POST /rest/posts → guardar x-restli-id y evidencia → GET por ID → confirmar autor/contenido/estado. Timeout posterior al envío queda UNKNOWN: no asumir idempotency key del proveedor ni repetir POST sin reconciliación. ContentPublisher actual solo devuelve recibo: requiere reconciliación durable antes de activarlo.
+
+Métricas: adaptador separado de solo lectura, sujeto al producto/scopes analytics confirmados. Snapshot conserva ID de post/organización/ventana/zona horaria/hora/versión API/payload/hash. Escribir Posts no garantiza permiso de analytics. CPC/CPL/ROAS no se derivan sin inversión/conversiones/ingresos reales. Endpoints/campos analytics se fijarán contra documentación oficial del producto habilitado; no se inventan ni se invocan ahora.
+
+Validación afectada: 6 pruebas PASS, SQLite para metadata y generador/object store inyectados; TypeScript y lint específicos PASS. No certifican invocación real del nuevo adaptador, R2 ni Cloudflare E2E. En #304 se observó Failed to fetch después de la generación pendiente y luego Access pidió nuevo login; no se atribuye la causa al backend sin evidencia adicional.
