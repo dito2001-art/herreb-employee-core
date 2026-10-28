@@ -260,3 +260,61 @@ test("DO commit guard rejects concurrent review/approval before persisting any n
     f.db.close();
   }
 });
+
+test("approval before quota reservation atomically prevents quota debit and provider call", async () => {
+  const f = copyFixture();
+  let transactions = 0,
+    calls = 0;
+  await createPersistentBlueprintRepository(
+    createEMP003DurableStorageAdapter(f.storage)
+  ).put("tenant-a", "campaign", copyBlueprint);
+  await f.storage.put("emp003:draft-revision:tenant-a:campaign", 1);
+  const wrapped = {
+    ...f.storage,
+    async transaction<T>(work: (txn: typeof f.storage) => Promise<T>) {
+      transactions++;
+      if (transactions === 2)
+        await f.storage.put(reviewKey("tenant-a", "campaign"), {
+          tenantId: "tenant-a",
+          campaignId: "campaign",
+          state: "APPROVED",
+          revision: 2,
+          lastCorrelationId: null,
+          publishExecuted: false
+        });
+      return f.storage.transaction(work);
+    }
+  };
+  try {
+    const response = await handleEMP003CopyDO(
+      new Request(
+        "https://internal/copy-assets/generate?tenantId=tenant-a&campaignId=campaign",
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-emp003-copy-actor": "a"
+          },
+          body: JSON.stringify(copyRequest)
+        }
+      ),
+      wrapped as unknown as DurableObjectStorage,
+      {
+        AI: {} as Ai,
+        EMP003_ASSET_BUCKET: f.bucket,
+        EMP003_COPY_CONTEXTS_JSON: JSON.stringify([copyContext])
+      },
+      {
+        async generate() {
+          calls++;
+          return { headline: "h", body: "b", claimIds: ["claim"] };
+        }
+      }
+    );
+    assert.equal(response.status, 409);
+    assert.equal(calls, 0);
+    assert.equal((await f.storage.list({ prefix: "emp003:copy:" })).size, 0);
+  } finally {
+    f.db.close();
+  }
+});

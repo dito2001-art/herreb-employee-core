@@ -1,0 +1,63 @@
+name: Validate EMP003 Copy Pilot
+on:
+  pull_request:
+    branches: [feat/emp003-cycle-assets-20261028]
+    paths:
+      - '.github/workflows/validate-emp003-copy-pilot.yml'
+      - 'src/runtime/emp003-*'
+      - 'src/core/marketing-*'
+      - 'src/emp003-*'
+      - 'src/staging/emp003-*'
+      - 'package.json'
+      - 'package-lock.json'
+permissions:
+  contents: read
+concurrency:
+  group: emp003-copy-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  copy-pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CI: 'true'
+      CLOUDFLARE_SEND_METRICS: 'false'
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Confirm exact candidate SHA
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Affected copy and immutable-draft checks
+        run: >-
+          node --import tsx --test
+          src/runtime/emp003-approved-conflict.test.ts
+          src/runtime/emp003-copy-service.test.ts
+          src/runtime/emp003-copy-routes.test.ts
+          src/emp003-copy-library.test.ts
+          src/staging/emp003-copy-ingress.test.ts
+      - name: Types
+        run: node node_modules/typescript/bin/tsc --noEmit
+      - name: Affected lint
+        run: >-
+          node node_modules/oxlint/bin/oxlint
+          src/runtime/emp003-approved-conflict.test.ts
+          src/runtime/emp003-browser-draft-write.ts
+          src/runtime/emp003-copy-service.ts
+          src/runtime/emp003-copy-service.test.ts
+          src/runtime/emp003-copy-do.ts
+          src/runtime/emp003-copy-routes.ts
+          src/runtime/emp003-copy-routes.test.ts
+          src/emp003-copy-library.tsx
+          src/emp003-copy-library.test.ts
+      - name: Frontend build without deployment
+        run: npm run build:console

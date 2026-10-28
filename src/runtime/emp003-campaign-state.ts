@@ -64,12 +64,13 @@ export class EMP003CampaignState extends DurableObject<Env> {
           if (!createOnly && currentRevision !== expectedRevision) return "CONFLICT" as const;
           const state = await txn.get<unknown>(reviewKey(tenantId, campaignId));
           if (state !== undefined && EMP003ReviewStateSchema.parse(state).state !== "DRAFT") {
-            throw new Error("EMP003_REVIEWED_DRAFT_IMMUTABLE");
+            return "IMMUTABLE" as const;
           }
           await transactionalRepo.put(tenantId, campaignId, payload as never);
           await txn.put(revisionKey, currentRevision + 1);
           return "CREATED" as const;
         });
+        if (result === "IMMUTABLE") return Response.json({ ok: false, error: "EMP003_REVIEWED_DRAFT_IMMUTABLE" }, { status: 409, headers: { "cache-control": "no-store" } });
         if (result === "MISSING") return Response.json({ ok: false, error: "EMP003_DRAFT_NOT_FOUND" }, { status: 404 });
         if (result === "CONFLICT") return Response.json({ ok: false, error: "EMP003_DRAFT_REVISION_CONFLICT" }, { status: 409 });
         if (result === "EXISTS") {
