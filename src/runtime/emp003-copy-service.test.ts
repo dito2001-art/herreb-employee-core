@@ -208,6 +208,7 @@ test("ambiguous STARTED never calls provider again, GENERATED can recover withou
         }
       })
     );
+    await f.storage.put("emp003:copy:tenant-a:asset:campaign:copy", "op-1");
     assert.equal(
       (await f.service.generate("tenant-a", copyRequest)).state,
       "SUCCEEDED"
@@ -297,6 +298,83 @@ test("quota race across distinct assets reserves exactly one provider invocation
       await f.storage.get("emp003:copy:tenant-a:quota:2026-10-28"),
       "1"
     );
+  } finally {
+    f.db.close();
+  }
+});
+
+test("two concurrent GENERATED recoveries register one revision and never call AI", async () => {
+  const f = setup();
+  try {
+    const { copyHash } = await import("./emp003-copy-service");
+    const fingerprint = await copyHash(JSON.stringify(copyRequest));
+    await f.storage.put("emp003:copy:tenant-a:op:op-1", JSON.stringify({
+      fingerprint, state: "GENERATED", createdAt: "2026-10-28T20:00:00Z",
+      campaignId: "campaign",
+      draft: {
+        tenantId: "tenant-a", offeringId: "offering", audienceId: "audience",
+        channel: "Email", headline: "h", body: "b",
+        claimIds: ["claim"], sourceKnowledgeIds: ["knowledge"], status: "DRAFT"
+      }
+    }));
+    await f.storage.put("emp003:copy:tenant-a:asset:campaign:copy", "op-1");
+    const results = await Promise.all([
+      f.service.generate("tenant-a", copyRequest),
+      f.service.generate("tenant-a", copyRequest)
+    ]);
+    assert.deepEqual(results.map((x) => x.state), ["SUCCEEDED", "SUCCEEDED"]);
+    assert.deepEqual(results.map((x) => x.record?.revision), [1, 1]);
+    assert.equal(f.calls(), 0);
+    assert.equal((await f.service.list("tenant-a", "campaign")).length, 1);
+    assert.equal(await f.storage.get("emp003:copy:tenant-a:asset:campaign:copy"), "");
+  } finally {
+    f.db.close();
+  }
+});
+
+test("ambiguous STARTED stays pending without retrying AI and lock remains owned", async () => {
+  const f = setup();
+  try {
+    const { copyHash } = await import("./emp003-copy-service");
+    const fingerprint = await copyHash(JSON.stringify(copyRequest));
+    await f.storage.put("emp003:copy:tenant-a:op:op-1", JSON.stringify({
+      fingerprint, state: "STARTED", createdAt: "2026-10-28T20:00:00Z",
+      campaignId: "campaign"
+    }));
+    await f.storage.put("emp003:copy:tenant-a:asset:campaign:copy", "op-1");
+    const result = await Promise.all([
+      f.service.generate("tenant-a", copyRequest),
+      f.service.generate("tenant-a", copyRequest)
+    ]);
+    assert.deepEqual(result.map((x) => x.state), ["STARTED", "STARTED"]);
+    assert.equal(f.calls(), 0);
+    assert.equal(await f.storage.get("emp003:copy:tenant-a:asset:campaign:copy"), "op-1");
+  } finally {
+    f.db.close();
+  }
+});
+
+test("GENERATED recovery refuses a lock owned by another operation", async () => {
+  const f = setup();
+  try {
+    const { copyHash } = await import("./emp003-copy-service");
+    const fingerprint = await copyHash(JSON.stringify(copyRequest));
+    await f.storage.put("emp003:copy:tenant-a:op:op-1", JSON.stringify({
+      fingerprint, state: "GENERATED", createdAt: "2026-10-28T20:00:00Z",
+      campaignId: "campaign",
+      draft: {
+        tenantId: "tenant-a", offeringId: "offering", audienceId: "audience",
+        channel: "Email", headline: "h", body: "b",
+        claimIds: ["claim"], sourceKnowledgeIds: ["knowledge"], status: "DRAFT"
+      }
+    }));
+    await f.storage.put("emp003:copy:tenant-a:asset:campaign:copy", "other-operation");
+    await assert.rejects(
+      () => f.service.generate("tenant-a", copyRequest),
+      /COPY_RECOVERY_RECONCILIATION_REQUIRED/
+    );
+    assert.equal(f.calls(), 0);
+    assert.equal(await f.service.read("tenant-a", "campaign", "copy"), undefined);
   } finally {
     f.db.close();
   }
