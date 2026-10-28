@@ -1,4 +1,5 @@
 import employeeWorker from "../worker";
+import { handleEMP003BrowserGenerate } from "../runtime/emp003-browser-generate";
 // Wrangler requires every DO class bound in the staging manifest to be exported
 // by this entrypoint; forwarding these exports does not expose additional routes.
 export {
@@ -48,12 +49,16 @@ export function createEMP003StagingEntry(jwksFetcher: typeof fetch = fetch) {
         request.method === "GET" && url.pathname === "/api/emp003/drafts";
       const reviewWrite =
         request.method === "POST" && url.pathname === "/api/emp003/review";
+      const generateProposal =
+        request.method === "POST" &&
+        url.pathname === "/api/emp003/generate-campaign";
       if (
         !operationsRead &&
         !assetRead &&
         !draftWrite &&
         !campaignRead &&
-        !reviewWrite
+        !reviewWrite &&
+        !generateProposal
       )
         return deny(404, "EMP003_STAGING_ROUTE_DISABLED");
       if (
@@ -102,6 +107,8 @@ export function createEMP003StagingEntry(jwksFetcher: typeof fetch = fetch) {
       }
       if (campaignRead || reviewWrite)
         return handleEMP003BrowserCampaign(request, isolatedEnv, jwksFetcher);
+      if (generateProposal)
+        return handleEMP003BrowserGenerate(request, isolatedEnv, jwksFetcher);
       if (draftWrite)
         return handleEMP003BrowserDraftWrite(request, isolatedEnv, jwksFetcher);
       if (assetRead) {

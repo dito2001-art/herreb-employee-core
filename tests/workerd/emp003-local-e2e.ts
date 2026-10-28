@@ -395,3 +395,5 @@ assert.equal(
 console.log(
   "WORKERD_BROWSER_DELIVERY_PASS: independent GET, cross-tenant isolation, edit CAS, review, APPROVED immutable, origin denial"
 );
+
+assert.equal((await authRequest(validA, '/api/emp003/generate-campaign', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({topic:'Test',objective:'Test',sourceRefs:['https://example.com/']})})).status,503,'authenticated proposal generation fails closed without AI binding');

@@ -4,6 +4,13 @@
   "main": "../../src/staging/emp003-entry.ts",
   "compatibility_date": "2026-06-11",
   "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "EMP003_STAGING_ACCESS_TEAM_DOMAIN": "herreb.cloudflareaccess.com",
+    "EMP003_STAGING_ACCESS_AUDIENCE": "f5b7930229e0fbd70e9957ef379ddb6a0bcf67f4cc426632031998281eb9511f",
+    "EMP003_STAGING_IDENTITY_MAP_JSON": "[{\"email\":\"dito2001@gmail.com\",\"actorId\":\"fernando\",\"tenantId\":\"herreb-client-0\",\"role\":\"owner\"},{\"email\":\"dito37@hotmail.com\",\"actorId\":\"dito37@hotmail.com\",\"tenantId\":\"herreb-emp003-test-b\",\"role\":\"user\"}]",
+    "EMP003_RESEARCH_TENANT_ID": "herreb-client-0",
+    "EMP003_RESEARCH_ALLOWED_HOSTS_JSON": "[\"developers.cloudflare.com\"]"
+  },
   "workers_dev": false,
   "preview_urls": false,
   "ai": { "binding": "AI", "remote": true },
