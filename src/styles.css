@@ -16,3 +16,35 @@ body,
   height: 100%;
   min-height: 0;
 }
+
+/* Scoped to the marketer: native buttons must remain visible after the CSS reset. */
+.emp003-dashboard button {
+  border: 1px solid var(--color-kumo-line, #b8c0cc);
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.9rem;
+  background: var(--color-kumo-base, #fff);
+  cursor: pointer;
+}
+.emp003-dashboard button:hover:not(:disabled) {
+  background: var(--color-kumo-elevated, #edf2f7);
+}
+.emp003-dashboard button.emp003-primary {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: white;
+  font-weight: 600;
+}
+.emp003-dashboard button.emp003-primary:hover:not(:disabled) {
+  background: #1e40af;
+}
+.emp003-dashboard button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.emp003-dashboard button:focus-visible {
+  outline: 3px solid #60a5fa;
+  outline-offset: 2px;
+}
+.emp003-dashboard [role="alert"] {
+  color: #b91c1c;
+}

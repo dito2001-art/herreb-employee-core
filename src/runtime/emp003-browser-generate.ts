@@ -20,7 +20,7 @@ const inputSchema = z
           .refine((value) => new URL(value).protocol === "https:")
       )
       .min(1)
-      .max(5)
+      .max(2)
   })
   .strict();
 const reply = (status: number, body: unknown) =>

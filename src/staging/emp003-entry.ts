@@ -121,10 +121,26 @@ export function createEMP003StagingEntry(jwksFetcher: typeof fetch = fetch) {
         const response = await assets.fetch(request);
         const headers = new Headers(response.headers);
         headers.set("cache-control", "private, no-store");
-        return new Response(response.body, {
+        const privateResponse = new Response(response.body, {
           status: response.status,
           headers
         });
+        if (response.ok && headers.get("content-type")?.includes("text/html")) {
+          return new HTMLRewriter()
+            .on("html", {
+              element(element) {
+                element.setAttribute("data-workforce-mode", "emp003");
+                element.setAttribute("lang", "es-PY");
+              }
+            })
+            .on("title", {
+              element(element) {
+                element.setInnerContent("EMP-003 · HerreB AI Marketer");
+              }
+            })
+            .transform(privateResponse);
+        }
+        return privateResponse;
       }
       // Downstream browser handler independently verifies JWT and scopes DO by
       // the server-derived tenant, rejecting cross-tenant response payloads.
