@@ -54,7 +54,10 @@ export async function handleEMP003CopyDO(
               async put(key, value) {
                 if (
                   input &&
-                  key.startsWith(`emp003:assets:${tenantId}:${campaignId}:`)
+                  (key.startsWith(`emp003:assets:${tenantId}:${campaignId}:`) ||
+                    (key ===
+                      `emp003:copy:${tenantId}:op:${input.operationId}` &&
+                      JSON.parse(value).state === "STARTED"))
                 ) {
                   const review = await txn.get<unknown>(
                     reviewKey(tenantId, campaignId)
