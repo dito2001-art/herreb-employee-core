@@ -1,0 +1,110 @@
+[
+  {
+    "tenantId": "herreb-client-0",
+    "revision": 1,
+    "dailyLimit": 10,
+    "brand": {
+      "tenantId": "herreb-client-0",
+      "name": "HerreB AI Workforce",
+      "voice": [
+        "Español de Paraguay",
+        "Usar vos",
+        "Claro y verificable"
+      ],
+      "prohibitedThemes": [
+        "Prometer funciones no implementadas",
+        "Resultados o métricas no obtenidos",
+        "Publicación externa o inversión",
+        "Garantías comerciales no verificadas"
+      ]
+    },
+    "audiences": [
+      {
+        "id": "internal-team",
+        "tenantId": "herreb-client-0",
+        "name": "Equipo interno de HerreB",
+        "description": "Equipo que evalúa el piloto privado EMP-003",
+        "needs": [
+          "Revisar copy privado y verificar persistencia"
+        ],
+        "channels": [
+          "Piloto interno"
+        ]
+      }
+    ],
+    "offerings": [
+      {
+        "id": "emp003-internal-pilot",
+        "tenantId": "herreb-client-0",
+        "type": "SERVICE",
+        "name": "Piloto interno EMP-003",
+        "active": true,
+        "metadata": {
+          "internalOnly": true
+        }
+      }
+    ],
+    "knowledge": [
+      {
+        "id": "emp003-pilot-verified",
+        "tenantId": "herreb-client-0",
+        "namespace": "pilot",
+        "kind": "CANONICAL",
+        "subject": "Funciones comprobadas del piloto EMP-003",
+        "content": {
+          "capabilities": [
+            "Crear, editar, guardar y recuperar campañas en el piloto",
+            "Publicación externa deshabilitada"
+          ]
+        },
+        "sourceRefs": [
+          "https://github.com/dito2001-art/herreb-employee-core/blob/0dd809758530f7b634c44062f0699e48b68602ed/src/staging/emp003-entry.ts",
+          "https://herreb-emp003-staging.herreb-emp003-pilot.workers.dev/api/emp003/drafts?campaignId=campaign-820ff31e-a477-42c4-a8bf-c6f8d12da30a"
+        ],
+        "verified": true,
+        "updatedAt": "2026-10-28"
+      }
+    ],
+    "claims": [
+      {
+        "id": "pilot-campaign-persistence",
+        "tenantId": "herreb-client-0",
+        "offeringId": "emp003-internal-pilot",
+        "text": "El piloto EMP-003 permite crear, editar, guardar y recuperar campañas.",
+        "sourceKnowledgeIds": [
+          "emp003-pilot-verified"
+        ],
+        "verified": true
+      },
+      {
+        "id": "pilot-no-publication",
+        "tenantId": "herreb-client-0",
+        "offeringId": "emp003-internal-pilot",
+        "text": "La publicación externa permanece deshabilitada durante el piloto.",
+        "sourceKnowledgeIds": [
+          "emp003-pilot-verified"
+        ],
+        "verified": true
+      }
+    ],
+    "campaigns": [
+      {
+        "campaignId": "PENDING_ACTUAL_DRAFT_ID",
+        "campaignRevision": 1,
+        "audienceId": "internal-team",
+        "offeringId": "emp003-internal-pilot",
+        "channel": "Piloto interno",
+        "objective": {
+          "id": "copy-persistence-pilot",
+          "tenantId": "herreb-client-0",
+          "name": "Copy privado verificable",
+          "outcome": "Preparar y recuperar un copy interno de prueba, sin publicación externa ni inversión.",
+          "targetMetric": "Copies recuperados con hash verificado",
+          "targetValue": 1,
+          "startsAt": "2026-10-28",
+          "endsAt": "2026-11-30"
+        }
+      }
+    ]
+  }
+]

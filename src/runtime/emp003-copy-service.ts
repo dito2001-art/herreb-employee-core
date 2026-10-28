@@ -30,6 +30,7 @@ export type CopyLedger = {
   draft?: GroundedContentDraft;
   record?: ReturnType<typeof MarketingAssetVersionSchema.parse>;
   error?: string;
+  contextHash?: string;
 };
 export function createEMP003CopyService(deps: {
   metadata: AssetMetadataStorage;
@@ -203,6 +204,18 @@ export function createEMP003CopyService(deps: {
       }
       async function finish(receipt: CopyLedger) {
         if (!receipt.draft) throw new Error("COPY_RECEIPT_INVALID");
+        const authorizedContext = resolveCopyGeneration(
+          deps.contextJson,
+          tenantId,
+          input,
+          stored,
+          deps.generator
+        );
+        if (
+          receipt.contextHash !==
+          (await copyHash(JSON.stringify(authorizedContext.context)))
+        )
+          throw new Error("COPY_CONTEXT_CHANGED");
         // Recovery must still own the asset lock. A newer operation may not be
         // overwritten by a stale GENERATED receipt after an interrupted request.
         const current = await deps.metadata.transaction(async (s) => ({
@@ -215,7 +228,10 @@ export function createEMP003CopyService(deps: {
           throw new Error("COPY_IDEMPOTENCY_CONFLICT");
         if (persisted.state === "SUCCEEDED")
           return { state: persisted.state, record: persisted.record };
-        if (persisted.state !== "GENERATED" || current.owner !== input.operationId) {
+        if (
+          persisted.state !== "GENERATED" ||
+          current.owner !== input.operationId
+        ) {
           // Another recovery may have completed and released this lock.
           // Return the durable success receipt, never re-register or call AI.
           const latest = await deps.metadata.transaction((s) => s.get(key));
