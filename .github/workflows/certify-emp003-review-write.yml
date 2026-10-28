@@ -42,7 +42,7 @@ jobs:
             status: 'DRAFT', publishApproved: false
           };
           const base = { tenantId, campaignId, actorId: 'untrusted-workflow-actor', actorRole: 'operator' };
-          fs.writeFileSync(draftPath, JSON.stringify({ tenantId, campaignId, blueprint }));
+          fs.writeFileSync(draftPath, JSON.stringify({ tenantId, campaignId, createOnly: true, blueprint }));
           fs.writeFileSync(reviewPath, JSON.stringify({ ...base, correlationId: correlationId + '-review',
             from: 'DRAFT', to: 'IN_REVIEW', reason: 'Manual E2E certification',
             idempotencyKey: correlationId + '-review' }));
@@ -77,12 +77,26 @@ jobs:
           draft.blueprint.keyMessages = ['Revision verified before owner review'];
           fs.writeFileSync(process.argv[3], JSON.stringify(draft));
           NODE
+          get "$endpoint/drafts?tenantId=$tenant&campaignId=$campaign" "$work/pre-edit-readback.json"
+          node - "$work/edited-draft.json" "$work/pre-edit-readback.json" <<'NODE'
+          const fs = require('node:fs');
+          const [draftPath, readPath] = process.argv.slice(2);
+          const draft = JSON.parse(fs.readFileSync(draftPath, 'utf8'));
+          const read = JSON.parse(fs.readFileSync(readPath, 'utf8'));
+          if (read.ok !== true || read.found !== true || !Number.isSafeInteger(read.revision) || read.revision < 1) process.exit(1);
+          delete draft.createOnly;
+          draft.expectedRevision = read.revision;
+          fs.writeFileSync(draftPath, JSON.stringify(draft));
+          NODE
           post "$endpoint/drafts" "$work/edited-draft.json" "$work/edited-response.json"
           get "$endpoint/drafts?tenantId=$tenant&campaignId=$campaign" "$work/edited-readback.json"
-          node - "$work/edited-draft.json" "$work/edited-response.json" "$work/edited-readback.json" <<'NODE'
+          node - "$work/edited-draft.json" "$work/edited-response.json" "$work/edited-readback.json" "$work/pre-edit-readback.json" <<'NODE'
           const fs = require('node:fs');
           const [input, saved, reread] = process.argv.slice(2).map(p => JSON.parse(fs.readFileSync(p, 'utf8')));
+          const preEdit = JSON.parse(fs.readFileSync(process.argv[5], 'utf8'));
+          if (!Number.isSafeInteger(preEdit.revision) || preEdit.revision < 1) process.exit(1);
           if (saved.persisted !== true || reread.ok !== true || reread.found !== true) process.exit(1);
+          if (saved.revision !== preEdit.revision + 1 || reread.revision !== preEdit.revision + 1) process.exit(1);
           if (JSON.stringify(saved.campaign) !== JSON.stringify(input.blueprint)) process.exit(1);
           if (JSON.stringify(reread.campaign) !== JSON.stringify(input.blueprint)) process.exit(1);
           if (reread.campaign.publishApproved !== false || reread.campaign.status !== 'DRAFT') process.exit(1);
@@ -98,7 +112,17 @@ jobs:
           const fs = require('node:fs');
           const original = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
           original.blueprint.objective = 'UNAUTHORIZED MUTATION SHOULD NEVER PERSIST';
+          delete original.createOnly;
           fs.writeFileSync(process.argv[3], JSON.stringify(original));
+          NODE
+          node - "$work/mutated-draft.json" "$work/before-draft.json" <<'NODE'
+          const fs = require('node:fs');
+          const [draftPath, readPath] = process.argv.slice(2);
+          const draft = JSON.parse(fs.readFileSync(draftPath, 'utf8'));
+          const read = JSON.parse(fs.readFileSync(readPath, 'utf8'));
+          if (read.ok !== true || read.found !== true || !Number.isSafeInteger(read.revision) || read.revision < 1) process.exit(1);
+          draft.expectedRevision = read.revision;
+          fs.writeFileSync(draftPath, JSON.stringify(draft));
           NODE
           blocked="$(curl --silent --show-error --max-time 30 --output "$work/blocked.json" --write-out '%{http_code}' "${auth[@]}" --header 'content-type: application/json' --data-binary "@$work/mutated-draft.json" "$endpoint/drafts")"
           echo "EMP003_REVIEWED_DRAFT_OVERWRITE_HTTP=$blocked"

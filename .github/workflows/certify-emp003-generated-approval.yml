@@ -89,6 +89,16 @@ jobs:
           original.blueprint.objective = 'UNAUTHORIZED MUTATION SHOULD NEVER PERSIST';
           fs.writeFileSync(process.argv[3], JSON.stringify(original));
           NODE
+          # Negative immutability check must carry a valid CAS revision, not fail at 428.
+          node - "$work/mutated-draft.json" "$work/before-draft.json" <<'NODE'
+          const fs = require('node:fs');
+          const [draftPath, readPath] = process.argv.slice(2);
+          const draft = JSON.parse(fs.readFileSync(draftPath, 'utf8'));
+          const read = JSON.parse(fs.readFileSync(readPath, 'utf8'));
+          if (read.ok !== true || read.found !== true || !Number.isSafeInteger(read.revision) || read.revision < 1) process.exit(1);
+          draft.expectedRevision = read.revision;
+          fs.writeFileSync(draftPath, JSON.stringify(draft));
+          NODE
           blocked="$(curl --silent --show-error --max-time 30 --output "$work/blocked.json" --write-out '%{http_code}' "${auth[@]}" "${m2m[@]}" --header 'content-type: application/json' --data-binary "@$work/mutated-draft.json" "$endpoint/drafts")"
           echo "EMP003_REVIEWED_DRAFT_OVERWRITE_HTTP=$blocked"
           test "$blocked" = 400
