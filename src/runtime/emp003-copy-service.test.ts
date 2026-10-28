@@ -303,7 +303,7 @@ test("quota race across distinct assets reserves exactly one provider invocation
   }
 });
 
-test("two concurrent GENERATED recoveries register one revision and never call AI", async () => {
+test("two concurrent GENERATED recoveries register one revision and never call AI", { timeout: 5000 }, async () => {
   const f = setup();
   try {
     const { copyHash } = await import("./emp003-copy-service");
@@ -324,6 +324,7 @@ test("two concurrent GENERATED recoveries register one revision and never call A
       f.storage as unknown as DurableObjectStorage
     );
     let arrivals = 0;
+    let recoveryProviderCalls = 0;
     let release!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });
     const recover = createEMP003CopyService({
@@ -332,6 +333,7 @@ test("two concurrent GENERATED recoveries register one revision and never call A
       contextJson: JSON.stringify([copyContext]),
       generator: {
         async generate() {
+          recoveryProviderCalls++;
           throw Error("RECOVERY_MUST_NOT_CALL_AI");
         }
       },
@@ -357,6 +359,7 @@ test("two concurrent GENERATED recoveries register one revision and never call A
     assert.equal(arrivals >= 2, true);
     assert.deepEqual(results.map((x) => x.state), ["SUCCEEDED", "SUCCEEDED"]);
     assert.deepEqual(results.map((x) => x.record?.revision), [1, 1]);
+    assert.equal(recoveryProviderCalls, 0);
     assert.equal(f.calls(), 0);
     assert.equal((await f.service.list("tenant-a", "campaign")).length, 1);
     assert.equal(await f.storage.get("emp003:copy:tenant-a:asset:campaign:copy"), "");
