@@ -162,7 +162,21 @@ export function createEMP003CopyService(deps: {
         await s.put(key, JSON.stringify(entry));
         return true;
       });
-      if (!reserved) return this.generate(tenantId, input);
+      if (!reserved) {
+        // Another request reserved the same operation. Read its receipt instead
+        // of recursively entering generation; ambiguous STARTED is never replayed.
+        const current = await deps.metadata.transaction((s) => s.get(key));
+        if (!current) throw new Error("COPY_OPERATION_RECEIPT_MISSING");
+        const receipt = JSON.parse(current) as CopyLedger;
+        if (receipt.fingerprint !== fingerprint)
+          throw new Error("COPY_IDEMPOTENCY_CONFLICT");
+        if (receipt.state === "GENERATED") return finish(receipt);
+        return {
+          state: receipt.state,
+          record: receipt.record,
+          ...(receipt.error ? { error: receipt.error } : {})
+        };
+      }
       try {
         const draft = await orchestrateGroundedContent(resolved.generation);
         entry.state = "GENERATED";
