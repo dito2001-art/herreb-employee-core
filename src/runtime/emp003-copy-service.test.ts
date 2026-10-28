@@ -318,10 +318,55 @@ test("two concurrent GENERATED recoveries register one revision and never call A
       }
     }));
     await f.storage.put("emp003:copy:tenant-a:asset:campaign:copy", "op-1");
+    // Force both requests to read the GENERATED receipt before either may
+    // finish. This is a deterministic collision, not a scheduler-dependent race.
+    const base = createEMP003AssetMetadataStorage(
+      f.storage as unknown as DurableObjectStorage
+    );
+    let arrivals = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const metadata = {
+      transaction<T>(work: Parameters<typeof base.transaction<T>>[0]): Promise<T> {
+        return base.transaction(work);
+      }
+    };
+    const recover = createEMP003CopyService({
+      metadata: {
+        transaction(work) {
+          return metadata.transaction(async (storage) => {
+            const result = await work(storage);
+            return result;
+          });
+        }
+      },
+      objects: createEMP003AssetObjectStorage(f.bucket),
+      contextJson: JSON.stringify([copyContext]),
+      generator: {
+        async generate() {
+          throw Error("RECOVERY_MUST_NOT_CALL_AI");
+        }
+      },
+      async loadCampaign(t, campaignId) {
+        return t === "tenant-a" && campaignId === "campaign"
+          ? { campaign: copyBlueprint, revision: 1 }
+          : undefined;
+      },
+      async canGenerate() {
+        arrivals++;
+        if (arrivals <= 2) {
+          if (arrivals === 2) release();
+          await gate;
+        }
+        return true;
+      },
+      now: () => new Date("2026-10-28T20:00:00Z")
+    });
     const results = await Promise.all([
-      f.service.generate("tenant-a", copyRequest),
-      f.service.generate("tenant-a", copyRequest)
+      recover.generate("tenant-a", copyRequest),
+      recover.generate("tenant-a", copyRequest)
     ]);
+    assert.equal(arrivals >= 2, true);
     assert.deepEqual(results.map((x) => x.state), ["SUCCEEDED", "SUCCEEDED"]);
     assert.deepEqual(results.map((x) => x.record?.revision), [1, 1]);
     assert.equal(f.calls(), 0);
