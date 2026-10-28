@@ -326,20 +326,8 @@ test("two concurrent GENERATED recoveries register one revision and never call A
     let arrivals = 0;
     let release!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });
-    const metadata = {
-      transaction<T>(work: Parameters<typeof base.transaction<T>>[0]): Promise<T> {
-        return base.transaction(work);
-      }
-    };
     const recover = createEMP003CopyService({
-      metadata: {
-        transaction(work) {
-          return metadata.transaction(async (storage) => {
-            const result = await work(storage);
-            return result;
-          });
-        }
-      },
+      metadata: base,
       objects: createEMP003AssetObjectStorage(f.bucket),
       contextJson: JSON.stringify([copyContext]),
       generator: {
