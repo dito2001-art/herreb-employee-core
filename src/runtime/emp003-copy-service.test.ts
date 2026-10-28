@@ -379,3 +379,61 @@ test("GENERATED recovery refuses a lock owned by another operation", async () =>
     f.db.close();
   }
 });
+
+test("reservation-lost branch reads receipt once, never recursively generates", async () => {
+  const f = copyFixture();
+  try {
+    const { copyHash } = await import("./emp003-copy-service");
+    const fingerprint = await copyHash(JSON.stringify(copyRequest));
+    const operationKey = "emp003:copy:tenant-a:op:op-1";
+    await f.storage.put(operationKey, JSON.stringify({
+      fingerprint, state: "STARTED", createdAt: "2026-10-28T20:00:00Z",
+      campaignId: "campaign"
+    }));
+    const underlying = createEMP003AssetMetadataStorage(
+      f.storage as unknown as DurableObjectStorage
+    );
+    let masked = false;
+    let providerCalls = 0;
+    const service = createEMP003CopyService({
+      metadata: {
+        transaction(work) {
+          return underlying.transaction((storage) =>
+            work({
+              ...storage,
+              async get(key) {
+                if (key === operationKey && !masked) {
+                  masked = true;
+                  return undefined;
+                }
+                return storage.get(key);
+              }
+            })
+          );
+        }
+      },
+      objects: createEMP003AssetObjectStorage(f.bucket),
+      contextJson: JSON.stringify([copyContext]),
+      generator: {
+        async generate() {
+          providerCalls++;
+          throw Error("unexpected provider call");
+        }
+      },
+      async loadCampaign(t, campaignId) {
+        return t === "tenant-a" && campaignId === "campaign"
+          ? { campaign: copyBlueprint, revision: 1 }
+          : undefined;
+      },
+      async canGenerate() { return true; },
+      now: () => new Date("2026-10-28T20:00:00Z")
+    });
+    const result = await service.generate("tenant-a", copyRequest);
+    assert.equal(masked, true);
+    assert.equal(result.state, "STARTED");
+    assert.equal(providerCalls, 0);
+    assert.equal(await f.storage.get("emp003:copy:tenant-a:quota:2026-10-28"), undefined);
+  } finally {
+    f.db.close();
+  }
+});
