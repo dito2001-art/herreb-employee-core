@@ -1,0 +1,46 @@
+name: Validate EMP003 Review Content Pin
+on:
+  pull_request:
+    branches: [feat/emp003-copy-governance-ui-20261029]
+    paths:
+      - 'src/core/emp003-blueprint-pin.ts'
+      - 'src/runtime/emp003-browser-campaign*'
+      - 'src/runtime/emp003-campaign-state.ts'
+      - 'src/runtime/emp003-review-*'
+      - 'src/emp003-campaign-*'
+      - '.github/workflows/validate-emp003-review-pin.yml'
+permissions:
+  contents: read
+concurrency:
+  group: emp003-review-pin-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CI: 'true'
+      WRANGLER_SEND_METRICS: 'false'
+      CLOUDFLARE_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Exact SHA
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Affected integration checks
+        run: node --import tsx --test src/emp003-campaign-review-pin.test.ts src/runtime/emp003-browser-campaign.test.ts src/runtime/emp003-review-content-pin.test.ts src/runtime/emp003-review-transaction.test.ts src/emp003-campaign-dashboard.test.ts
+      - name: Types
+        run: node node_modules/typescript/bin/tsc --noEmit
+      - name: Affected lint
+        run: node node_modules/oxlint/bin/oxlint src/core/emp003-blueprint-pin.ts src/runtime/emp003-review-transaction.ts src/runtime/emp003-campaign-state.ts src/runtime/emp003-browser-campaign.ts src/runtime/emp003-browser-campaign.test.ts src/runtime/emp003-review-content-pin.test.ts src/emp003-campaign-dashboard.tsx src/emp003-campaign-review-pin.test.ts
+      - name: Build only
+        run: npm run build:console

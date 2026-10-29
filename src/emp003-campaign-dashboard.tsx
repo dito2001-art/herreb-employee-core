@@ -1,3 +1,5 @@
+import { BlueprintPinSchema } from "./core/emp003-blueprint-pin";
+import { hashEMP003Blueprint } from "./core/emp003-blueprint-pin";
 import { z } from "zod";
 import { useEffect, useState } from "react";
 import {
@@ -320,11 +322,22 @@ export function EMP003CampaignDashboard() {
   async function transition(
     to: "IN_REVIEW" | "APPROVED" | "REJECTED" | "DRAFT"
   ) {
-    if (!selected || !canWrite || !reason.trim() || busy || mustReload) return;
+    if (
+      !selected ||
+      !draft ||
+      !revision ||
+      !canWrite ||
+      !reason.trim() ||
+      busy ||
+      mustReload
+    )
+      return;
     setBusy(true);
     setError("");
     setNotice("");
     try {
+      const blueprintHash = await hashEMP003Blueprint(draft);
+      const operationId = crypto.randomUUID();
       const response = await fetch("/api/emp003/review", {
         method: "POST",
         credentials: "same-origin",
@@ -334,16 +347,31 @@ export function EMP003CampaignDashboard() {
           from: selected.reviewState,
           to,
           reason: reason.trim(),
-          idempotencyKey: crypto.randomUUID()
+          blueprintRevision: revision,
+          blueprintHash,
+          idempotencyKey: operationId
         })
       });
       if (!response.ok) throw new Error(message(response.status));
       const body = await json(response);
       if (body.ok !== true || body.readBackConfirmed !== true)
         throw new Error("No se confirmó el cambio de estado.");
+      const pin = BlueprintPinSchema.parse(body.blueprintPin);
+      if (
+        pin.tenantId !== tenantId ||
+        pin.campaignId !== selectedId ||
+        pin.revision !== revision ||
+        pin.sha256 !== blueprintHash ||
+        pin.idempotencyKey !== operationId
+      )
+        throw Error(
+          "La revisión confirmada no coincide con el contenido mostrado."
+        );
       await list();
       setReason("");
-      setNotice("Estado actualizado y verificado.");
+      setNotice(
+        `Estado actualizado y verificado para versión ${pin.revision} · SHA-256: ${pin.sha256}`
+      );
     } catch (e) {
       setMustReload(true);
       setError(e instanceof Error ? e.message : "Error de conexión.");

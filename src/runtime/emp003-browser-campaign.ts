@@ -1,3 +1,7 @@
+import {
+  BlueprintPinSchema,
+  hashEMP003Blueprint
+} from "../core/emp003-blueprint-pin";
 import { MarketingCampaignBlueprintSchema } from "../core/marketing-campaign-blueprint";
 import { CampaignTransitionSchema } from "../core/marketing-campaign-lifecycle";
 import { EMP003ReviewStateSchema } from "./emp003-review-state";
@@ -74,10 +78,25 @@ export async function handleEMP003BrowserCampaign(
     if (
       Object.keys(input).some(
         (k) =>
-          !["campaignId", "from", "to", "reason", "idempotencyKey"].includes(k)
+          ![
+            "campaignId",
+            "from",
+            "to",
+            "reason",
+            "idempotencyKey",
+            "blueprintRevision",
+            "blueprintHash"
+          ].includes(k)
       )
     )
       return fail(400, "EMP003_REVIEW_UNEXPECTED_FIELD");
+    if (
+      !Number.isSafeInteger(input.blueprintRevision) ||
+      Number(input.blueprintRevision) < 1 ||
+      typeof input.blueprintHash !== "string" ||
+      !/^[a-f0-9]{64}$/.test(input.blueprintHash)
+    )
+      return fail(400, "EMP003_REVIEW_CONTENT_PIN_REQUIRED");
   } else if ([...url.searchParams.keys()].some((k) => k !== "campaignId"))
     return fail(400, "EMP003_DRAFT_UNEXPECTED_FIELD");
   const campaignId = read
@@ -117,6 +136,11 @@ export async function handleEMP003BrowserCampaign(
         },
         { headers: { "cache-control": "no-store" } }
       );
+    if (
+      body.revision !== input.blueprintRevision ||
+      (await hashEMP003Blueprint(blueprint.data)) !== input.blueprintHash
+    )
+      return fail(409, "EMP003_REVIEW_CONTENT_REVISION_CONFLICT");
     const transition = CampaignTransitionSchema.safeParse({
       ...input,
       tenantId: actor.tenantId,
@@ -127,6 +151,14 @@ export async function handleEMP003BrowserCampaign(
     if (!transition.success || !safe(input.idempotencyKey))
       return fail(400, "EMP003_REVIEW_INVALID_INPUT");
     destination.pathname = "/transition";
+    destination.searchParams.set(
+      "expectedBlueprintRevision",
+      String(input.blueprintRevision)
+    );
+    destination.searchParams.set(
+      "expectedBlueprintHash",
+      String(input.blueprintHash)
+    );
     const result = await stub.fetch(
       new Request(destination, {
         method: "POST",
@@ -140,8 +172,15 @@ export async function handleEMP003BrowserCampaign(
         "EMP003_REVIEW_REJECTED"
       );
     const receipt = (await result.json()) as Record<string, unknown>;
+    const pin = BlueprintPinSchema.safeParse(receipt.blueprintPin);
     const state = EMP003ReviewStateSchema.safeParse(receipt.state);
     if (
+      !pin.success ||
+      pin.data.tenantId !== actor.tenantId ||
+      pin.data.campaignId !== campaignId ||
+      pin.data.revision !== input.blueprintRevision ||
+      pin.data.sha256 !== input.blueprintHash ||
+      pin.data.idempotencyKey !== input.idempotencyKey ||
       receipt.ok !== true ||
       receipt.readBackConfirmed !== true ||
       !state.success ||
@@ -151,6 +190,8 @@ export async function handleEMP003BrowserCampaign(
     )
       return fail(503, "EMP003_REVIEW_READBACK_FAILED");
     destination.pathname = "/review";
+    destination.searchParams.delete("expectedBlueprintRevision");
+    destination.searchParams.delete("expectedBlueprintHash");
     const check = await stub.fetch(new Request(destination));
     if (!check.ok) return fail(503, "EMP003_REVIEW_READBACK_FAILED");
     const persisted = (await check.json()) as Record<string, unknown>;
@@ -159,7 +200,10 @@ export async function handleEMP003BrowserCampaign(
       persisted.ok !== true ||
       persisted.found !== true ||
       !checked.success ||
-      JSON.stringify(checked.data) !== JSON.stringify(state.data)
+      JSON.stringify(checked.data) !== JSON.stringify(state.data) ||
+      JSON.stringify(
+        BlueprintPinSchema.safeParse(persisted.blueprintPin).data
+      ) !== JSON.stringify(pin.data)
     )
       return fail(503, "EMP003_REVIEW_READBACK_FAILED");
     return Response.json(
@@ -167,7 +211,8 @@ export async function handleEMP003BrowserCampaign(
         ok: true,
         persisted: true,
         readBackConfirmed: true,
-        state: checked.data
+        state: checked.data,
+        blueprintPin: pin.data
       },
       { headers: { "cache-control": "no-store" } }
     );
