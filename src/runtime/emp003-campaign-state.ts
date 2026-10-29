@@ -1,3 +1,4 @@
+import {BlueprintPinSchema} from "../core/emp003-blueprint-pin";
 import { handleEMP003CopyDO } from "./emp003-copy-do";
 import { DurableObject } from "cloudflare:workers";
 import { createEMP003DurableStorageAdapter } from "./emp003-durable-storage";
@@ -81,8 +82,25 @@ export class EMP003CampaignState extends DurableObject<Env> {
         return Response.json({ ok: true, persisted: true, campaign, revision }, { headers: { "cache-control": "no-store" } });
       }
       if (request.method === "GET" && url.pathname === "/review") {
-        const state = await this.ctx.storage.get<unknown>(reviewKey(tenantId, campaignId));
-        return Response.json({ ok: true, found: state !== undefined, state: state === undefined ? null : EMP003ReviewStateSchema.parse(state) }, { headers: { "cache-control": "no-store" } });
+        const state = await this.ctx.storage.get<unknown>(
+          reviewKey(tenantId, campaignId)
+        );
+        const pinned = await this.ctx.storage.get<unknown>(
+          `emp003:review-content:${tenantId}:${campaignId}:latest`
+        );
+        const pin = pinned ? BlueprintPinSchema.parse(pinned) : undefined;
+        const parsedState =
+          state === undefined ? null : EMP003ReviewStateSchema.parse(state);
+        return Response.json(
+          {
+            ok: true,
+            found: state !== undefined,
+            state: parsedState,
+            blueprintPin:
+              pin?.correlationId === parsedState?.lastCorrelationId ? pin : null
+          },
+          { headers: { "cache-control": "no-store" } }
+        );
       }
       if (request.method === "GET" && url.pathname === "/audit") {
         const events = await createEMP003AuditRepository(this.ctx.storage).list(tenantId, campaignId);
@@ -91,16 +109,48 @@ export class EMP003CampaignState extends DurableObject<Env> {
       if (request.method === "POST" && url.pathname === "/transition") {
         const raw: unknown = await request.json();
         const transition = CampaignTransitionSchema.parse(raw);
-        if (transition.tenantId !== tenantId || transition.campaignId !== campaignId) throw new Error("EMP003_TRANSITION_SCOPE_REJECTED");
+        if (
+          transition.tenantId !== tenantId ||
+          transition.campaignId !== campaignId
+        )
+          throw new Error("EMP003_TRANSITION_SCOPE_REJECTED");
         const blueprint = await repo.get(tenantId, campaignId);
         if (!blueprint) throw new Error("EMP003_TRANSITION_DRAFT_NOT_FOUND");
         const key = reviewKey(tenantId, campaignId);
+        const revision = url.searchParams.get("expectedBlueprintRevision"),
+          sha256 = url.searchParams.get("expectedBlueprintHash");
+        if (
+          (revision !== null || sha256 !== null) &&
+          (!revision ||
+            !sha256 ||
+            !/^[1-9]\d*$/.test(revision) ||
+            !Number.isSafeInteger(Number(revision)) ||
+            !/^[a-f0-9]{64}$/.test(sha256))
+        )
+          throw Error("EMP003_REVIEW_PIN_INVALID");
+        const expected =
+          revision && sha256
+            ? { revision: Number(revision), sha256 }
+            : undefined;
         const result = await this.ctx.storage.transaction((txn) =>
-          applyEMP003ReviewTransaction(txn, transition, tenantId, campaignId, new Date().toISOString())
+          applyEMP003ReviewTransaction(
+            txn,
+            transition,
+            tenantId,
+            campaignId,
+            new Date().toISOString(),
+            expected
+          )
         );
-        const readBack = EMP003ReviewStateSchema.parse(await this.ctx.storage.get<unknown>(key));
-        if (JSON.stringify(readBack) !== JSON.stringify(result.state)) throw new Error("EMP003_TRANSITION_READBACK_FAILED");
-        return Response.json({ ok: true, persisted: true, ...result, readBackConfirmed: true }, { headers: { "cache-control": "no-store" } });
+        const readBack = EMP003ReviewStateSchema.parse(
+          await this.ctx.storage.get<unknown>(key)
+        );
+        if (JSON.stringify(readBack) !== JSON.stringify(result.state))
+          throw new Error("EMP003_TRANSITION_READBACK_FAILED");
+        return Response.json(
+          { ok: true, persisted: true, ...result, readBackConfirmed: true },
+          { headers: { "cache-control": "no-store" } }
+        );
       }
       return Response.json({ ok: false, error: "NOT_FOUND" }, { status: 404 });
     } catch {
