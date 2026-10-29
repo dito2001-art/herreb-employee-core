@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { request as httpRequest } from "node:http";
 
 const base = "http://127.0.0.1:8791/integrated";
 const call = (path: string, init?: RequestInit) => fetch(base + path, init);
@@ -10,7 +11,16 @@ test("integrated ingress denies internal routes, unsupported methods and malform
   }
   assert.equal((await call("/api/emp001/operations", { method: "POST" })).status, 404);
   assert.equal((await call("/api/emp002/calendar", { method: "GET" })).status, 404);
-  assert.equal((await call("/api/emp003/operations", { headers: { upgrade: "websocket" } })).status, 403);
+  const upgradeStatus = await new Promise<number>((resolve, reject) => {
+    const req = httpRequest(base + "/api/emp003/operations", { headers: { upgrade: "websocket", connection: "Upgrade" } }, response => {
+      resolve(response.statusCode ?? 0);
+      response.resume();
+    });
+    req.on("upgrade", () => reject(new Error("INTEGRATED_WEBSOCKET_ACCEPTED")));
+    req.on("error", reject);
+    req.end();
+  });
+  assert.equal(upgradeStatus, 403);
 });
 test("integrated ingress denies missing Access config for all employee APIs and assets", async () => {
   for (const [path, method] of [["/api/emp001/operations","GET"],["/api/emp002/calendar","POST"],["/api/emp003/operations","GET"],["/api/emp003/review","GET"],["/api/emp003/drafts","GET"],["/api/emp003/generate-campaign","POST"],["/","GET"],["/index.html","GET"],["/assets/app.js","GET"]]) {
