@@ -1,0 +1,40 @@
+name: Validate Integrated Workforce Staging
+on:
+  pull_request:
+    branches: [feat/workforce-client0-functional-20261029]
+    paths:
+      - 'src/staging/workforce-integrated-entry.ts'
+      - 'src/staging/workforce-integrated-entry.test.ts'
+      - 'deploy/staging/wrangler.workforce-integrated.jsonc'
+      - '.github/workflows/validate-workforce-integrated-staging.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Portal build only
+        run: npm run build:console
+      - name: Wrangler config dry-run only
+        run: npx wrangler deploy --dry-run --config deploy/staging/wrangler.workforce-integrated.jsonc --outdir /tmp/workforce-integrated-dryrun
+      - name: Integrated ingress negatives in local workerd
+        run: |
+          npx wrangler dev --local --config tests/workerd/wrangler.toml --port 8791 > /tmp/workerd-integrated.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 45); do
+            if curl -sS --max-time 1 http://127.0.0.1:8791/fixture/health >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          node --import tsx --test tests/workerd/workforce-integrated-negative.test.ts

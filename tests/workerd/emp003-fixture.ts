@@ -1,6 +1,7 @@
 import { EMP003CampaignState } from "../../src/runtime/emp003-campaign-state";
 import staging, { createEMP003StagingEntry } from "../../src/staging/emp003-entry";
 import workforce from "../../src/worker";
+import integrated from "../../src/staging/workforce-integrated-entry";
 export { EMP003CampaignState };
 type FixtureEnv = { EMP003_CAMPAIGN_STATE: DurableObjectNamespace };
 export default {
@@ -15,6 +16,11 @@ export default {
         WORKFORCE_ADMIN_M2M_ACTOR_ID: "fernando",
         WORKFORCE_ADMIN_M2M_TENANT_ID: "tenant-a"
       } as never, {} as ExecutionContext);
+    }
+    if (incoming.pathname.startsWith("/integrated/")) {
+      const destination = new URL(request.url);
+      destination.pathname = destination.pathname.slice("/integrated".length);
+      return integrated.fetch(new Request(destination, request), env as never, {} as ExecutionContext);
     }
     if (incoming.pathname.startsWith("/staging/")) {
       const stagingUrl = new URL(request.url);
