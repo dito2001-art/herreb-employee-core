@@ -34,7 +34,7 @@ jobs:
           PID=$!
           trap 'kill "$PID" 2>/dev/null || true' EXIT
           for i in $(seq 1 45); do
-            if curl -fsS http://127.0.0.1:8791/fixture/health >/dev/null 2>&1; then break; fi
+            if curl -sS --max-time 1 http://127.0.0.1:8791/fixture/health >/dev/null 2>&1; then break; fi
             sleep 2
           done
           node --import tsx --test tests/workerd/workforce-integrated-negative.test.ts
