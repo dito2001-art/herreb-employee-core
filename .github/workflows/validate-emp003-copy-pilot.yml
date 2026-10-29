@@ -1,7 +1,7 @@
 name: Validate EMP003 Copy Pilot
 on:
   pull_request:
-    branches: [test/emp003-copy-race-assertions-20261028, fix/emp003-copy-integrated-recovery-20261028]
+    branches: [test/emp003-copy-race-assertions-20261028, fix/emp003-copy-integrated-recovery-20261028, fix/emp003-copy-provider-diagnostics-20261028]
     paths:
       - '.github/workflows/validate-emp003-copy-pilot.yml'
       - 'src/runtime/emp003-*'
