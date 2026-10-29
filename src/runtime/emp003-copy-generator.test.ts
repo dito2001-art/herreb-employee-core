@@ -60,10 +60,38 @@ const input: ContentGeneratorInput = {
 test("real adapter accepts valid output and preserves one bounded invocation", async () => {
   let calls = 0;
   const generator = createEMP003CopyGenerator({
-    async run(_model: unknown, args: { max_tokens: number; stream: boolean }) {
+    async run(
+      _model: unknown,
+      args: {
+        max_tokens: number;
+        stream: boolean;
+        response_format: {
+          type: string;
+          json_schema: {
+            properties: Record<string, unknown>;
+            additionalProperties: boolean;
+            required: string[];
+          };
+        };
+      }
+    ) {
       calls++;
       assert.equal(args.max_tokens, 2048);
       assert.equal(args.stream, true);
+      assert.equal(args.response_format.type, "json_schema");
+      assert.deepEqual(
+        Object.keys(args.response_format.json_schema.properties).sort(),
+        ["body", "claimIds", "headline"]
+      );
+      assert.equal(
+        args.response_format.json_schema.additionalProperties,
+        false
+      );
+      assert.deepEqual([...args.response_format.json_schema.required].sort(), [
+        "body",
+        "claimIds",
+        "headline"
+      ]);
       return {
         choices: [
           {
