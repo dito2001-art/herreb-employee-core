@@ -35,6 +35,15 @@ export function createEMP003CopyGenerator(binding: Ai): ContentGenerator {
         throw new Error("CONTENT_GENERATION_INPUT_INVALID");
       const workersai = createWorkersAI({ binding });
       let raw: string;
+      let streamFailed = false;
+      let finishReason: string | undefined;
+      const fail = (code: string): never => {
+        // Fixed codes only: never log provider errors, prompts, output or identities.
+        console.warn(
+          JSON.stringify({ event: "emp003.copy.generation_failed", code })
+        );
+        throw new Error(code);
+      };
       try {
         const result = streamText({
           model: workersai("@cf/zai-org/glm-4.7-flash", {
@@ -45,17 +54,35 @@ export function createEMP003CopyGenerator(binding: Ai): ContentGenerator {
           prompt,
           maxOutputTokens: 2048,
           maxRetries: 0,
+          onError: () => {
+            streamFailed = true;
+          },
           abortSignal: AbortSignal.timeout(60000)
         });
         raw = await result.text;
+        finishReason = await result.finishReason;
       } catch {
         // Never return raw provider errors, prompts or credentials to the caller.
-        throw new Error("CONTENT_GENERATION_PROVIDER_FAILED");
+        return fail("CONTENT_GENERATION_PROVIDER_FAILED");
       }
-      return parseEMP003CopyOutput(
-        raw,
-        input.allowedClaims.map((claim) => claim.id)
-      );
+      if (streamFailed || finishReason === "error")
+        return fail("CONTENT_GENERATION_PROVIDER_FAILED");
+      if (finishReason === "length")
+        return fail("CONTENT_GENERATION_OUTPUT_TRUNCATED");
+      if (!raw.trim()) return fail("CONTENT_GENERATION_OUTPUT_EMPTY");
+      try {
+        return parseEMP003CopyOutput(
+          raw,
+          input.allowedClaims.map((claim) => claim.id)
+        );
+      } catch (error) {
+        return fail(
+          error instanceof Error &&
+            error.message === "CONTENT_GENERATION_UNVERIFIED_CLAIM"
+            ? "CONTENT_GENERATION_UNVERIFIED_CLAIM"
+            : "CONTENT_GENERATION_OUTPUT_INVALID"
+        );
+      }
     }
   };
 }
