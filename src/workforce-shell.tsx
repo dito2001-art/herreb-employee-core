@@ -8,7 +8,7 @@ import {
 import { WorkforceAdminPanel } from "./workforce-admin-panel";
 import { EMP002CalendarDashboard } from "./emp002-calendar-dashboard";
 import { EMP001SalesDashboard } from "./emp001-sales-dashboard";
-import { EMP003CampaignDashboard } from "./emp003-campaign-dashboard";
+import { EMP003Workspace } from "./emp003-workspace";
 
 export type WorkforceView =
   | "assistant"
@@ -86,7 +86,7 @@ export function WorkforceShell({ assistant }: { assistant: ReactNode }) {
           </div>
         ) : view === "marketer" ? (
           <div className="max-w-5xl mx-auto p-5 overflow-y-auto h-full">
-            <EMP003CampaignDashboard />
+            <EMP003Workspace />
           </div>
         ) : (
           <div className="max-w-5xl mx-auto p-5 overflow-y-auto h-full">

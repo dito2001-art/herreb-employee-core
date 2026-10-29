@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
 import { z } from "zod";
+import {
+  WORKFORCE_TIMEZONE,
+  workforceLocalTime,
+  workforceInstant,
+  workforceCalendarWindow
+} from "./core/workforce-calendar-time";
 const entrySchema = z.object({
   tenantId: z.string(),
   id: z.string(),
@@ -13,12 +19,9 @@ const entrySchema = z.object({
   version: z.number().int().positive()
 });
 type Entry = z.infer<typeof entrySchema>;
-const day = (value: Date) =>
-  `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
-const local = (value: string) => {
-  const d = new Date(value);
-  return `${day(d)}T${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
+const local = workforceLocalTime;
+const display = (value: string) =>
+  new Date(value).toLocaleString("es-PY", { timeZone: WORKFORCE_TIMEZONE });
 const failure = (status: number) =>
   status === 409
     ? "Hay un conflicto de horario o la entrada cambió. Recargá antes de guardar."
@@ -41,7 +44,7 @@ export function EMP002CalendarDashboard() {
   const [reminders, setReminders] = useState<Entry[]>([]);
   const [reminderError, setReminderError] = useState("");
   const [canWrite, setCanWrite] = useState(false);
-  const [date, setDate] = useState(() => day(new Date()));
+  const [date, setDate] = useState(() => local(new Date()).slice(0, 10));
   const [draft, setDraft] = useState({
     id: "",
     kind: "MEETING" as Entry["kind"],
@@ -56,9 +59,7 @@ export function EMP002CalendarDashboard() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const read = async (selected: string) => {
-    const from = new Date(selected + "T00:00:00");
-    const to = new Date(from);
-    to.setDate(to.getDate() + 31);
+    const { from, to } = workforceCalendarWindow(selected);
     return z
       .object({
         ok: z.literal(true),
@@ -69,8 +70,8 @@ export function EMP002CalendarDashboard() {
       .parse(
         await call({
           operation: "list",
-          from: from.toISOString(),
-          to: to.toISOString()
+          from,
+          to
         })
       );
   };
@@ -88,7 +89,7 @@ export function EMP002CalendarDashboard() {
       } catch {
         if (active) {
           setReminders([]);
-          setReminderError("Non è stato possibile caricare i promemoria.");
+          setReminderError("No se pudieron cargar los recordatorios.");
         }
       }
     };
@@ -101,6 +102,9 @@ export function EMP002CalendarDashboard() {
   }, []);
   useEffect(() => {
     let active = true;
+    setCanWrite(false);
+    setEntries([]);
+    setError("");
     void read(date)
       .then((data) => {
         if (active) {
@@ -109,7 +113,10 @@ export function EMP002CalendarDashboard() {
         }
       })
       .catch((e) => {
-        if (active) setError(e.message);
+        if (active) {
+          setCanWrite(false);
+          setError(e.message);
+        }
       });
     return () => {
       active = false;
@@ -118,6 +125,9 @@ export function EMP002CalendarDashboard() {
   async function reload() {
     setBusy(true);
     setError("");
+    setCanWrite(false);
+    setEntries([]);
+    setReminders([]);
     try {
       const data = await read(date);
       setEntries(data.entries);
@@ -153,12 +163,10 @@ export function EMP002CalendarDashboard() {
         id: draft.id || crypto.randomUUID(),
         kind: draft.kind,
         title: draft.title.trim(),
-        startsAt: new Date(draft.startsAt).toISOString(),
-        ...(draft.endsAt
-          ? { endsAt: new Date(draft.endsAt).toISOString() }
-          : {}),
+        startsAt: workforceInstant(draft.startsAt),
+        ...(draft.endsAt ? { endsAt: workforceInstant(draft.endsAt) } : {}),
         ...(draft.reminderAt
-          ? { reminderAt: new Date(draft.reminderAt).toISOString() }
+          ? { reminderAt: workforceInstant(draft.reminderAt) }
           : {}),
         status: cancel ? "CANCELLED" : "ACTIVE"
       };
@@ -225,7 +233,7 @@ export function EMP002CalendarDashboard() {
       <h1 className="text-2xl font-bold">Agenda y tareas · EMP-002</h1>
       <p>
         Calendario nativo de Workforce. Mostrando 31 días desde la fecha
-        elegida.
+        elegida. Todos los horarios son de Asunción.
       </p>
       <label>
         Desde
@@ -256,7 +264,7 @@ export function EMP002CalendarDashboard() {
         {reminderError && <p role="alert">{reminderError}</p>}
         {reminders.map((entry) => (
           <p key={entry.id}>
-            {entry.title} · {new Date(entry.reminderAt!).toLocaleString()}
+            {entry.title} · {display(entry.reminderAt!)}
             {canWrite && (
               <button
                 disabled={busy || reloadRequired}
@@ -273,7 +281,7 @@ export function EMP002CalendarDashboard() {
           <li className="rounded border p-3" key={entry.id}>
             <strong>{entry.title}</strong> ·{" "}
             {entry.kind === "TASK" ? "Tarea" : "Reunión / evento"} ·{" "}
-            {new Date(entry.startsAt).toLocaleString()}{" "}
+            {display(entry.startsAt)}{" "}
             {canWrite && (
               <button
                 disabled={busy || reloadRequired}
@@ -346,6 +354,26 @@ export function EMP002CalendarDashboard() {
               }
             />
           </label>
+          <label className="block">
+            Recordatorio (hora de Asunción, opcional)
+            <input
+              type="datetime-local"
+              value={draft.reminderAt}
+              disabled={busy || reloadRequired}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, reminderAt: e.target.value }))
+              }
+            />
+          </label>
+          {draft.reminderAt && (
+            <button
+              type="button"
+              disabled={busy || reloadRequired}
+              onClick={() => setDraft((d) => ({ ...d, reminderAt: "" }))}
+            >
+              Quitar recordatorio
+            </button>
+          )}
           <button disabled={busy || reloadRequired} type="submit">
             Guardar y verificar
           </button>

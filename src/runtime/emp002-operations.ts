@@ -12,6 +12,7 @@ import { generateEMP002CalendarReply, generateEMP002WhatsAppReply, parseEMP002Ow
 import { buildEMP002CalendarReadTransport, buildEMP002CalendarTransport, buildEMP002OperationsTransports, buildEMP002WhatsAppTransport, type EMP002OperationsTransportEnv } from './emp002-operations-transports';
 import { isEMP002CalendarReadIntent, resolveEMP002CalendarQueryWindow } from './emp002-calendar-query';
 import { WorkforceCalendarStore, type WorkforceCalendarEntry } from './workforce-calendar-store';
+import { workforceCommandInstant } from '../core/workforce-calendar-time';
 
 export class EMP002Operations implements DurableObject {
   private readonly dispatchStore: SqliteWhatsAppSchedulingDispatchStore;
@@ -235,8 +236,11 @@ export class EMP002Operations implements DurableObject {
             const changes = command.changes as Record<string, string>;
             // Reject CRM-only date fragments: native calendar needs complete instants.
             if (changes.startDate || changes.endDate || (changes.startTime && !Number.isFinite(Date.parse(changes.startTime))) || (changes.endTime && !Number.isFinite(Date.parse(changes.endTime)))) return Response.json({ ok: false, handled: false, error: 'EMP002_NATIVE_CALENDAR_UPDATE_REQUIRES_ISO_INSTANTS' }, { status: 422 });
-            const start = changes.startTime ? new Date(changes.startTime).toISOString() : target.startsAt;
-            const end = changes.endTime ? new Date(changes.endTime).toISOString() : target.endsAt;
+            let start: string; let end: string | undefined;
+            try {
+              start = changes.startTime ? workforceCommandInstant(changes.startTime) : target.startsAt;
+              end = changes.endTime ? workforceCommandInstant(changes.endTime) : target.endsAt;
+            } catch { return Response.json({ ok: false, handled: false, error: 'INVALID_CALENDAR_TIME_RANGE' }, { status: 422 }); }
             if (!end || Date.parse(end) <= Date.parse(start)) return Response.json({ ok: false, handled: false, error: 'INVALID_CALENDAR_TIME_RANGE' }, { status: 422 });
             const first = await this.conversationStore.markInboundOnce(message.tenantId, message.messageId, message.receivedAt);
             if (!first) return Response.json({ ok: true, handled: true, duplicate: true, mode: 'native-calendar-update' });
@@ -282,8 +286,8 @@ export class EMP002Operations implements DurableObject {
           let mode: string;
           if (command.operation === 'create') {
             const id = `wa-${message.messageId}`;
-            const start = new Date(command.startTime).toISOString();
-            const end = new Date(command.endTime).toISOString();
+            const start = workforceCommandInstant(command.startTime);
+            const end = workforceCommandInstant(command.endTime);
             const existing = this.nativeCalendar.get(message.tenantId, id);
             if (existing && (existing.title !== command.title || existing.startsAt !== start || existing.endsAt !== end || existing.status !== 'ACTIVE')) throw new Error('EMP002_NATIVE_CALENDAR_IDEMPOTENCY_MISMATCH');
             const entry = this.state.storage.transactionSync(() => {
