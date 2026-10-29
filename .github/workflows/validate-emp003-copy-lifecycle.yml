@@ -1,7 +1,7 @@
 name: Validate EMP003 Copy Lifecycle
 on:
   pull_request:
-    branches: [feat/emp003-copy-lifecycle-connected-workspace-20261028]
+    branches: [feat/emp003-v3-connected-workspace-20261028]
     paths:
       - 'src/runtime/emp003-copy-*'
       - 'src/core/emp003-copy-lifecycle-contracts.ts'
