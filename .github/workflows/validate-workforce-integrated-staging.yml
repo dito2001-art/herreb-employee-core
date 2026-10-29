@@ -24,9 +24,17 @@ jobs:
       - run: npm ci
       - name: TypeScript
         run: npx tsc --noEmit
-      - name: Staging negative tests
-        run: node --import tsx --test src/staging/workforce-integrated-entry.test.ts
       - name: Portal build only
         run: npm run build:console
       - name: Wrangler config dry-run only
         run: npx wrangler deploy --dry-run --config deploy/staging/wrangler.workforce-integrated.jsonc --outdir /tmp/workforce-integrated-dryrun
+      - name: Integrated ingress negatives in local workerd
+        run: |
+          npx wrangler dev --local --config tests/workerd/wrangler.toml --port 8791 > /tmp/workerd-integrated.log 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true' EXIT
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:8791/fixture/health >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          node --import tsx --test tests/workerd/workforce-integrated-negative.test.ts
