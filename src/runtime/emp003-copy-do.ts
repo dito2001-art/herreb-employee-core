@@ -1,3 +1,10 @@
+import {
+  createEMP003CopyLifecycle,
+  CopyEditInput,
+  CopyApproveInput,
+  brandHeadKey,
+  configuredCopyHash
+} from "./emp003-copy-lifecycle";
 import type { ContentGenerator } from "../core/marketing-content-orchestrator";
 import { createPersistentBlueprintRepository } from "../core/marketing-blueprint-persistent";
 import { createEMP003DurableStorageAdapter } from "./emp003-durable-storage";
@@ -24,12 +31,24 @@ export async function handleEMP003CopyDO(
   try {
     const url = new URL(request.url);
     const tenantId = CopyId.parse(url.searchParams.get("tenantId"));
-    const campaignId = CopyId.parse(url.searchParams.get("campaignId"));
+    const brand =
+      request.method === "GET" && url.pathname === "/copy-assets/brand-brain";
+    const campaignId = brand
+      ? ""
+      : CopyId.parse(url.searchParams.get("campaignId"));
+    const edit =
+      request.method === "POST" && url.pathname === "/copy-assets/edit";
+    const approve =
+      request.method === "POST" && url.pathname === "/copy-assets/approve";
     const generate =
       request.method === "POST" && url.pathname === "/copy-assets/generate";
     const input = generate
       ? CopyGenerateInput.parse(await request.json())
-      : undefined;
+      : edit
+        ? CopyEditInput.parse(await request.json())
+        : approve
+          ? CopyApproveInput.parse(await request.json())
+          : undefined;
     if (input && input.campaignId !== campaignId)
       throw Error("COPY_CONTEXT_SCOPE_REJECTED");
     if (!env.EMP003_ASSET_BUCKET)
@@ -41,12 +60,16 @@ export async function handleEMP003CopyDO(
     const repo = createPersistentBlueprintRepository(
       createEMP003DurableStorageAdapter(storage)
     );
-    const service = createEMP003CopyService({
+    const dependencies = {
       contextJson: env.EMP003_COPY_CONTEXTS_JSON,
       actorId: request.headers.get("x-emp003-copy-actor") ?? undefined,
       objects: createEMP003AssetObjectStorage(env.EMP003_ASSET_BUCKET),
       metadata: {
-        transaction(work) {
+        transaction<T>(
+          work: (
+            s: import("../core/campaign-persistent").CampaignStorage
+          ) => Promise<T>
+        ) {
           return storage.transaction(async (txn) => {
             const adapter = createEMP003DurableStorageAdapter(txn);
             return work({
@@ -55,10 +78,40 @@ export async function handleEMP003CopyDO(
                 if (
                   input &&
                   (key.startsWith(`emp003:assets:${tenantId}:${campaignId}:`) ||
-                    (key ===
-                      `emp003:copy:${tenantId}:op:${input.operationId}` &&
+                    key.startsWith(
+                      `emp003:asset-approvals:${tenantId}:${campaignId}:`
+                    ) ||
+                    key ===
+                      `emp003:asset-approval-ops:${tenantId}:${input.operationId}` ||
+                    ((key ===
+                      `emp003:copy:${tenantId}:op:${input.operationId}` ||
+                      key ===
+                        `emp003:copy-edits:${tenantId}:op:${input.operationId}`) &&
                       JSON.parse(value).state === "STARTED"))
                 ) {
+                  const profileRaw = await adapter.get(brandHeadKey(tenantId));
+                  const profileHead = profileRaw
+                    ? (JSON.parse(profileRaw) as { hash: string })
+                    : undefined;
+                  if (
+                    profileHead &&
+                    profileHead.hash !==
+                      (await configuredCopyHash(
+                        env.EMP003_COPY_CONTEXTS_JSON,
+                        tenantId
+                      ))
+                  )
+                    throw Error("COPY_BRAND_REVISION_CONFLICT");
+                  if (
+                    edit &&
+                    key.startsWith(
+                      `emp003:assets:${tenantId}:${campaignId}:`
+                    ) &&
+                    (await txn.get(
+                      `emp003:copy:${tenantId}:asset:${campaignId}:${input.assetId}`
+                    )) !== input.operationId
+                  )
+                    throw Error("COPY_RECOVERY_LOCK_CONFLICT");
                   const review = await txn.get<unknown>(
                     reviewKey(tenantId, campaignId)
                   );
@@ -81,12 +134,12 @@ export async function handleEMP003CopyDO(
         }
       },
       generator: generator ?? {
-        async generate(value) {
+        async generate(value: Parameters<ContentGenerator["generate"]>[0]) {
           if (!env.AI) throw Error("COPY_AI_NOT_CONFIGURED");
           return createEMP003CopyGenerator(env.AI).generate(value);
         }
       },
-      async loadCampaign(t, c) {
+      async loadCampaign(t: string, c: string) {
         const campaign = await repo.get(t, c);
         return campaign
           ? {
@@ -98,11 +151,42 @@ export async function handleEMP003CopyDO(
             }
           : undefined;
       },
-      async canGenerate(t, c) {
+      async canGenerate(t: string, c: string) {
         const raw = await storage.get<unknown>(reviewKey(t, c));
         return !raw || EMP003ReviewStateSchema.parse(raw).state === "DRAFT";
       }
-    });
+    };
+    const service = createEMP003CopyService(dependencies);
+    const lifecycle = createEMP003CopyLifecycle(dependencies);
+    if (brand) {
+      const revision = url.searchParams.get("revision");
+      if (
+        revision !== null &&
+        (!/^[1-9]\d*$/.test(revision) ||
+          !Number.isSafeInteger(Number(revision)))
+      )
+        throw Error("COPY_INPUT_INVALID");
+      return reply(200, {
+        ok: true,
+        ...(await lifecycle.brand(
+          tenantId,
+          revision === null ? undefined : Number(revision)
+        ))
+      });
+    }
+    if (edit || approve) {
+      if (!request.headers.get("x-emp003-copy-actor"))
+        return reply(403, { ok: false, error: "COPY_ACTOR_REQUIRED" });
+      if (edit)
+        return reply(200, {
+          ok: true,
+          ...(await lifecycle.edit(tenantId, input))
+        });
+      return reply(200, {
+        ok: true,
+        approval: await lifecycle.approve(tenantId, input)
+      });
+    }
     if (generate && input) {
       if (!request.headers.get("x-emp003-copy-actor"))
         return reply(403, {
@@ -116,7 +200,11 @@ export async function handleEMP003CopyDO(
           error: "COPY_AI_NOT_CONFIGURED",
           retrySafe: true
         });
-      const result = await service.generate(tenantId, input);
+      await lifecycle.pinProfile(tenantId);
+      const result = await service.generate(
+        tenantId,
+        CopyGenerateInput.parse(input)
+      );
       return reply(
         result.state === "STARTED"
           ? 202
@@ -128,6 +216,20 @@ export async function handleEMP003CopyDO(
     }
     if (request.method !== "GET")
       return reply(405, { ok: false, error: "METHOD_NOT_ALLOWED" });
+    if (url.pathname === "/copy-assets/approval") {
+      const revision = Number(url.searchParams.get("revision"));
+      if (!Number.isSafeInteger(revision) || revision < 1)
+        throw Error("COPY_INPUT_INVALID");
+      return reply(200, {
+        ok: true,
+        ...(await lifecycle.approval(
+          tenantId,
+          campaignId,
+          CopyId.parse(url.searchParams.get("assetId")),
+          revision
+        ))
+      });
+    }
     if (url.pathname === "/copy-assets/context")
       return reply(200, {
         ok: true,

@@ -22,9 +22,17 @@ Object.assign(globalThis, {
   IS_REACT_ACT_ENVIRONMENT: true
 });
 const flush = async () => {
-  await act(async () => {
-    await new Promise((r) => setTimeout(r, 30));
-  });
+  const deadline = Date.now() + 5000;
+  do {
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10));
+    });
+    const refresh = [...document.querySelectorAll("button")].find(
+      (x) => x.textContent?.trim() === "Actualizar campañas de biblioteca"
+    );
+    if (refresh && !refresh.disabled) return;
+  } while (Date.now() < deadline);
+  assert.fail("Copy UI did not finish its visible operation within 5s");
 };
 const button = (name: string) =>
   [...document.querySelectorAll("button")].find(

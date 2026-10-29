@@ -1,0 +1,45 @@
+name: Validate EMP003 Copy Lifecycle
+on:
+  pull_request:
+    branches: [feat/emp003-copy-lifecycle-connected-workspace-20261028]
+    paths:
+      - 'src/runtime/emp003-copy-*'
+      - 'src/core/emp003-copy-lifecycle-contracts.ts'
+      - 'src/staging/emp003-*'
+      - 'src/emp003-copy-library*'
+      - '.github/workflows/validate-emp003-copy-lifecycle.yml'
+permissions:
+  contents: read
+concurrency:
+  group: emp003-copy-lifecycle-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      CI: 'true'
+      WRANGLER_SEND_METRICS: 'false'
+      CLOUDFLARE_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Exact SHA
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Affected integration checks
+        run: node --import tsx --test src/runtime/emp003-copy-lifecycle.test.ts src/runtime/emp003-copy-service.test.ts src/runtime/emp003-copy-routes.test.ts src/staging/emp003-copy-ingress.test.ts src/emp003-copy-library.test.ts
+      - name: Types
+        run: node node_modules/typescript/bin/tsc --noEmit
+      - name: Affected lint
+        run: node node_modules/oxlint/bin/oxlint src/runtime/emp003-copy-lifecycle.ts src/runtime/emp003-copy-lifecycle.test.ts src/runtime/emp003-copy-do.ts src/runtime/emp003-copy-routes.ts src/core/emp003-copy-lifecycle-contracts.ts src/emp003-copy-library.test.ts
+      - name: Build only
+        run: npm run build:console
