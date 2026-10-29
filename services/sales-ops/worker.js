@@ -635,37 +635,23 @@ export default {
           );
         }
 
-        await env.DB.prepare(
-          `UPDATE orders
-           SET status=?,
-               updated_at=?,
-               evidence_json=?
-           WHERE tenant_id=? AND id=?`
-        )
-          .bind(
-            target,
-            now(),
-            evidence
-              ? JSON.stringify(evidence)
-              : o.evidence_json,
-            tid,
-            id
-          )
-          .run();
-
-        await audit(
-          env,
-          tid,
-          b.actor || 'AUTHORIZED_HUMAN',
-          `ORDER_STATE_${target}`,
-          'order',
-          id,
-          {
-            from: o.status,
-            to: target,
-            evidence
-          }
-        );
+        const changedAt = now();
+        const transition = await env.DB.batch([
+          env.DB.prepare(
+            `UPDATE orders SET status=?, updated_at=?, evidence_json=?
+             WHERE tenant_id=? AND id=? AND status=?`
+          ).bind(target, changedAt, evidence ? JSON.stringify(evidence) : o.evidence_json, tid, id, o.status),
+          // changes() observes the preceding CAS inside the same D1 batch.
+          // A losing writer must not create an audit event for an unapplied state.
+          env.DB.prepare(
+            `INSERT INTO audit_log(id,tenant_id,ts,actor,action,entity_type,entity_id,payload_json)
+             SELECT ?,?,?,?,?,?,?,? WHERE changes()=1`
+          ).bind(crypto.randomUUID(), tid, changedAt, b.actor || 'AUTHORIZED_HUMAN',
+            `ORDER_STATE_${target}`, 'order', id,
+            JSON.stringify({ from: o.status, to: target, evidence }))
+        ]);
+        const changed = transition[0]?.meta?.changes ?? transition[0]?.changes;
+        if (changed !== 1) return err('ORDER_STATE_CONFLICT', 'Order changed; read it again before confirming', 409);
 
         return json({
           ok: true,

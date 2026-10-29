@@ -25,3 +25,31 @@ test('replay after lost response returns same order and operation cannot change 
 test('same operation key is isolated across tenants',async()=>{const f=fixture();assert.equal((await worker.fetch(f.request(),f.env)).status,201);assert.equal((await worker.fetch(f.request('tenant-b'),f.env)).status,201);assert.equal(f.db.prepare('SELECT count(*) n FROM orders').get().n,2);});
 test('lost database response after commit reconciles without a second order',async()=>{const f=fixture();const batch=f.env.DB.batch;f.env.DB.batch=async statements=>{await batch(statements);throw new Error('lost response');};const r=await worker.fetch(f.request(),f.env);assert.equal(r.status,200);assert.equal((await r.json()).replayed,true);assert.equal(f.db.prepare('SELECT count(*) n FROM orders').get().n,1);});
 test('unscoped legacy token and demo reset are denied',async()=>{const f=fixture();const env={...f.env,SALES_OPS_CREDENTIALS_JSON:'[]',EMP001_API_TOKEN:'a'};assert.equal((await worker.fetch(f.request(),env)).status,401);assert.equal((await worker.fetch(new Request('https://sales.test/api/v1/demo/reset',{method:'POST',headers:{authorization:'Bearer a','x-tenant-id':'tenant-a'}}),f.env)).status,404);});
+test('concurrent order state confirmations accept one transition and one audit', async () => {
+ const f=fixture();
+ try {
+  const created=await (await worker.fetch(f.request(),f.env)).json();
+  const batch=f.env.DB.batch;
+  f.env.DB.batch=async statements=>(await batch(statements)).map(result=>({success:true,meta:{changes:Number(result.changes)}}));
+  const request=()=>new Request(`https://sales.test/api/v1/orders/${created.order.id}/state`,{method:'POST',headers:{authorization:'Bearer a','x-tenant-id':'tenant-a','content-type':'application/json'},body:JSON.stringify({status:'PAYMENT_CONFIRMED',evidence:{reference:'verified-test-payment'}})});
+  const results=await Promise.all([worker.fetch(request(),f.env),worker.fetch(request(),f.env)]);
+  assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);
+  assert.equal(f.db.prepare("SELECT count(*) n FROM audit_log WHERE action='ORDER_STATE_PAYMENT_CONFIRMED'").get().n,1);
+  assert.equal(f.db.prepare('SELECT status FROM orders WHERE id=?').get(created.order.id).status,'PAYMENT_CONFIRMED');
+ } finally { f.db.close(); }
+});
+test('failed transition audit rolls back the state change', async () => {
+ const f=fixture();
+ try {
+  const created=await (await worker.fetch(f.request(),f.env)).json();
+  const batch=f.env.DB.batch;
+  f.env.DB.batch=async statements=>{
+   statements[1]={...statements[1],query:'INSERT INTO missing_audit_table VALUES(?)',args:['fail']};
+   return batch(statements);
+  };
+  const r=await worker.fetch(new Request(`https://sales.test/api/v1/orders/${created.order.id}/state`,{method:'POST',headers:{authorization:'Bearer a','x-tenant-id':'tenant-a','content-type':'application/json'},body:JSON.stringify({status:'PAYMENT_CONFIRMED',evidence:{reference:'verified-test-payment'}})}),f.env);
+  assert.ok(r.status>=400);
+  assert.equal(f.db.prepare('SELECT status FROM orders WHERE id=?').get(created.order.id).status,'PAYMENT_PENDING');
+  assert.equal(f.db.prepare("SELECT count(*) n FROM audit_log WHERE action='ORDER_STATE_PAYMENT_CONFIRMED'").get().n,0);
+ } finally { f.db.close(); }
+});
