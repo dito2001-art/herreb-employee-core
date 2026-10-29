@@ -26,7 +26,8 @@ export default {
       return denied(403, "STAGING_UPGRADE_DENIED");
     const methods = allowed.get(url.pathname);
     const asset = (request.method === "GET" || request.method === "HEAD") &&
-      (url.pathname === "/" || url.pathname === "/index.html" || /^\/assets\/[a-zA-Z0-9._/-]+$/.test(url.pathname));
+      (url.pathname === "/" || url.pathname === "/index.html" ||
+        /^\/assets\/[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*(?:\/[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*)*$/.test(url.pathname));
     if ((!methods || !methods.has(request.method)) && !asset)
       return denied(404, "STAGING_ROUTE_DISABLED");
     if (!env.STAGING_ACCESS_TEAM_DOMAIN?.trim() ||
@@ -52,6 +53,10 @@ export default {
     if (asset) {
       if (!env.ASSETS) return denied(503, "STAGING_ASSETS_UNAVAILABLE");
       const response = await env.ASSETS.fetch(request);
+      // Do not return the SPA fallback as a successful missing asset.
+      if (url.pathname.startsWith("/assets/") &&
+          response.headers.get("content-type")?.toLowerCase().includes("text/html"))
+        return denied(404, "STAGING_ASSET_NOT_FOUND");
       const headers = new Headers(response.headers);
       headers.set("cache-control", "private, no-store");
       return new Response(response.body, { status: response.status, headers });
