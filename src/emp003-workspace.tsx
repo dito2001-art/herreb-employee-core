@@ -1,3 +1,4 @@
+import { EMP003BrandBrain } from "./emp003-copy-governance";
 import { useEffect, useState } from "react";
 import { EMP003CampaignDashboard } from "./emp003-campaign-dashboard";
 import { EMP003CopyLibrary } from "./emp003-copy-library";
@@ -8,6 +9,7 @@ import {
 
 const sections = [
   "Control Center",
+  "Brand Brain",
   "Campañas y aprobaciones",
   "Creative Studio",
   "Calendario"
@@ -138,6 +140,9 @@ export function EMP003Workspace() {
               </p>
               <EMP003CopyLibrary />
             </section>
+            <div hidden={page !== "Brand Brain"}>
+              <EMP003BrandBrain tenantId={data.tenantId} />
+            </div>
             <section
               hidden={page !== "Calendario"}
               aria-label="Calendario de campañas"

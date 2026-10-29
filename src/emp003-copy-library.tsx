@@ -1,3 +1,4 @@
+import { EMP003CopyGovernance } from "./emp003-copy-governance";
 import { useCallback, useEffect, useState } from "react";
 import { z } from "zod";
 import {
@@ -436,7 +437,34 @@ export function EMP003CopyLibrary() {
               </label>
               <p>SHA-256: {asset.sha256}</p>
               <pre style={{ whiteSpace: "pre-wrap" }}>{text}</pre>
-              <p>DRAFT · Sin aprobación ni publicación externa.</p>
+              <p>
+                Asset de preparación · La aprobación exacta se consulta por
+                separado. Sin publicación externa.
+              </p>
+              {context && (
+                <EMP003CopyGovernance
+                  key={`${tenant}:${asset.assetId}:${asset.revision}:${asset.sha256}`}
+                  asset={asset}
+                  text={text}
+                  campaignRevision={context.campaignRevision}
+                  canWrite={
+                    canWrite &&
+                    selected?.reviewState === "DRAFT" &&
+                    asset.revision === head?.revision &&
+                    !busy &&
+                    !pending
+                  }
+                  canRecover={canWrite}
+                  onWorking={setBusy}
+                  onSaved={async (record) => {
+                    await loadLibrary();
+                    if (!(await open(record)))
+                      throw Error(
+                        "La nueva revisión existe pero no se pudo verificar su contenido."
+                      );
+                  }}
+                />
+              )}
             </article>
           )}
         </>

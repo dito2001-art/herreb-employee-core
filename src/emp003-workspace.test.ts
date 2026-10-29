@@ -61,6 +61,8 @@ test("workspace reuses real UI modules, stays read-only for B and clears previou
     assert.equal(init?.method ?? "GET", "GET");
     assert.equal(init?.credentials, "same-origin");
     assert.equal(init?.cache, "no-store");
+    if (String(url) === "/api/emp003/assets/brand-brain")
+      return Response.json({ ok: false }, { status: 503 });
     assert.equal(String(url), "/api/emp003/operations");
     return denied
       ? Response.json({ ok: false }, { status: 401 })
