@@ -37,10 +37,16 @@ export function createEMP003StagingEntry(jwksFetcher: typeof fetch = fetch) {
             "/api/emp003/assets",
             "/api/emp003/assets/content",
             "/api/emp003/assets/context",
-            "/api/emp003/assets/status"
+            "/api/emp003/assets/status",
+            "/api/emp003/assets/approval",
+            "/api/emp003/assets/brand-brain"
           ].includes(url.pathname)) ||
         (request.method === "POST" &&
-          url.pathname === "/api/emp003/assets/generate");
+          [
+            "/api/emp003/assets/generate",
+            "/api/emp003/assets/edit",
+            "/api/emp003/assets/approve"
+          ].includes(url.pathname));
       const operationsRead =
         request.method === "GET" && url.pathname === "/api/emp003/operations";
       // Do not treat SPA fallback as an authorization decision. Explicit paths only.
