@@ -194,10 +194,16 @@ test("portal selection→authenticated BFF→SQLite assets→independent byte re
         ].find((x) => x.endsWith(":head"))!
       ))!
     );
+    await click(`${record.assetId} · Email · versión 3`);
+    assert.match(document.querySelector("pre")!.textContent!, /Copy 3/);
     f.objects.set(head.objectKey, new TextEncoder().encode("tampered"));
     await click(`${record.assetId} · Email · versión 3`);
     assert.ok(document.querySelector("[role=alert]"));
-    assert.equal(document.querySelector("pre")?.textContent, "");
+    assert.equal(document.querySelector("pre"), null);
+    assert.equal(
+      document.querySelector('[aria-label="Edición y aprobación de copy"]'),
+      null
+    );
     assert.doesNotMatch(document.body.textContent!, /hash verificado/);
     await act(async () => root.unmount());
     root = createRoot(document.getElementById("root")!);

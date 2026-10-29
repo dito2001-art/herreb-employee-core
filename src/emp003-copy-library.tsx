@@ -161,6 +161,9 @@ export function EMP003CopyLibrary() {
   ) {
     setBusy(true);
     setError("");
+    // Revoke the previous verified selection until this independent read passes.
+    // A failed read must leave no editor or approval action for stale bytes.
+    setAsset(undefined);
     setText("");
     setNotice("");
     try {
