@@ -29,7 +29,9 @@ test("unexpected methods and static paths fail closed", async () => {
   for (const [path, method] of [
     ["/api/emp001/operations","POST"], ["/api/emp002/calendar","GET"],
     ["/api/emp003/operations","POST"], ["/api/emp003/generate-campaign","GET"],
-    ["/favicon.ico","GET"], ["/assets/private%2Ffile","GET"]
+    ["/favicon.ico","GET"], ["/assets/private%2Ffile","GET"],
+    ["/assets/.hidden","GET"], ["/assets/app..js","GET"],
+    ["/assets/app.js/","GET"]
   ]) assert.equal((await call(path, method)).status, 404, path);
 });
 test("forged email headers and tenant selectors never authorize access", async () => {
@@ -44,5 +46,21 @@ test("forged email headers and tenant selectors never authorize access", async (
     const method = path === "/api/emp002/calendar" ? "POST" : "GET";
     const res = await call(path, method, {"cf-access-authenticated-user-email":"a@example.test"}, env);
     assert.equal(res.status, 401, path);
+  }
+});
+
+test("staging config never trusts a forged Access email or an unsigned JWT", async () => {
+  const env = {STAGING_ACCESS_TEAM_DOMAIN:"staging.cloudflareaccess.com",
+    STAGING_ACCESS_AUDIENCE:"staging-only-aud",
+    STAGING_IDENTITY_MAP_JSON:JSON.stringify([
+      {email:"a@example.test",actorId:"a",tenantId:"tenant-a",role:"owner"},
+      {email:"b@example.test",actorId:"b",tenantId:"tenant-b",role:"owner"}
+    ])} as unknown as typeof empty;
+  for (const email of ["a@example.test","b@example.test"]) {
+    const res = await call("/api/emp003/operations", "GET", {
+      "cf-access-authenticated-user-email":email,
+      "cf-access-jwt-assertion":"unsigned.jwt.payload"
+    }, env);
+    assert.equal(res.status,401);
   }
 });
