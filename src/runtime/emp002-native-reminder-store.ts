@@ -12,6 +12,7 @@ export function reminderOwnerForTenant(raw: string | undefined, tenantId: string
   if (!Array.isArray(m.whatsappOwners) || !m.whatsappOwners.every(v => typeof v === 'string')) throw new Error('EMP002_REMINDER_OWNERS_INVALID');
   if (typeof m.reminderOwnerWhatsapp !== 'string' || !m.reminderOwnerWhatsapp.trim()) throw new Error('EMP002_REMINDER_OWNER_NOT_CONFIGURED');
   const owner = normalizeEMP002WhatsAppNumber(m.reminderOwnerWhatsapp);
+  if (!/^\d{8,15}$/.test(owner)) throw new Error('EMP002_REMINDER_OWNER_INVALID');
   const owners = m.whatsappOwners.map((v: string) => normalizeEMP002WhatsAppNumber(v));
   if (!owner || !owners.includes(owner) || owners.filter((v: string) => v === owner).length !== 1) throw new Error('EMP002_REMINDER_OWNER_UNAUTHORIZED');
   return owner;
@@ -39,6 +40,12 @@ export class NativeReminderStore {
     if (!current || current.tenantId !== tenantId || current.id !== id || current.version !== version || current.status !== 'ACTIVE' || !current.reminderAt || new Date(current.reminderAt).toISOString() !== row.due_at || row.due_at > new Date(now).toISOString()) throw new Error('EMP002_REMINDER_STALE');
     this.sql.exec("UPDATE emp002_native_reminder_actions SET status = 'UNKNOWN' WHERE tenant_id = ? AND calendar_id = ? AND calendar_version = ? AND status = 'PENDING'",tenantId,id,version);
     return {recipient:String(row.recipient),actionKey:`emp002-reminder:${tenantId}:${id}:${version}`};
+  }
+  markSent(tenantId:string,id:string,version:number,providerMessageId:string):void {
+    if (!/^wamid[.\\w-]{4,255}$/.test(providerMessageId)) throw new Error('EMP002_REMINDER_PROVIDER_EVIDENCE_MISSING');
+    const rows=Array.from(this.sql.exec('SELECT status FROM emp002_native_reminder_actions WHERE tenant_id = ? AND calendar_id = ? AND calendar_version = ?',tenantId,id,version));
+    if (rows.length!==1 || rows[0].status!=='UNKNOWN') throw new Error('EMP002_REMINDER_SEND_STATE_CONFLICT');
+    this.sql.exec("UPDATE emp002_native_reminder_actions SET status='SENT',provider_message_id=? WHERE tenant_id=? AND calendar_id=? AND calendar_version=? AND status='UNKNOWN'",providerMessageId,tenantId,id,version);
   }
   reconcile(tenantId:string,id:string,version:number,providerMessageId:string,evidenceReference:string,actor:string):void {
     const rows=Array.from(this.sql.exec('SELECT status FROM emp002_native_reminder_actions WHERE tenant_id = ? AND calendar_id = ? AND calendar_version = ?',tenantId,id,version));
