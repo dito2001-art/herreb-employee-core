@@ -103,3 +103,16 @@ test('cancellation after irreversible UNKNOWN claim never rearms old version',()
  // UNKNOWN requires provider evidence, even though the calendar was cancelled.
  store.reconcile(tenant,'event-1',1,'wamid.test-1234','provider-receipt-001','operator');
 });
+
+test('two asynchronous contenders observe exactly one durable claim',async()=>{
+ const db=new DatabaseSync(':memory:');
+ const store=new NativeReminderStore(sqlAdapter(db) as never);
+ store.replace(entry(1),'595981123456');
+ const results=await Promise.allSettled([
+  Promise.resolve().then(()=>store.claim(tenant,'event-1',1,entry(1),'2026-10-29T14:00:00.000Z')),
+  Promise.resolve().then(()=>store.claim(tenant,'event-1',1,entry(1),'2026-10-29T14:00:00.000Z')),
+ ]);
+ assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
+ assert.equal(results.filter(r=>r.status==='rejected').length,1);
+ assert.equal(store.due(tenant,'2026-10-29T14:00:00.000Z').length,0);
+});
