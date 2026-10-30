@@ -1,0 +1,26 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "herreb-emp002-staging-NOT-DEPLOYABLE",
+  "main": "../src/worker.ts",
+  "compatibility_date": "2026-06-11",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "routes": [],
+  "triggers": {"crons": []},
+  "vars": {
+    "CRM_TENANT_ID": "EMP002_STAGING_UNCONFIGURED",
+    "AG002_TENANT_ID": "EMP002_STAGING_UNCONFIGURED",
+    "CALENDAR_TENANT_ID": "EMP002_STAGING_UNCONFIGURED",
+    "TENANT_MANIFESTS_JSON": "[]",
+    "ACCESS_IDENTITY_MAP_JSON": "[]",
+    "WHATSAPP_TENANT_ROUTES_JSON": "[]",
+    "EMP002_STAGING_SEND_DISABLED": "true"
+  },
+  "durable_objects": {
+    "bindings": [{"name":"EMP002_OPERATIONS","class_name":"EMP002Operations"}]
+  },
+  "migrations": [
+    {"tag":"emp002-staging-v1","new_sqlite_classes":["EMP002Operations"]}
+  ],
+  "observability": {"enabled":true,"logs":{"enabled":true,"invocation_logs":true}}
+}
