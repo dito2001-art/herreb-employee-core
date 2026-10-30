@@ -1,6 +1,6 @@
 import { verifyWorkforceAccessJwt } from '../src/runtime/workforce-admin-access-jwt';
 import { resolveAccessIdentity } from '../src/runtime/access-identity';
-import { EMP002Operations } from '../src/runtime/emp002-operations';
+import { EMP002Operations as BaseEMP002Operations } from '../src/runtime/emp002-operations';
 
 type Env = {
   EMP002_OPERATIONS: DurableObjectNamespace;
@@ -11,7 +11,20 @@ type Env = {
   TENANT_MANIFESTS_JSON?: string;
   EMP002_RECONCILIATION_TOKEN?: string;
 };
-export { EMP002Operations };
+// Defense in depth: even direct DO stub callers cannot invoke outbound-capable handlers.
+// Strip Meta credentials from the DO environment, regardless of accidental bindings.
+export class EMP002Operations extends BaseEMP002Operations {
+  constructor(state: DurableObjectState, env: ConstructorParameters<typeof BaseEMP002Operations>[1]) {
+    super(state, { ...env, META_ACCESS_TOKEN: undefined, META_PHONE_NUMBER_ID: undefined });
+  }
+  override async fetch(request: Request): Promise<Response> {
+    const path = new URL(request.url).pathname;
+    if (request.method !== 'POST' || (path !== '/native-calendar' && path !== '/internal/native-reminders/status')) {
+      return Response.json({ok:false,error:'STAGING_DO_OPERATION_FORBIDDEN'},{status:403});
+    }
+    return super.fetch(request);
+  }
+}
 
 // Deliberately narrow: no webhook, execute, claim, reconcile, or outbound transport.
 const ALLOWED = new Map([
