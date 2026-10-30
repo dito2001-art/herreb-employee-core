@@ -61,3 +61,25 @@ test('a stale calendar version cannot be sent and remains pending for reconcilia
   assert.throws(()=>store.claim(tenant,'event-1',1,entry(2),'2026-10-29T14:00:00.000Z'),/STALE/);
   assert.equal(store.due(tenant,'2026-10-29T14:00:00.000Z').length,1);
 });
+
+test('Meta timeout after UNKNOWN cannot cause a second claim or resend',()=>{
+  const db=new DatabaseSync(':memory:');
+  const store=new NativeReminderStore(db as never);
+  store.replace(entry(1),'595981123456');
+  store.claim(tenant,'event-1',1,entry(1),'2026-10-29T14:00:00.000Z');
+  // Simulated provider timeout: no acknowledgment and therefore no markSent.
+  assert.equal(store.due(tenant,'2026-10-29T14:00:00.000Z').length,0);
+  assert.throws(()=>store.claim(tenant,'event-1',1,entry(1),'2026-10-29T14:00:00.000Z'),/ALREADY_CLAIMED/);
+  assert.throws(()=>store.markSent(tenant,'event-1',1,''),/EVIDENCE_MISSING/);
+});
+test('concurrent duplicate claims serialize to one UNKNOWN transition',()=>{
+  const db=new DatabaseSync(':memory:');
+  const store=new NativeReminderStore(db as never);
+  store.replace(entry(1),'595981123456');
+  let claimed=0;
+  for(let i=0;i<2;i++) {
+    try {store.claim(tenant,'event-1',1,entry(1),'2026-10-29T14:00:00.000Z');claimed++;}
+    catch(error) {assert.match(String(error),/ALREADY_CLAIMED/);}
+  }
+  assert.equal(claimed,1);
+});
