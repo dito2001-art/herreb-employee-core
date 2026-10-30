@@ -8,6 +8,7 @@ const entry=readFileSync('staging/emp002-entry.ts','utf8');
 test('staging never uses shared worker or public routes',()=>{
  assert.equal(config.main,'./emp002-entry.ts');
  assert.equal(config.workers_dev,false);
+ assert.equal(config.preview_urls,false);
  assert.deepEqual(config.routes,[]);
  assert.deepEqual(config.triggers.crons,[]);
  assert.equal(config.name.includes('NOT-DEPLOYABLE'),true);

@@ -1,35 +1,54 @@
-# EMP-002 — staging aislado: preflight y aceptación (NO-GO)
+# EMP-002 — Runbook G0 aislado: calendario y estado, sin Meta
 
-**Base inmutable:** PR #321, SHA `19e8ab4671084d0f345831eb6a610363fe55da53`. Miniflare/workerd local PASS: [run 40986429886](https://github.com/dito2001-art/herreb-employee-core/actions/runs/40986429886). Esta rama es exclusivamente de preparación. **No desplegar** `staging/emp002.wrangler.preflight.jsonc`: es un esqueleto intencionalmente no desplegable, con nombre `NOT-DEPLOYABLE`, tenants vacíos y sin bindings de recursos. No reemplaza el `wrangler.jsonc` productivo.
+Fecha: 30/10/2026. Base #322 `e6257b14ab6674941d44e0bdc3b472f1ca00d74c`; correctivo en PR separado. Este documento prepara acciones futuras: **no autoriza ejecutarlas**. No repetir la suite funcional Miniflare de #321; conservar su [CI histórico](https://github.com/dito2001-art/herreb-employee-core/actions/runs/40986429886).
 
-## Inventario verificado en repositorio
+## 1. Alcance exacto
 
-- `wrangler.jsonc` productivo tiene ruta pública `employee.herreb.com`, `EMP002_OPERATIONS` y migración SQLite `v2`; también tiene bindings de ChatAgent, WorkforceAdminState y EMP003CampaignState, además de service bindings a EMP001, SALES_OPS, CRM_CAPABILITY y CALENDAR_READ. **No reutilizar** como manifiesto staging.
-- El manifiesto productivo contiene un número Meta real y una lista de propietarios WhatsApp sin `reminderOwnerWhatsapp`. No copiar estos valores a staging.
-- `src/runtime/emp002-operations.ts` implementa calendario nativo, `/internal/native-reminders/execute`, `/status`, `/claim`, `/reconcile`; ejecución de recordatorios requiere token interno y tenant nombrado. La prueba local cubre DO SQLite A/B, timeout, duplicados y read-back, no Cloudflare real.
-- Recursos staging registrados históricamente por WF-01: gateway `herreb-workforce-staging-gateway`, D1 `herreb-workforce-staging-db`, KV `herreb-workforce-staging-kv` y Queue `herreb-workforce-staging-queue`. **No se verificó read-back efectivo actual ni bindings a EMP-002**. DO staging específico, Access específico y Meta sandbox no certificados.
+El entrypoint es `staging/emp002-entry.ts`, nunca el Worker general. Expone únicamente:
 
-## Gates obligatorios antes de cualquier despliegue o E2E
+- POST `/staging/emp002/calendar` → `/native-calendar`: get/list/availability/reminders y save solo para owner, con versión esperada y tenant derivado del JWT.
+- POST `/staging/emp002/reminder-status` → `/internal/native-reminders/status`: lectura tenant-scoped; token interno recreado en servidor.
 
-1. **WF-01 SECURITY GO escrito**: Worker y versión exactos, SHA, cuenta, Access issuer/AUD/JWKS y reglas deny-by-default, dos actores reales distintos vinculados mediante JWT verificado a tenant A/B, sin bypass por workers.dev, preview, routes, service bindings o WebSocket. Aislamiento de DO SQLite y ausencia de referencia a recursos de producción; revisión de migraciones y políticas.
-2. **WF-04 RELEASE GO escrito**, independiente y referido al mismo SHA y configuración, con procedimiento de rollback, stop conditions y auditoría de publicaciones externas. **Autorización explícita del propietario** para el alcance exacto. GO de EMP-003 no es GO de EMP-002.
-3. **Inventario/read-back de bindings**: resolver y verificar D1, KV, Queue y DO exclusivos o justificar explícitamente cada recurso no utilizado por el camino EMP-002. El código actual no acredita que EMP-002 requiera D1/KV/Queue directamente: no inventar bindings ni migraciones. Si un service binding se necesita, su destino debe ser staging aislado, nunca EMP001/CRM/CALENDAR_READ productivo.
-4. **Manifiesto definitivo revisado**: nombre de Worker staging real, `workers_dev:false`, sin ruta pública ni cron, identidad A/B derivada de Access; `TENANT_MANIFESTS_JSON` con `reminderOwnerWhatsapp` autorizado y único por tenant; rutas WhatsApp sandbox separadas, `META_PHONE_NUMBER_ID` sandbox verificado; token `EMP002_RECONCILIATION_TOKEN` secreto, no en Git. Sin activar Meta hasta autorización separada.
-5. **Egress**: la prueba local usa un mock que intercepta `https://graph.facebook.com/` y deniega otros destinos. Staging no hereda automáticamente ese mock: hasta aprobar envío, bloquear outbound y verificar que ninguna ruta/cola/cron produzca mensajes reales.
+Todas las demás rutas/métodos se deniegan. No hay webhook, execute, claim, reconcile, cron, queue consumer, RPC de Cloudflare, publicaciones o mensajes Meta en G0. La subclase DO vuelve a denegar métodos/rutas privilegiadas, ata la cabecera tenant al ID real del DO y elimina token/número Meta aun si se inyectan accidentalmente.
 
-## Sesión E2E única — ejecutar solamente tras todos los GO
+La aplicación Access debe ser exclusiva de EMP-002. JWT RS256 validado con issuer, AUD y JWKS de configuración confiable; nunca tomar claves del JWT. Definir propietario del refresh/rotación JWKS; una clave nueva desconocida debe fallar cerrada hasta actualización autorizada. No usar tokens, keys ni identidades RSA del harness local en Cloudflare.
 
-- **Registro**: UTC, SHA/versión Cloudflare, entorno, actor seudonimizado, tenant, id de operación, versión calendario, HTTP status, id de correlación, sin cookies, JWT, teléfonos, mensajes privados ni secretos.
-- **A calendario**: crear evento/tarea, GET independiente, modificar con versión esperada, GET nuevo, cancelar, GET confirmando CANCELLED, recargar interfaz. Verificar conflicto y operación idempotente.
-- **B aislamiento**: B no puede consultar ni mutar el ID de A por GET/POST; A tampoco B. Verificar denegación de actor sin Access y de token interno inválido, sin exponer recursos.
-- **Recordatorios**: primero dry-run sin outbound; confirmar cancel-before sin envío. Con Meta sandbox explícitamente autorizado, ejecutar un único caso controlado, capturar transición PENDING→UNKNOWN→SENT, id de proveedor y `/internal/native-reminders/status` por lectura independiente; concurrencia sin doble envío.
-- **Timeout**: introducir fallo *solo en sandbox*, observar UNKNOWN sin reenvío; reconciliación únicamente con evidencia externa autoritativa. Nunca convertir UNKNOWN a PENDING ni reintentar ciegamente.
-- **Observabilidad**: logs de estado, versión y correlación, contador de intentos Meta, sin PII; confirmar no hay publicaciones ni tráfico externo inesperado.
+## 2. Evidencia previa, sin acciones remotas
 
-## Stop conditions y rollback
+1. Verificar el HEAD del PR correctivo y su CI exact-head. Registrar SHA, tree, versión Node/Miniflare/esbuild/TypeScript, resultados estáticos y de comportamiento. El CI anterior #40987796399 comprobó un merge sintético con tree idéntico a `e6257b1…`; no equivale al nuevo correctivo.
+2. WF-01 revisa el código, política Access propuesta, mapeo de actores/roles/tenants, manifiesto definitivo y aislamiento. A/B deben ser tenants distintos. El usuario de lectura no se convierte en owner para facilitar pruebas. Aprobar cómo se provisionarán registros de B a través de su owner autorizado, sin saltar el gateway ni modificar producción.
+3. Identificar cuenta, nombre de Worker, namespace DO nuevo y migración SQLite `emp002-staging-v1`. D1/KV/Queue/services **no se requieren en G0**; verificar su ausencia, no crearlos por rutina. No copiar bindings, rutas, números, propietarios ni credenciales de producción.
+4. Resolver el transporte de pruebas: el Worker sin routes/workers.dev/previews no tiene una URL HTTP utilizable. Proponer un transporte privado o gateway separado protegido por Access, con origen, service binding y políticas exactos revisados. No inventar una URL, abrir workers.dev ni usar RPC como atajo.
+5. El esqueleto `staging/emp002.wrangler.preflight.jsonc` sigue NO DESPLEGABLE: nombre NOT-DEPLOYABLE, identidades/manifests vacíos, sin issuer/AUD/JWKS/token interno. Se necesita un manifiesto definitivo revisado; cambiarlo requiere nueva revisión del SHA/configuración.
+6. Exigir permisos del pipeline solo de lectura en CI de pruebas; no introducir secretos Cloudflare, despliegues automáticos, cron ni comandos remotos. Inventariar y revisar vías de publicación efectivas antes de autorizar la primera activación.
 
-**Abortar** ante tenant cruzado, ruta pública, token inválido aceptado, binding a producción, destinatario no autorizado, doble envío, UNKNOWN reintentado, read-back inconsistente o ausencia de evidencia. Deshabilitar tráfico/ejecutor de staging (sin tocar producción), preservar DO SQLite y registros para conciliación; no borrar ni revertir almacenamiento irreversible. Rollback del Worker a versión staging anterior aprobada únicamente tras GO específico y comprobación de compatibilidad de migraciones; documentar versión y read-back posterior. No activar cron ni programador en este gate.
+## 3. GO dual y autorización para la primera activación G0
 
-## Decisión vigente
+Solicitar decisiones **independientes** de WF-01 y WF-04 usando [el paquete final](security-release-review-package.md), para el mismo SHA y manifiesto definitivo. Un GO de código/preflight no certifica recursos que aún no existen. La autorización del propietario debe nombrar las acciones concretas de creación/migración/deploy/transporte que correspondan. Hasta contar con eso, no ejecutar ninguna.
 
-**LOCAL GO / STAGING NO-GO / RELEASE NO-GO.** Pendiente WF-01, WF-04, autorización owner y configuración efectiva. EMP-001/003 NO-GO. No merge, deploy, Cloudflare RPC, cron ni envíos Meta.
+Después de autorización, el operador designado registra los recursos realmente creados, versión/artefacto, SHA/tree, configuración y bindings efectivos. El read-back del control-plane no debe activar RPC, tests, cron o Meta no autorizados. Si difiere del plan, detenerse. La primera versión/URL son evidencia posterior a la activación, no requisitos imposibles que se simulan antes de existir.
+
+Antes de abrir una sesión HTTP: confirmar Access y aislamiento reales, ausencia de bypass por workers.dev/previews/routes/services y ausencia de ejecutores/credenciales Meta. Solo entonces pedir/usar la autorización específica de E2E G0.
+
+## 4. Única sesión real G0, solo tras autorización
+
+- Registrar UTC, entorno, SHA/tree/versión, actor seudonimizado y tenant, ruta/operación, HTTP real, revisión/CAS, correlación y resultado. Nunca guardar cookies, JWT, secretos, teléfonos o mensajes privados.
+- A owner: crear tarea/evento → GET independiente y comparación → modificar con expectedVersion → GET nuevo → conflicto de una escritura obsoleta → cancelar → GET CANCELLED y lectura/listado posterior. Comparar datos y revisión, no solo códigos HTTP.
+- B: usar registros previamente provisionados por el owner autorizado de B. Probar lectura propia, lectura directa de A y escritura con scope A; hacer el inverso con el owner A. Un null de un ID que nunca existió no prueba aislamiento. Repetir GET de A y B y comparar integridad tras los intentos.
+- Reader: confirmar lectura permitida del tenant asignado y save 403; JWT inválido/ausente/expirado, origen ajeno, cabeceras de scope/token inyectadas, contenido no JSON y tamaño excesivo deben denegarse sin mutación.
+- Recordatorios: configurar/cancelar mediante calendario y consultar estado cuando exista; no ejecutar ni reconciliar. El gateway G0 **no permite** demostrar PENDING→UNKNOWN→SENT de Meta real. Ese recorrido pertenece a un futuro G1 revisado, no a una variable de activación.
+- Observar rutas privilegiadas rechazadas, cero intentos Meta y ausencia de tráfico externo inesperado. No realizar DO directo ni Cloudflare RPC remotos salvo aprobación específica posterior; los tests de DO directo de este paquete son exclusivamente Miniflare local.
+
+## 5. Stop conditions y recuperación
+
+Abortar por scope cruzado, permiso indebido, ruta pública/bypass, binding de producción, intento Meta, duplicación, read-back inconsistente, evidencia incompleta o código/configuración distintos. Cerrar el transporte o deshabilitar el ingreso staging únicamente dentro del alcance autorizado; no tocar producción. Preservar SQLite y recibos, sin borrar ni revertir datos.
+
+**Primer staging:** si no hay versión previa aprobada, no afirmar rollback probado. Mantener ingreso cerrado y preparar forward-fix revisado. No eliminar namespace ni revertir migración para volver a un supuesto estado inicial.
+
+**Staging con versión previa:** WF-04 identifica versión anterior real, compatibilidad del esquema/clase/migraciones y acciones exactas de vuelta de código, con read-back posterior. Cambiar versión no restaura datos. Cualquier rollback efectivo requiere autorización específica y control independiente.
+
+## 6. Fuera de alcance G0
+
+Meta sandbox, ejecución/claim/reconciliación, envíos/cron y publishers requieren otro incremento, GO dual y autorización explícita. El interceptor de salida del harness es **local**; no es un firewall de Cloudflare. No emitir RELEASE funcional completo basándose en este paquete.
+
+**Estado:** paquete preparado; SECURITY/RELEASE GO pendientes. Sin merge, deploy, RPC Cloudflare, cron ni Meta real. EMP-001/003 no se modifican.

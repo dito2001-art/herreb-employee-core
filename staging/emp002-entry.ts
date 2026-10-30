@@ -14,13 +14,22 @@ type Env = {
 // Defense in depth: even direct DO stub callers cannot invoke outbound-capable handlers.
 // Strip Meta credentials from the DO environment, regardless of accidental bindings.
 export class EMP002Operations extends BaseEMP002Operations {
+  private readonly stagingId: DurableObjectId;
+  private readonly stagingNamespace?: DurableObjectNamespace;
   constructor(state: DurableObjectState, env: ConstructorParameters<typeof BaseEMP002Operations>[1]) {
     super(state, { ...env, META_ACCESS_TOKEN: undefined, META_PHONE_NUMBER_ID: undefined });
+    this.stagingId = state.id;
+    this.stagingNamespace = (env as {EMP002_OPERATIONS?: DurableObjectNamespace}).EMP002_OPERATIONS;
   }
   override async fetch(request: Request): Promise<Response> {
     const path = new URL(request.url).pathname;
     if (request.method !== 'POST' || (path !== '/native-calendar' && path !== '/internal/native-reminders/status')) {
       return Response.json({ok:false,error:'STAGING_DO_OPERATION_FORBIDDEN'},{status:403});
+    }
+    const tenantId = request.headers.get('x-herreb-internal-tenant-id');
+    if (!tenantId || !/^[a-zA-Z0-9_-]{1,100}$/.test(tenantId) || !this.stagingNamespace ||
+        this.stagingNamespace.idFromName('tenant:'+tenantId).toString() !== this.stagingId.toString()) {
+      return Response.json({ok:false,error:'STAGING_DO_TENANT_FORBIDDEN'},{status:403});
     }
     return super.fetch(request);
   }
@@ -56,17 +65,34 @@ export default {
       if (request.headers.has('x-herreb-internal-tenant-id') || request.headers.has('x-emp002-reconciliation-token')) {
         return Response.json({ok:false,error:'CLIENT_SCOPE_HEADERS_FORBIDDEN'},{status:403});
       }
+      const origin = request.headers.get('origin');
+      if (request.headers.get('sec-fetch-site') === 'cross-site' || (origin && origin !== new URL(request.url).origin)) {
+        return Response.json({ok:false,error:'STAGING_ORIGIN_FORBIDDEN'},{status:403});
+      }
+      if (request.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'application/json') {
+        return Response.json({ok:false,error:'STAGING_JSON_REQUIRED'},{status:415});
+      }
       const body = await request.text();
-      if (body.length > 65536) return Response.json({ok:false,error:'PAYLOAD_TOO_LARGE'},{status:413});
+      if (new TextEncoder().encode(body).byteLength > 65536) return Response.json({ok:false,error:'PAYLOAD_TOO_LARGE'},{status:413});
+      let parsed: unknown;
+      try { parsed = JSON.parse(body); }
+      catch { return Response.json({ok:false,error:'STAGING_INVALID_JSON'},{status:400}); }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return Response.json({ok:false,error:'STAGING_INVALID_BODY'},{status:400});
+      if (path.endsWith('/calendar') && (parsed as {operation?:unknown}).operation === 'save' && identity.role !== 'owner') {
+        return Response.json({ok:false,error:'STAGING_WRITE_FORBIDDEN'},{status:403});
+      }
       if (path.endsWith('/reminder-status') && !env.EMP002_RECONCILIATION_TOKEN) {
         return Response.json({ok:false,error:'STAGING_NOT_CONFIGURED'},{status:503});
       }
       const headers = new Headers({'content-type':'application/json','x-herreb-internal-tenant-id':identity.tenantId});
       if (path.endsWith('/reminder-status')) headers.set('x-emp002-reconciliation-token',env.EMP002_RECONCILIATION_TOKEN!);
       const id=env.EMP002_OPERATIONS.idFromName('tenant:'+identity.tenantId);
-      return env.EMP002_OPERATIONS.get(id).fetch(new Request('https://emp002.staging.internal'+ALLOWED.get(path),{
+      const response = await env.EMP002_OPERATIONS.get(id).fetch(new Request('https://emp002.staging.internal'+ALLOWED.get(path),{
         method:'POST',headers,body
       }));
+      const responseHeaders = new Headers(response.headers);
+      responseHeaders.set('cache-control','private, no-store');
+      return new Response(response.body,{status:response.status,headers:responseHeaders});
     } catch {
       return Response.json({ok:false,error:'ACCESS_DENIED'},{status:403});
     }
