@@ -33,3 +33,12 @@ test('gateway excludes outbound Meta and privileged DO operations',()=>{
  assert.doesNotMatch(entry,/\/internal\/native-reminders\/reconcile['"]/);
  assert.doesNotMatch(entry,/\/inbound\/whatsapp['"]/);
 });
+
+test('DO subclass blocks direct execution, reconcile and Meta credentials',()=>{
+ assert.match(entry,/class EMP002Operations extends BaseEMP002Operations/);
+ assert.match(entry,/META_ACCESS_TOKEN: undefined/);
+ assert.match(entry,/META_PHONE_NUMBER_ID: undefined/);
+ assert.match(entry,/STAGING_DO_OPERATION_FORBIDDEN/);
+ assert.match(entry,/path !== '\/native-calendar'/);
+ assert.match(entry,/path !== '\/internal\/native-reminders\/status'/);
+});
