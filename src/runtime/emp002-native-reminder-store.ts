@@ -44,7 +44,7 @@ export class NativeReminderStore {
     return {recipient:String(row.recipient),actionKey:`emp002-reminder:${tenantId}:${id}:${version}`};
   }
   markSent(tenantId:string,id:string,version:number,providerMessageId:string):void {
-    if (!/^wamid[.\\w-]{4,255}$/.test(providerMessageId)) throw new Error('EMP002_REMINDER_PROVIDER_EVIDENCE_MISSING');
+    if (!/^wamid[.\w-]{4,255}$/.test(providerMessageId)) throw new Error('EMP002_REMINDER_PROVIDER_EVIDENCE_MISSING');
     const rows=Array.from(this.sql.exec('SELECT status FROM emp002_native_reminder_actions WHERE tenant_id = ? AND calendar_id = ? AND calendar_version = ?',tenantId,id,version));
     if (rows.length!==1 || rows[0].status!=='UNKNOWN') throw new Error('EMP002_REMINDER_SEND_STATE_CONFLICT');
     this.sql.exec("UPDATE emp002_native_reminder_actions SET status='SENT',provider_message_id=? WHERE tenant_id=? AND calendar_id=? AND calendar_version=? AND status='UNKNOWN'",providerMessageId,tenantId,id,version);
