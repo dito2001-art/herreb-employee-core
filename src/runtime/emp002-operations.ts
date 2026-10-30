@@ -127,6 +127,45 @@ export class EMP002Operations implements DurableObject {
 
     // Internal-only handoff: UNKNOWN is committed BEFORE any external send.
     // Caller must never retry an UNKNOWN action without provider reconciliation.
+    // Explicit internal dispatch only; no public route or automatic cron registration.
+    if (request.method === 'POST' && url.pathname === '/internal/native-reminders/execute') {
+      const token=this.env.EMP002_RECONCILIATION_TOKEN?.trim();
+      if (!token || request.headers.get('x-emp002-reconciliation-token')!==token) return Response.json({ok:false,error:'REMINDER_FORBIDDEN'},{status:403});
+      const tenantId=request.headers.get('x-herreb-internal-tenant-id')?.trim()??'';
+      if (!/^[a-zA-Z0-9_-]{1,100}$/.test(tenantId)) return Response.json({ok:false,error:'TENANT_SCOPE_REQUIRED'},{status:403});
+      try {
+        const recipient=reminderOwnerForTenant(this.env.TENANT_MANIFESTS_JSON,tenantId);
+        const due=this.nativeReminders.due(tenantId,new Date().toISOString());
+        const results: Array<{id:string;version:number;status:string;error?:string}>=[];
+        for (const action of due) {
+          let claim: {recipient:string;actionKey:string;title:string}|undefined;
+          try {
+            claim=this.state.storage.transactionSync(()=>{
+              const current=this.nativeCalendar.get(tenantId,action.calendar_id);
+              const result=this.nativeReminders.claim(tenantId,action.calendar_id,action.calendar_version,current,new Date().toISOString());
+              if(result.recipient!==recipient) throw new Error('EMP002_REMINDER_RECIPIENT_CHANGED');
+              if(!current) throw new Error('EMP002_REMINDER_STALE');
+              return {...result,title:current.title};
+            });
+          } catch(error) {
+            results.push({id:action.calendar_id,version:action.calendar_version,status:'NOT_SENT',error:error instanceof Error?error.message:'CLAIM_FAILED'});
+            continue;
+          }
+          // No network request occurs until UNKNOWN has committed.
+          try {
+            const transport=buildEMP002WhatsAppTransport(this.env,tenantId);
+            const outbound=await transport.sendText({tenantId,to:claim.recipient,body:`Recordatorio de Workforce: ${claim.title}`,audience:'EXTERNAL_CONTACT',correlationId:claim.actionKey,idempotencyKey:claim.actionKey});
+            if(!outbound.messageId) throw new Error('EMP002_REMINDER_PROVIDER_EVIDENCE_MISSING');
+            this.state.storage.transactionSync(()=>this.nativeReminders.markSent(tenantId,action.calendar_id,action.calendar_version,outbound.messageId!));
+            results.push({id:action.calendar_id,version:action.calendar_version,status:'SENT'});
+          } catch {
+            // UNKNOWN stays fenced even if provider may have delivered.
+            results.push({id:action.calendar_id,version:action.calendar_version,status:'UNKNOWN',error:'EMP002_REMINDER_RECONCILIATION_REQUIRED'});
+          }
+        }
+        return Response.json({ok:results.every(r=>r.status==='SENT'),results},{status:results.every(r=>r.status==='SENT')?200:207});
+      } catch(error) {return Response.json({ok:false,error:error instanceof Error?error.message:'REMINDER_DISPATCH_FAILED'},{status:503});}
+    }
     if (request.method === 'POST' && url.pathname === '/internal/native-reminders/claim') {
       const token = this.env.EMP002_RECONCILIATION_TOKEN?.trim();
       if (!token || request.headers.get('x-emp002-reconciliation-token') !== token) return Response.json({ok:false,error:'REMINDER_FORBIDDEN'},{status:403});
