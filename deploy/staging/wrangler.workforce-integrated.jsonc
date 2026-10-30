@@ -1,38 +1,59 @@
+// I2 candidate for a NEW isolated Worker and new namespaces only. Not an upgrade manifest.
+// Requires reviewed Access configuration and a dedicated STAGING_DO_BOUNDARY_KEY secret.
+// No resource creation, secret installation, or deployment is authorized by this file.
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "herreb-workforce-integrated-staging",
   "main": "../../src/staging/workforce-integrated-entry.ts",
   "compatibility_date": "2026-06-11",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "workers_dev": false,
-  "ai": { "binding": "AI", "remote": true },
+  "ai": {
+    "binding": "AI",
+    "remote": true
+  },
   "assets": {
     "directory": "../../dist/client",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
     "run_worker_first": true
   },
-  "build": { "command": "npm run build:console" },
+  "build": {
+    "command": "npm run build:console"
+  },
   "durable_objects": {
     "bindings": [
-      { "class_name": "ChatAgent", "name": "ChatAgent" },
-      { "class_name": "EMP002Operations", "name": "EMP002_OPERATIONS" },
-      { "class_name": "WorkforceAdminState", "name": "WORKFORCE_ADMIN_STATE" },
-      { "class_name": "EMP003CampaignState", "name": "EMP003_CAMPAIGN_STATE" }
+      {
+        "class_name": "EMP002Operations",
+        "name": "EMP002_OPERATIONS"
+      },
+      {
+        "class_name": "EMP003CampaignState",
+        "name": "EMP003_CAMPAIGN_STATE"
+      }
     ]
   },
   "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["ChatAgent"] },
-    { "tag": "v2", "new_sqlite_classes": ["EMP002Operations"] },
-    { "tag": "v3", "new_sqlite_classes": ["WorkforceAdminState"] },
-    { "tag": "v4", "new_sqlite_classes": ["EMP003CampaignState"] }
+    {
+      "tag": "integrated-i2-v1",
+      "new_sqlite_classes": [
+        "EMP002Operations",
+        "EMP003CampaignState"
+      ]
+    }
   ],
-  "d1_databases": [
-    { "binding": "DB", "database_name": "herreb-workforce-staging-db", "database_id": "488f4829-bee4-4e0a-8ecd-bd4a1ced71b4" }
-  ],
-  "kv_namespaces": [
-    { "binding": "STAGING_KV", "id": "0c24a032442d47adb30dfc8dbf72b010" }
-  ],
-  "browser": { "binding": "BROWSER" },
-  "observability": { "enabled": true, "logs": { "enabled": true, "invocation_logs": true } }
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    }
+  },
+  "preview_urls": false,
+  "routes": [],
+  "triggers": {
+    "crons": []
+  }
 }

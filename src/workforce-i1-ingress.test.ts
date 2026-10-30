@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { authorizeBoundary } from "./staging/workforce-do-boundary";
 import { readFileSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { handleEMP003CopyDO } from "./runtime/emp003-copy-do";
@@ -27,6 +28,15 @@ for (const match of source.matchAll(
 const actual = new Set(["./runtime/emp003-copy-routes"]);
 const hook = registerHooks({
   resolve(specifier, context, next) {
+    if (specifier === "cloudflare:workers")
+      return {
+        url:
+          "data:text/javascript," +
+          encodeURIComponent(
+            "export class DurableObject { constructor(ctx,env){this.ctx=ctx;this.env=env;} }"
+          ),
+        shortCircuit: true
+      };
     if (
       context.parentURL?.endsWith("/src/worker.ts") &&
       !actual.has(specifier)
@@ -88,8 +98,25 @@ test("Integrated ingress → real Worker → Access BFF→tenant DO→generation
       get(id: unknown) {
         const f = id === "tenant-a" ? a : b;
         return {
-          fetch: (request: Request) =>
-            handleEMP003CopyDO(
+          fetch: async (request: Request) => {
+            const permitted = await authorizeBoundary(
+              request,
+              {
+                id: { toString: () => String(id) },
+                storage: f.storage
+              } as unknown as DurableObjectState,
+              {
+                STAGING_DO_BOUNDARY_KEY:
+                  "local-test-key-only-never-deployed-12345",
+                EMP003_CAMPAIGN_STATE: {
+                  idFromName: (name: string) => ({ toString: () => name })
+                } as DurableObjectNamespace
+              },
+              "marketing"
+            );
+            if (!permitted)
+              return Response.json({ ok: false }, { status: 403 });
+            return handleEMP003CopyDO(
               request,
               f.storage as unknown as DurableObjectStorage,
               {
@@ -107,7 +134,8 @@ test("Integrated ingress → real Worker → Access BFF→tenant DO→generation
                   };
                 }
               }
-            )
+            );
+          }
         };
       }
     }
@@ -131,6 +159,7 @@ test("Integrated ingress → real Worker → Access BFF→tenant DO→generation
   globalThis.fetch = authn.fetcher;
   const integratedEnv = {
     ...env,
+    STAGING_DO_BOUNDARY_KEY: "local-test-key-only-never-deployed-12345",
     STAGING_ACCESS_TEAM_DOMAIN: env.WORKFORCE_ACCESS_TEAM_DOMAIN,
     STAGING_ACCESS_AUDIENCE: env.WORKFORCE_ACCESS_AUDIENCE,
     STAGING_IDENTITY_MAP_JSON: env.ACCESS_IDENTITY_MAP_JSON
@@ -149,6 +178,22 @@ test("Integrated ingress → real Worker → Access BFF→tenant DO→generation
         new Request("https://pilot.test/api/emp003/assets" + path, { method })
       );
       assert.equal(denied.status, 404);
+    }
+    for (const name of [
+      "x-herreb-internal-tenant-id",
+      "x-herreb-internal-role",
+      "x-emp003-copy-actor",
+      "x-workforce-do-capability",
+      "x-emp002-reconciliation-token"
+    ]) {
+      assert.equal(
+        (
+          await run(
+            request("/brand-brain", authn.a, undefined, { [name]: "forged" })
+          )
+        ).status,
+        403
+      );
     }
     assert.equal((await run(request("/brand-brain"))).status, 200);
     assert.equal(

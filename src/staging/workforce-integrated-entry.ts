@@ -1,18 +1,22 @@
 import employeeWorker from "../worker";
 import { readWorkforceAdminAccessActor } from "../runtime/workforce-admin-access-read";
+import {
+  scopeBoundaryNamespace,
+  type BoundaryActor,
+  type BoundaryEnv
+} from "./workforce-do-boundary";
 export {
-  ChatAgent,
   EMP002Operations,
-  WorkforceAdminState,
   EMP003CampaignState
-} from "../worker";
+} from "./workforce-durable-objects";
 
-type StagingEnv = Env & {
-  STAGING_ACCESS_TEAM_DOMAIN?: string;
-  STAGING_ACCESS_AUDIENCE?: string;
-  STAGING_IDENTITY_MAP_JSON?: string;
-  ASSETS?: { fetch(request: Request): Promise<Response> };
-};
+type StagingEnv = Env &
+  BoundaryEnv & {
+    STAGING_ACCESS_TEAM_DOMAIN?: string;
+    STAGING_ACCESS_AUDIENCE?: string;
+    STAGING_IDENTITY_MAP_JSON?: string;
+    ASSETS?: { fetch(request: Request): Promise<Response> };
+  };
 const allowed = new Map<string, Set<string>>([
   ...["", "/content", "/context", "/status", "/approval", "/brand-brain"].map(
     (suffix): [string, Set<string>] => [
@@ -49,6 +53,23 @@ export default {
       request.headers.get("connection")?.toLowerCase().includes("upgrade")
     )
       return denied(403, "STAGING_UPGRADE_DENIED");
+    if (
+      [...request.headers.keys()].some(
+        (k) =>
+          k.startsWith("x-herreb-internal-") ||
+          k.startsWith("x-emp003-copy-") ||
+          k.startsWith("x-workforce-do-") ||
+          k === "x-emp002-reconciliation-token"
+      )
+    )
+      return denied(403, "STAGING_CLIENT_CONTEXT_DENIED");
+    if (
+      request.method === "POST" &&
+      (request.headers.get("sec-fetch-site") === "cross-site" ||
+        (request.headers.has("origin") &&
+          request.headers.get("origin") !== url.origin))
+    )
+      return denied(403, "STAGING_ORIGIN_DENIED");
     const methods = allowed.get(url.pathname);
     const asset =
       (request.method === "GET" || request.method === "HEAD") &&
@@ -74,8 +95,13 @@ export default {
       WORKFORCE_PLATFORM_ADMIN_TOKEN: undefined,
       WORKFORCE_PLATFORM_ADMIN_ACTOR_ID: undefined
     };
+    let actor: BoundaryActor;
     try {
-      const actor = await readWorkforceAdminAccessActor(request, isolatedEnv);
+      const verified = await readWorkforceAdminAccessActor(
+        request,
+        isolatedEnv
+      );
+      actor = verified as BoundaryActor;
       if (
         !["owner", "user"].includes(actor.role) ||
         !actor.actorId ||
@@ -101,6 +127,26 @@ export default {
       headers.set("cache-control", "private, no-store");
       return new Response(response.body, { status: response.status, headers });
     }
-    return employeeWorker.fetch(request, isolatedEnv as Env, ctx);
+    if (
+      !env.STAGING_DO_BOUNDARY_KEY ||
+      new TextEncoder().encode(env.STAGING_DO_BOUNDARY_KEY).length < 32
+    )
+      return denied(503, "STAGING_BOUNDARY_NOT_CONFIGURED");
+    // Bind fresh capabilities to the independently authenticated request actor.
+    const scopedEnv = {
+      ...isolatedEnv,
+      EMP002_OPERATIONS: env.EMP002_OPERATIONS
+        ? scopeBoundaryNamespace(env.EMP002_OPERATIONS, env, actor, "calendar")
+        : undefined,
+      EMP003_CAMPAIGN_STATE: env.EMP003_CAMPAIGN_STATE
+        ? scopeBoundaryNamespace(
+            env.EMP003_CAMPAIGN_STATE,
+            env,
+            actor,
+            "marketing"
+          )
+        : undefined
+    };
+    return employeeWorker.fetch(request, scopedEnv as unknown as Env, ctx);
   }
 };
