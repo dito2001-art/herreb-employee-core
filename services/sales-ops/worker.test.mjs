@@ -6,6 +6,7 @@ import worker from './worker.js';
 function fixture() {
  const db = new DatabaseSync(':memory:');
  db.exec(`CREATE TABLE tenants(id TEXT PRIMARY KEY,active INT); CREATE TABLE products(sku TEXT,tenant_id TEXT,name TEXT,active INT,stock_qty INT); CREATE TABLE quotes(id TEXT,tenant_id TEXT,customer_id TEXT,status TEXT,quote_json TEXT,total_gs INT); CREATE TABLE orders(id TEXT PRIMARY KEY,tenant_id TEXT,customer_id TEXT,quote_id TEXT,status TEXT,total_gs INT,created_at TEXT,updated_at TEXT,evidence_json TEXT); CREATE TABLE order_lines(id TEXT PRIMARY KEY,tenant_id TEXT,order_id TEXT,sku TEXT,name TEXT,qty INT,unit_price_gs INT,line_total_gs INT); CREATE TABLE audit_log(id TEXT PRIMARY KEY,tenant_id TEXT,ts TEXT,actor TEXT,action TEXT,entity_type TEXT,entity_id TEXT,payload_json TEXT);`);
+ db.exec(readFileSync(new URL('./migrations/0000_tenant_operations.sql',import.meta.url),'utf8'));
  db.exec(readFileSync(new URL('./migrations/0001_order_create_operations.sql',import.meta.url),'utf8'));
  for(const tenant of ['tenant-a','tenant-b']) {
  db.prepare('INSERT INTO tenants VALUES(?,1)').run(tenant);
@@ -72,4 +73,18 @@ test('authenticated health and OPTIONS retain previous responses',async()=>{
  assert.equal((await health.json()).status,'ok');
  const preflight=await worker.fetch(new Request('https://sales.test/api/v1/orders',{method:'OPTIONS',headers}),f.env);
  assert.equal(preflight.status,204);
+});
+
+test('tenant operations GET is read-only and PUT persists without runtime DDL',async()=>{
+ const f=fixture();
+ const headers={authorization:'Bearer a','x-tenant-id':'tenant-a','content-type':'application/json'};
+ const url='https://sales.test/api/v1/tenant-operations';
+ const before=f.db.prepare('SELECT count(*) AS n FROM sqlite_schema WHERE type=? AND name=?').get('table','tenant_operations').n;
+ assert.equal(before,1);
+ const get=await worker.fetch(new Request(url,{headers}),f.env);
+ assert.equal(get.status,200);
+ const put=await worker.fetch(new Request(url,{method:'PUT',headers,body:JSON.stringify({operations:{enabled:true}})}),f.env);
+ assert.equal(put.status,200);
+ assert.deepEqual((await (await worker.fetch(new Request(url,{headers}),f.env)).json()).operations,{enabled:true});
+ assert.equal(f.db.prepare('SELECT count(*) AS n FROM sqlite_schema WHERE type=? AND name=?').get('table','tenant_operations').n,1);
 });
