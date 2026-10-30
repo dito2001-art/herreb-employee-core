@@ -1,0 +1,36 @@
+name: Validate Workforce I3.1
+on:
+  pull_request:
+    branches: [fix/workforce-i21-capability-expiry]
+    paths:
+      - 'src/staging/workforce-access-gateway.ts'
+      - 'src/staging/workforce-access-gateway.test.ts'
+      - 'deploy/staging/wrangler.workforce-gateway.jsonc'
+      - '.github/workflows/validate-workforce-i31.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Verify exact SHA
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts
+      - name: Gateway and integrated ingress tests
+        run: node --import tsx --test src/staging/workforce-access-gateway.test.ts src/staging/workforce-integrated-entry.test.ts
+      - name: TypeScript
+        run: npx --no-install tsc --noEmit
+      - name: Lint
+        run: npx --no-install oxlint src/staging/workforce-access-gateway.ts src/staging/workforce-access-gateway.test.ts
+      - name: Portal build
+        run: npm run build:console
