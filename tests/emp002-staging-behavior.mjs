@@ -43,10 +43,12 @@ try{
  assert.equal((await call('/internal/native-reminders/execute',token('a@example.test'))).status,404);
  assert.equal((await call('/webhooks/meta/whatsapp',token('a@example.test'))).status,404);
  results.push('privileged routes denied: PASS');
- const a=await call('/staging/emp002/calendar',token('a@example.test'),{operation:'read',id:'b-secret'});
- const b=await call('/staging/emp002/calendar',token('b@example.test'),{operation:'read',id:'b-secret'});
- assert.equal(a.status,404);
- assert.equal(b.status,404);
+ const a=await call('/staging/emp002/calendar',token('a@example.test'),{operation:'get',id:'b-secret'});
+ const b=await call('/staging/emp002/calendar',token('b@example.test'),{operation:'get',id:'b-secret'});
+ assert.equal(a.status,200);
+ assert.equal(b.status,200);
+ assert.equal((await a.json()).entry,null);
+ assert.equal((await b.json()).entry,null);
  results.push('two signed Access tenants independently scoped: PASS');
  const ns=await mf.getDurableObjectNamespace('EMP002_OPERATIONS');
  const stub=ns.get(ns.idFromName('tenant:tenant-a'));
