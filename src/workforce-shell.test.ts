@@ -60,11 +60,18 @@ test(
       await flush();
     };
     try {
-      await act(async () =>
-        root.render(
-          createElement(WorkforceShell, {
-            assistant: createElement("p", null, "Assistant")
-          })
+      await act(async () => root.render(createElement(WorkforceShell)));
+      await click("EMP-002");
+      assert.match(
+        document.body.textContent!,
+        /Chat del asistente no conectado/
+      );
+      assert.doesNotMatch(document.body.textContent!, /Assistant/);
+      await click("Admin");
+      assert.match(document.body.textContent!, /Administración no habilitada/);
+      assert.ok(
+        !requests.some(
+          (path) => path.includes("/api/admin/") || path.includes("/agents/")
         )
       );
       await click("EMP-001");
