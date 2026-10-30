@@ -1,32 +1,28 @@
-# EMP-002 — Matriz de evidencia para GO dual
+# EMP-002 — Matriz final para revisión independiente de GO dual
 
-Base de código: PR #321 SHA `19e8ab4671084d0f345831eb6a610363fe55da53`. Preparación: PR #322. Fecha de corte: 2026-10-30 UTC.
+Auditoría: 30/10/2026. Base congelada #322 `e6257b14ab6674941d44e0bdc3b472f1ca00d74c`; dependencia funcional #321 `19e8ab4671084d0f345831eb6a610363fe55da53`. El correctivo se presenta en PR separado contra #322. Su HEAD exacto figura en el PR y en el paso `Verify exact candidate SHA`; ningún GO se hereda entre SHA.
 
-| Gate | Evidencia disponible | Falta para GO | Responsable | Dictamen |
-|---|---|---|---|---|
-| DO real local | [Miniflare #40986429886](https://github.com/dito2001-art/herreb-employee-core/actions/runs/40986429886), 5 grupos PASS, 14 Node PASS, tsc PASS | No repetir; no sustituye Cloudflare real | WF-02 | LOCAL GO |
-| Identidad A/B | Harness usa tenants A/B sintéticos; sin Access real | issuer/AUD/JWKS, actores reales separados, JWT validado, pruebas deny-by-default | WF-01 | NO-GO |
-| DO SQLite staging | `EMP002Operations` y migración SQLite `new_sqlite_classes` en esqueleto | DO staging real exclusivo, migración compatible, bindings efectivos y read-back | WF-01 | NO-GO |
-| D1/KV/Queue | Recursos staging mencionados en Issue #281; no evidencia de uso directo obligatorio en ruta de recordatorios | inventario de dependencias y bindings efectivos; no agregar recursos innecesarios | WF-01 | NO-GO |
-| Service bindings | Producción referencia EMP001, SALES_OPS, CRM_CAPABILITY, CALENDAR_READ | no conectar destinos productivos; identificar cuáles necesita el E2E y sustituir por staging autorizado | WF-01/WF-04 | NO-GO |
-| Calendario nativo | API y pruebas de código existentes | crear/editar/consultar/cancelar, reload y GET independiente con identidad Access real | WF-02 | NO-GO |
-| Recordatorios | Miniflare: cancel-before, concurrency, UNKNOWN timeout, cancel-after, SENT read-back, A/B PASS | repetir solo E2E staging autorizado; verificar persistencia y respuesta real | WF-02 | NO-GO |
-| Meta sandbox | Mock local, cero Meta real | cuenta/número sandbox, destinatarios autorizados, bloqueo efectivo de egress hasta autorización explícita | WF-01/WF-02 | NO-GO |
-| Reconciliación | `/internal/native-reminders/status` y `/reconcile` existentes | evidencia autoritativa externa antes de reconciliar UNKNOWN; operador y auditoría | WF-02/WF-04 | NO-GO |
-| Observabilidad | Wrangler productivo tiene observabilidad; esqueleto la declara | logs efectivos sanitizados, correlación, conteos y stop conditions | WF-01/WF-04 | NO-GO |
-| Rollback | Procedimiento documentado en runbook | versión staging previa verificable, compatibilidad migraciones SQLite, read-back post-rollback | WF-04 | NO-GO |
-| GO dual | Solicitud [PR #322](https://github.com/dito2001-art/herreb-employee-core/pull/322#issuecomment-6512787813) | SECURITY GO escrito WF-01 + RELEASE GO escrito WF-04 sobre SHA y entorno exactos + autorización owner | WF-01/WF-04/Owner | NO-GO |
+**Alcance G0 solicitado:** primer staging EMP-002 aislado para calendario nativo y lectura de estado de recordatorios. Sin ejecución, claim, reconciliación, webhook, cron, Meta real ni otras áreas del Workforce. Paquete completo: [security-release-review-package.md](security-release-review-package.md).
 
-**Control crítico:** no existe evidencia de que una variable `EMP002_STAGING_SEND_DISABLED` bloquee outbound; fue retirada del esqueleto. La prevención efectiva exige no desplegar, no exponer rutas y, cuando se autorice un staging, controlar explícitamente el egress y el ejecutor. Ningún GO de EMP-003 sirve para EMP-002.
+| Gate | Evidencia verificable | Límite / falta exacta | Responsable / estado |
+|---|---|---|---|
+| Base funcional #321 | [CI 40986429886 SUCCESS](https://github.com/dito2001-art/herreb-employee-core/actions/runs/40986429886), HEAD `19e8ab4…` | Evidencia local histórica; no se repitió esa suite Miniflare | WF-02: LOCAL PASS |
+| CI #322 | [CI 40987796399 SUCCESS](https://github.com/dito2001-art/herreb-employee-core/actions/runs/40987796399), [job 123842770209](https://github.com/dito2001-art/herreb-employee-core/actions/runs/40987796399/job/123842770209) | Checkout `93e02f85…` fue merge sintético; su tree y el del HEAD `e6257b1…` coinciden en `8482d6b368b23422e949e82bdfc5f4b4ab8d2d48`. No fue checkout directo del HEAD | WF-02: PASS de ese árbol, no del correctivo |
+| Procedencia CI del correctivo | Checkout por HEAD, comparación de SHA, acciones fijadas a los SHA observados en el CI previo, credenciales no persistidas; permisos contents:read; timeout 10 min; log de versiones | Revisar nuevo run del correctivo; ningún upload/deploy en ese workflow | WF-04: revisión pendiente |
+| JWT | Local workerd: firma alterada/ausente, AUD/issuer incorrectos, expiración y actor no registrado rechazados | Falta aplicación Access EMP-002 real exclusiva, issuer/AUD/JWKS confiables vigentes y política efectiva | WF-01: LOCAL PASS / REAL PENDIENTE |
+| Tenant A/B | Registros reales dentro del SQLite local de A y B; lectura propia, ausencia de lectura ajena, rechazo de escrituras con tenant ajeno e integridad posterior; reader separado | Son identidades RSA de fixture, no sesiones Access reales. Falta mapeo real autorizado y fixtures B provisionados por su propietario autorizado | WF-01/WF-02: LOCAL PASS / REAL PENDIENTE |
+| Roles | Usuario local `user` puede leer pero save devuelve 403; owners permanecen acotados a su tenant | Antes devolvía 200: defecto reproducido y corregido. Política y actores reales aún sin aprobar | WF-01: revisión pendiente |
+| Origen / formato / límites | POST de otro origen 403; no JSON 415; >64KiB UTF-8 413; cabeceras internas del cliente 403; read-back privado sin cache | Antes los tres primeros casos devolvían 200. Son pruebas locales, no HTTP Cloudflare | WF-01: LOCAL PASS |
+| DO directo | La subclase permite únicamente dos rutas POST; valida tenant contra el ID real de su namespace; rechaza execute/claim/reconcile/inbound/actions | Antes una escritura con tenant B en el stub A devolvía 200. Falta namespace Cloudflare nuevo y ausencia efectiva de bindings externos no autorizados | WF-01: LOCAL PASS / REAL PENDIENTE |
+| Meta | Token y número se eliminan del entorno de la subclase; rutas outbound denegadas; interceptor de salida local cuenta **cero intentos** | El interceptor es local. En Cloudflare verificar manifiesto efectivo, ausencia de credenciales/ejecutores/rutas/colas/cron. No se afirma firewall global de egress ni Meta real PASS | WF-01: revisión pendiente |
+| Publicación / superficie | Entrypoint dedicado, workers_dev:false, preview_urls:false, routes:[], crons:[], sin services ni recursos D1/KV/Queue en el esqueleto | Esqueleto NO DESPLEGABLE. Faltan nombre/cuenta/configuración definitiva y transporte privado o gateway Access aprobado. No agregar ruta pública para facilitar pruebas | WF-01/WF-04: NO-GO actual |
+| Bindings | Solo EMP002_OPERATIONS SQLite + migración emp002-staging-v1. Código G0 no necesita D1/KV/Queue, CRM, Google ni otros empleados | Verificar ausencia efectiva de esos bindings y datos de producción; los recursos históricos no acreditan conexión actual | WF-01: REAL PENDIENTE |
+| Observabilidad | Esqueleto declara logs; errores nuevos no exponen JWT, secretos ni contenido | Faltan política efectiva de logs, retención y evidencia sanitizada en entorno real | WF-01/WF-04: PENDIENTE |
+| Recuperación | Runbook separa primer staging de un rollback entre versiones existentes; preservar SQLite, detener ingreso y forward-fix revisado si no existe versión previa | No hay rollback Cloudflare probado ni versión previa EMP-002 certificada. No retroceder datos/migraciones | WF-04: PENDIENTE |
+| Decisiones | [Solicitud histórica](https://github.com/dito2001-art/herreb-employee-core/pull/322#issuecomment-6512787813) apuntaba a `b8e66f6…`, no al HEAD actual ni al correctivo | Nuevos SECURITY GO WF-01 y RELEASE GO WF-04 independientes sobre mismo SHA/configuración, más autorización owner específica | WF-01/WF-04/Owner: NO-GO actual |
 
-**Decisión:** LOCAL GO, STAGING NO-GO, RELEASE NO-GO. EMP-001/003 NO-GO. Sin merge, deploy, RPC Cloudflare, cron ni Meta real.
+## Hallazgo histórico cerrado, sin atribuir GO
 
-## Hallazgo estático bloqueante — entrypoint compartido
+La versión anterior de esta matriz decía que el esqueleto aún apuntaba a `../src/worker.ts`. En `e6257b1…` ya apunta a `./emp002-entry.ts`; esa afirmación estaba desactualizada. El entrypoint exclusivo y la subclase existen y se auditaron. Esto cierra ese hallazgo de código, no la configuración efectiva ni la certificación Access real.
 
-El esqueleto `staging/emp002.wrangler.preflight.jsonc` referencia `../src/worker.ts`, el entrypoint compartido de producción. Auditoría del código en SHA base: `src/worker.ts` también maneja `/api/internal/emp003/*`, `/api/internal/emp002/north-star/*`, `/api/internal/emp002/e2e` y `/webhooks/*`. **`workers_dev:false` y `routes:[]` no prueban que esas rutas estén inaccesibles por service bindings, previews o futuras rutas.** El esqueleto no es apto para deploy ni para autorización de staging.
-
-**Acción WF-02 antes de solicitar GO:** diseñar entrypoint exclusivo EMP-002 con allowlist explícita de operaciones autorizadas, autenticación Access verificada en el borde y denegación de rutas ajenas. Asegurar que ninguna llamada de prueba alcance Meta sin mock/egress guard efectivo. Auditar `src/worker.ts` y sus handlers; no asumir que `ACCESS_IDENTITY_MAP_JSON` vacío constituye un control suficiente.
-
-**Acción WF-01:** certificar por lectura los caminos de acceso efectivos, incluida invocación M2M y previews, y validar el entrypoint exclusivo y sus bindings; sin esta evidencia, SECURITY NO-GO.
-
-**Acción WF-04:** rechazar cualquier GO sobre el esqueleto actual; exigir diff revisado del entrypoint, revisión independiente y autorización owner. No inferir que la CI del PR #321 certifica la configuración del PR #322.
+**Decisión de esta auditoría:** preparación local corregida y paquete revisable. **SECURITY GO no emitido; RELEASE GO no emitido; STAGING NO-GO** hasta los gates enumerados. No se ejecutó merge, deploy, Cloudflare RPC, cron ni Meta real. No se intervino EMP-001/003.
