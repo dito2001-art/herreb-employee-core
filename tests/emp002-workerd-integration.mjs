@@ -7,7 +7,7 @@ const manifests=['tenant-a','tenant-b'].map((tenant,i)=>({tenantId:tenant,whatsa
 const mf=new Miniflare({
  modules:[{type:'ESModule',path:'emp002-test.mjs',contents:compiled.outputFiles[0].text}],
  compatibilityDate:'2026-06-11',compatibilityFlags:['nodejs_compat'],
- durableObjects:{EMP002_OPERATIONS:'EMP002Operations'},
+ durableObjects:{EMP002_OPERATIONS:{className:'EMP002Operations',useSQLite:true}},
  durableObjectsPersist:false,
  bindings:{EMP002_RECONCILIATION_TOKEN:'local-only-token',TENANT_MANIFESTS_JSON:JSON.stringify(manifests),META_ACCESS_TOKEN:'LOCAL_FAKE_NO_REAL_NETWORK',META_PHONE_NUMBER_ID:'LOCAL_FAKE',META_GRAPH_VERSION:'v26.0'},
 });
