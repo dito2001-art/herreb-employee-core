@@ -1,0 +1,25 @@
+name: Validate EMP002 Native Reminders
+on:
+  pull_request:
+    paths:
+      - 'src/runtime/emp002-native-reminder-store*'
+      - 'src/runtime/emp002-reminder-do-auth.test.ts'
+      - 'src/runtime/emp002-operations.ts'
+      - '.github/workflows/validate-emp002-native-reminders.yml'
+  workflow_dispatch:
+jobs:
+  native-reminder-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Native reminder state and DO authorization tests
+        run: npx --yes tsx@4.23.13 --test src/runtime/emp002-native-reminder-store.test.ts src/runtime/emp002-reminder-do-auth.test.ts
+      - name: TypeScript
+        run: npx tsc --noEmit
