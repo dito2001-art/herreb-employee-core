@@ -57,3 +57,18 @@ test('authorized tenant DO rejects missing reminder-owner configuration without 
   assert.match(JSON.stringify(await response.json()),/EMP002_REMINDER_TENANT_NOT_UNIQUE/);
  } finally {db.close();}
 });
+
+test('independent status read-back requires matching named DO and internal token', async () => {
+ const {operations,db}=createOperations('tenant:tenant-a');
+ try {
+  const url='https://emp002.operations/internal/native-reminders/status';
+  const body=JSON.stringify({id:'event-1',version:1});
+  const headers={'x-herreb-internal-tenant-id':'tenant-a','x-emp002-reconciliation-token':'test-only-secret','content-type':'application/json'};
+  const absent=await operations.fetch(new Request(url,{method:'POST',headers,body}));
+  assert.equal(absent.status,404);
+  const forbidden=await operations.fetch(new Request(url,{method:'POST',headers:{...headers,'x-emp002-reconciliation-token':'wrong'},body}));
+  assert.equal(forbidden.status,403);
+  const mismatched=await operations.fetch(new Request(url,{method:'POST',headers:{...headers,'x-herreb-internal-tenant-id':'tenant-b'},body}));
+  assert.equal(mismatched.status,403);
+ } finally {db.close();}
+});
