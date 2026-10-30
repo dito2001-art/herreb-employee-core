@@ -76,6 +76,15 @@ export class EMP002Operations implements DurableObject {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === 'GET' && url.pathname === '/health') return Response.json({ ok: true, service: 'EMP002Operations' });
+    // A supplied tenant header is not proof of DO ownership. Named DO identity
+    // must agree with the requested tenant before any reminder read or mutation.
+    if (request.method === 'POST' && url.pathname.startsWith('/internal/native-reminders/')) {
+      const tenantId=request.headers.get('x-herreb-internal-tenant-id')?.trim()??'';
+      if (!tenantId || this.state.id?.name !== `tenant:${tenantId}`) {
+        return Response.json({ok:false,error:'EMP002_REMINDER_DO_TENANT_MISMATCH'},{status:403});
+      }
+    }
+
 
     if (request.method === 'POST' && url.pathname === '/internal/meta-reconcile') {
       // A distinct secret, never the tenant header, authenticates the operator gateway.
