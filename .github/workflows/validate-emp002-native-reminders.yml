@@ -21,5 +21,9 @@ jobs:
       - run: npm ci
       - name: Native reminder state and DO authorization tests
         run: npx --yes tsx@4.23.13 --test src/runtime/emp002-native-reminder-store.test.ts src/runtime/emp002-reminder-do-auth.test.ts
+      - name: Install isolated workerd harness dependencies
+        run: npm install --no-save --package-lock=false miniflare@4 esbuild@0.25
+      - name: Real workerd Durable Object A/B integration (Meta mock only)
+        run: node tests/emp002-workerd-integration.mjs
       - name: TypeScript
         run: npx tsc --noEmit
