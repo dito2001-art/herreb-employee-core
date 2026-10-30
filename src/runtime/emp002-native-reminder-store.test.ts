@@ -44,3 +44,20 @@ test('provider-confirmed delivery transitions UNKNOWN to SENT once',()=>{
   assert.throws(()=>store.markSent(tenant,'event-1',1,'wamid.provider-1234'),/STATE_CONFLICT/);
   assert.equal(store.due(tenant,'2026-10-29T14:00:00.000Z').length,0);
 });
+
+test('tenant B cannot claim or reconcile tenant A reminder',()=>{
+  const db=new DatabaseSync(':memory:');
+  const store=new NativeReminderStore(db as never);
+  store.replace(entry(1),'595981123456');
+  assert.equal(store.due('tenant-b','2026-10-29T14:00:00.000Z').length,0);
+  assert.throws(()=>store.claim('tenant-b','event-1',1,{...entry(1),tenantId:'tenant-b'},'2026-10-29T14:00:00.000Z'),/CLAIMED/);
+  assert.throws(()=>store.reconcile('tenant-b','event-1',1,'wamid.test-1234','provider-receipt-001','operator'),/CONFLICT/);
+  assert.equal(store.due(tenant,'2026-10-29T14:00:00.000Z').length,1);
+});
+test('a stale calendar version cannot be sent and remains pending for reconciliation',()=>{
+  const db=new DatabaseSync(':memory:');
+  const store=new NativeReminderStore(db as never);
+  store.replace(entry(1),'595981123456');
+  assert.throws(()=>store.claim(tenant,'event-1',1,entry(2),'2026-10-29T14:00:00.000Z'),/STALE/);
+  assert.equal(store.due(tenant,'2026-10-29T14:00:00.000Z').length,1);
+});
