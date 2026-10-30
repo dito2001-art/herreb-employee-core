@@ -1,11 +1,10 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { Button, Badge } from "@cloudflare/kumo";
 import {
   ChatCircleDotsIcon,
   GearIcon,
   MegaphoneIcon
 } from "@phosphor-icons/react";
-import { WorkforceAdminPanel } from "./workforce-admin-panel";
 import { EMP002CalendarDashboard } from "./emp002-calendar-dashboard";
 import { EMP001SalesDashboard } from "./emp001-sales-dashboard";
 import { EMP003Workspace } from "./emp003-workspace";
@@ -17,8 +16,8 @@ export type WorkforceView =
   | "calendar"
   | "sales";
 
-export function WorkforceShell({ assistant }: { assistant: ReactNode }) {
-  const [view, setView] = useState<WorkforceView>("assistant");
+export function WorkforceShell() {
+  const [view, setView] = useState<WorkforceView>("calendar");
 
   return (
     <div className="h-screen flex flex-col bg-kumo-elevated">
@@ -75,7 +74,13 @@ export function WorkforceShell({ assistant }: { assistant: ReactNode }) {
       </nav>
       <main className="min-h-0 flex-1">
         {view === "assistant" ? (
-          assistant
+          <section aria-label="Capacidad no disponible" className="p-5">
+            <h2>Chat del asistente no conectado</h2>
+            <p>
+              Usá Agenda y tareas para consultar y gestionar el calendario
+              nativo. Este ingreso no habilita chat ni recordatorios WhatsApp.
+            </p>
+          </section>
         ) : view === "sales" ? (
           <div className="max-w-5xl mx-auto p-5 overflow-y-auto h-full">
             <EMP001SalesDashboard />
@@ -89,9 +94,13 @@ export function WorkforceShell({ assistant }: { assistant: ReactNode }) {
             <EMP003Workspace />
           </div>
         ) : (
-          <div className="max-w-5xl mx-auto p-5 overflow-y-auto h-full">
-            <WorkforceAdminPanel />
-          </div>
+          <section aria-label="Capacidad no disponible" className="p-5">
+            <h2>Administración no habilitada</h2>
+            <p>
+              La configuración y los permisos requieren un ingreso de
+              administración autorizado.
+            </p>
+          </section>
         )}
       </main>
     </div>

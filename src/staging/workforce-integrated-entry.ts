@@ -1,6 +1,11 @@
 import employeeWorker from "../worker";
 import { readWorkforceAdminAccessActor } from "../runtime/workforce-admin-access-read";
-export { ChatAgent, EMP002Operations, WorkforceAdminState, EMP003CampaignState } from "../worker";
+export {
+  ChatAgent,
+  EMP002Operations,
+  WorkforceAdminState,
+  EMP003CampaignState
+} from "../worker";
 
 type StagingEnv = Env & {
   STAGING_ACCESS_TEAM_DOMAIN?: string;
@@ -9,6 +14,16 @@ type StagingEnv = Env & {
   ASSETS?: { fetch(request: Request): Promise<Response> };
 };
 const allowed = new Map<string, Set<string>>([
+  ...["", "/content", "/context", "/status", "/approval", "/brand-brain"].map(
+    (suffix): [string, Set<string>] => [
+      "/api/emp003/assets" + suffix,
+      new Set(["GET"])
+    ]
+  ),
+  ...["/generate", "/edit", "/approve"].map((suffix): [string, Set<string>] => [
+    "/api/emp003/assets" + suffix,
+    new Set(["POST"])
+  ]),
   ["/api/emp001/operations", new Set(["GET"])],
   ["/api/emp002/calendar", new Set(["POST"])],
   ["/api/emp003/operations", new Set(["GET"])],
@@ -17,22 +32,38 @@ const allowed = new Map<string, Set<string>>([
   ["/api/emp003/generate-campaign", new Set(["POST"])]
 ]);
 const denied = (status: number, error: string) =>
-  Response.json({ ok: false, error }, { status, headers: { "cache-control": "no-store" } });
+  Response.json(
+    { ok: false, error },
+    { status, headers: { "cache-control": "no-store" } }
+  );
 
 export default {
-  async fetch(request: Request, env: StagingEnv, ctx: ExecutionContext): Promise<Response> {
+  async fetch(
+    request: Request,
+    env: StagingEnv,
+    ctx: ExecutionContext
+  ): Promise<Response> {
     const url = new URL(request.url);
-    if (request.headers.get("upgrade") || request.headers.get("connection")?.toLowerCase().includes("upgrade"))
+    if (
+      request.headers.get("upgrade") ||
+      request.headers.get("connection")?.toLowerCase().includes("upgrade")
+    )
       return denied(403, "STAGING_UPGRADE_DENIED");
     const methods = allowed.get(url.pathname);
-    const asset = (request.method === "GET" || request.method === "HEAD") &&
-      (url.pathname === "/" || url.pathname === "/index.html" ||
-        /^\/assets\/[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*(?:\/[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*)*$/.test(url.pathname));
+    const asset =
+      (request.method === "GET" || request.method === "HEAD") &&
+      (url.pathname === "/" ||
+        url.pathname === "/index.html" ||
+        /^\/assets\/[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*(?:\/[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*)*$/.test(
+          url.pathname
+        ));
     if ((!methods || !methods.has(request.method)) && !asset)
       return denied(404, "STAGING_ROUTE_DISABLED");
-    if (!env.STAGING_ACCESS_TEAM_DOMAIN?.trim() ||
-        !env.STAGING_ACCESS_AUDIENCE?.trim() ||
-        !env.STAGING_IDENTITY_MAP_JSON?.trim())
+    if (
+      !env.STAGING_ACCESS_TEAM_DOMAIN?.trim() ||
+      !env.STAGING_ACCESS_AUDIENCE?.trim() ||
+      !env.STAGING_IDENTITY_MAP_JSON?.trim()
+    )
       return denied(503, "STAGING_ACCESS_NOT_CONFIGURED");
     const isolatedEnv = {
       ...env,
@@ -45,7 +76,11 @@ export default {
     };
     try {
       const actor = await readWorkforceAdminAccessActor(request, isolatedEnv);
-      if (!["owner", "user"].includes(actor.role) || !actor.actorId || !actor.tenantId)
+      if (
+        !["owner", "user"].includes(actor.role) ||
+        !actor.actorId ||
+        !actor.tenantId
+      )
         return denied(403, "STAGING_ACTOR_FORBIDDEN");
     } catch {
       return denied(401, "STAGING_ACCESS_DENIED");
@@ -54,8 +89,13 @@ export default {
       if (!env.ASSETS) return denied(503, "STAGING_ASSETS_UNAVAILABLE");
       const response = await env.ASSETS.fetch(request);
       // Do not return the SPA fallback as a successful missing asset.
-      if (url.pathname.startsWith("/assets/") &&
-          response.headers.get("content-type")?.toLowerCase().includes("text/html"))
+      if (
+        url.pathname.startsWith("/assets/") &&
+        response.headers
+          .get("content-type")
+          ?.toLowerCase()
+          .includes("text/html")
+      )
         return denied(404, "STAGING_ASSET_NOT_FOUND");
       const headers = new Headers(response.headers);
       headers.set("cache-control", "private, no-store");

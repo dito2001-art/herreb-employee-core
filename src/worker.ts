@@ -1,4 +1,5 @@
 import employeeServer from './server';
+import { handleEMP003CopyAssets } from './runtime/emp003-copy-routes';
 import { handleEMP001BrowserSales } from './runtime/emp001-browser-sales';
 import { handleEMP002BrowserCalendar } from './runtime/emp002-browser-calendar';
 import { handleEMP003BrowserCampaign } from './runtime/emp003-browser-campaign';
@@ -42,6 +43,7 @@ export { EMP003CampaignState } from './runtime/emp003-campaign-state';
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url); const runtimeEnv = env as WorkerEnv;
+    if (url.pathname === '/api/emp003/assets' || url.pathname.startsWith('/api/emp003/assets/')) return handleEMP003CopyAssets(request, runtimeEnv);
     if (url.pathname === '/api/emp003/generate-campaign') return handleEMP003BrowserGenerate(request, runtimeEnv);
     if (url.pathname === '/api/emp001/operations') return handleEMP001BrowserSales(request, runtimeEnv);
     if (url.pathname === '/api/emp002/calendar') return handleEMP002BrowserCalendar(request, runtimeEnv);
