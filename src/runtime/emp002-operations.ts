@@ -151,13 +151,10 @@ export class EMP002Operations implements DurableObject {
             results.push({id:action.calendar_id,version:action.calendar_version,status:'NOT_SENT',error:error instanceof Error?error.message:'CLAIM_FAILED'});
             continue;
           }
-          // Recheck the calendar immediately before transport construction. This
-          // narrows the claim-to-send race but does not certify atomicity across Meta.
-          const latest=this.nativeCalendar.get(tenantId,action.calendar_id);
-          if(!latest || latest.version!==action.calendar_version || latest.status!=='ACTIVE' || !latest.reminderAt || new Date(latest.reminderAt).toISOString()!==action.due_at) {
-            results.push({id:action.calendar_id,version:action.calendar_version,status:'UNKNOWN',error:'EMP002_REMINDER_CHANGED_AFTER_CLAIM_RECONCILIATION_REQUIRED'});
-            continue;
-          }
+          // The durable UNKNOWN claim is the irreversible dispatch boundary.
+          // Later edits/cancellations may supersede the calendar version but cannot
+          // retract a message whose dispatch was already authorized. No lock is
+          // held across provider I/O; UNKNOWN is never automatically retried.
           // No network request occurs until UNKNOWN has committed.
           try {
             const transport=buildEMP002WhatsAppTransport(this.env,tenantId);
