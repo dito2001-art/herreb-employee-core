@@ -83,3 +83,15 @@ test('concurrent duplicate claims serialize to one UNKNOWN transition',()=>{
   }
   assert.equal(claimed,1);
 });
+
+test('cancellation after irreversible UNKNOWN claim never rearms old version',()=>{
+ const db=new DatabaseSync(':memory:');
+ const store=new NativeReminderStore(db as never);
+ store.replace(entry(1),'595981123456');
+ store.claim(tenant,'event-1',1,entry(1),'2026-10-29T14:00:00.000Z');
+ store.replace({...entry(2),status:'CANCELLED'});
+ assert.equal(store.due(tenant,'2026-10-29T14:00:00.000Z').length,0);
+ assert.throws(()=>store.claim(tenant,'event-1',1,entry(1),'2026-10-29T14:00:00.000Z'),/ALREADY_CLAIMED/);
+ // UNKNOWN requires provider evidence, even though the calendar was cancelled.
+ store.reconcile(tenant,'event-1',1,'wamid.test-1234','provider-receipt-001','operator');
+});
