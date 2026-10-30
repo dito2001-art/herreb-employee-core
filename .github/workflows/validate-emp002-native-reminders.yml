@@ -1,0 +1,29 @@
+name: Validate EMP002 Native Reminders
+on:
+  pull_request:
+    paths:
+      - 'src/runtime/emp002-native-reminder-store*'
+      - 'src/runtime/emp002-reminder-do-auth.test.ts'
+      - 'src/runtime/emp002-operations.ts'
+      - '.github/workflows/validate-emp002-native-reminders.yml'
+  workflow_dispatch:
+jobs:
+  native-reminder-tests:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Native reminder state and DO authorization tests
+        run: npx --yes tsx@4.23.13 --test src/runtime/emp002-native-reminder-store.test.ts src/runtime/emp002-reminder-do-auth.test.ts
+      - name: Install isolated workerd harness dependencies
+        run: npm install --no-save --package-lock=false miniflare@4 esbuild@0.28
+      - name: Real workerd Durable Object A/B integration (Meta mock only)
+        run: node tests/emp002-workerd-integration.mjs
+      - name: TypeScript
+        run: npx tsc --noEmit
