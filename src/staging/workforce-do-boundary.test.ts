@@ -408,3 +408,35 @@ test("calendar DO permits native CAS/readback only, rejects direct RPC-shaped ca
     f.db.close();
   }
 });
+
+test("failed calendar construction returns sanitized503 and consumed capability cannot replay", async () => {
+  const { f, ctx } = state(copyFixture(), "tenant:tenant-a");
+  Object.assign(ctx.storage, {
+    sql: {
+      exec() {
+        throw Error("PRIVATE_SQL_FAILURE");
+      }
+    }
+  });
+  try {
+    const request = await ticket(
+      internal("/native-calendar", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-herreb-internal-tenant-id": "tenant-a"
+        },
+        body: JSON.stringify({ operation: "get", id: "task" })
+      }),
+      actor,
+      "calendar"
+    );
+    const d = new EMP002Operations(ctx, env as never);
+    const failed = await d.fetch(request.clone() as Request);
+    assert.equal(failed.status, 503);
+    assert.doesNotMatch(await failed.text(), /PRIVATE_SQL_FAILURE/);
+    assert.equal((await d.fetch(request.clone() as Request)).status, 403);
+  } finally {
+    f.db.close();
+  }
+});

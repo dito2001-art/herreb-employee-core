@@ -18,10 +18,10 @@ export class EMP002Operations extends DurableObject<IsolatedEnv> {
   async fetch(request: Request): Promise<Response> {
     if (!(await authorizeBoundary(request, this.ctx, this.env, "calendar")))
       return boundaryDenied();
-    this.#delegate ??= new Calendar(this.ctx, {
-      TENANT_MANIFESTS_JSON: this.env.TENANT_MANIFESTS_JSON
-    } as ConstructorParameters<typeof Calendar>[1]);
     try {
+      this.#delegate ??= new Calendar(this.ctx, {
+        TENANT_MANIFESTS_JSON: this.env.TENANT_MANIFESTS_JSON
+      } as ConstructorParameters<typeof Calendar>[1]);
       return await this.#delegate.fetch(request);
     } catch {
       return Response.json(
@@ -36,12 +36,12 @@ export class EMP003CampaignState extends DurableObject<IsolatedEnv> {
   async fetch(request: Request): Promise<Response> {
     if (!(await authorizeBoundary(request, this.ctx, this.env, "marketing")))
       return boundaryDenied();
-    this.#delegate ??= new Marketing(this.ctx, {
-      AI: this.env.AI,
-      EMP003_ASSET_BUCKET: this.env.EMP003_ASSET_BUCKET,
-      EMP003_COPY_CONTEXTS_JSON: this.env.EMP003_COPY_CONTEXTS_JSON
-    } as unknown as Env);
     try {
+      this.#delegate ??= new Marketing(this.ctx, {
+        AI: this.env.AI,
+        EMP003_ASSET_BUCKET: this.env.EMP003_ASSET_BUCKET,
+        EMP003_COPY_CONTEXTS_JSON: this.env.EMP003_COPY_CONTEXTS_JSON
+      } as unknown as Env);
       return await this.#delegate.fetch(request);
     } catch {
       return Response.json(
