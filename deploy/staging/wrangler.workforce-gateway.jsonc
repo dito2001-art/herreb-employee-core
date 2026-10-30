@@ -1,0 +1,15 @@
+// New dedicated ingress candidate. Access application, hostname and secrets
+// require independent security/release approval before any deployment.
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "herreb-workforce-integrated-gateway",
+  "main": "../../src/staging/workforce-access-gateway.ts",
+  "compatibility_date": "2026-06-11",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [],
+  "triggers": { "crons": [] },
+  "services": [
+    { "binding": "INTEGRATED", "service": "herreb-workforce-integrated-staging" }
+  ]
+}
