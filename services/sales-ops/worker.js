@@ -253,6 +253,16 @@ export default {
     const p = u.pathname;
     const m = request.method.toUpperCase();
 
+    // Do not disclose service metadata or CORS preflight responses before authentication.
+    if (p === '/api/v1/demo/reset') return err('NOT_FOUND', 'Not found', 404);
+    if (!auth(request, env)) {
+      return err(
+        'UNAUTHORIZED',
+        'Bearer token required',
+        401
+      );
+    }
+
     if (m === 'OPTIONS') return new Response(null, { status: 204, headers: H });
 
     if (p === '/health') {
@@ -262,15 +272,6 @@ export default {
         version: '0.3.0-order-authority-candidate',
         storage: env.DB ? 'D1' : 'missing'
       });
-    }
-
-    if (p === '/api/v1/demo/reset') return err('NOT_FOUND', 'Not found', 404);
-    if (!auth(request, env)) {
-      return err(
-        'UNAUTHORIZED',
-        'Bearer token required',
-        401
-      );
     }
 
     const t = await tenant(request, env);
