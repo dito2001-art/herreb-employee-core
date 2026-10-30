@@ -13,12 +13,14 @@ import { buildEMP002CalendarReadTransport, buildEMP002CalendarTransport, buildEM
 import { isEMP002CalendarReadIntent, resolveEMP002CalendarQueryWindow } from './emp002-calendar-query';
 import { WorkforceCalendarStore, type WorkforceCalendarEntry } from './workforce-calendar-store';
 import { workforceCommandInstant } from '../core/workforce-calendar-time';
+import { NativeReminderStore, reminderOwnerForTenant } from './emp002-native-reminder-store';
 
 export class EMP002Operations implements DurableObject {
   private readonly dispatchStore: SqliteWhatsAppSchedulingDispatchStore;
   private readonly conversationStore: SqliteEMP002WhatsAppConversationStore;
   private readonly appointmentStore: SqliteAppointmentLifecycleStore;
   private readonly nativeCalendar: WorkforceCalendarStore;
+  private readonly nativeReminders: NativeReminderStore;
   // Durable per-tenant/message receipt: mutation is committed once, delivery can retry.
   private getNativeReceipt(tenantId: string, messageId: string): { reply: string; mode: string; recordId: string; version?: number } | undefined {
     const row = Array.from(this.state.storage.sql.exec('SELECT payload FROM emp002_native_receipts WHERE tenant_id = ? AND message_id = ?', tenantId, messageId))[0];
@@ -54,6 +56,7 @@ export class EMP002Operations implements DurableObject {
     this.conversationStore = new SqliteEMP002WhatsAppConversationStore(this.state.storage.sql);
     this.appointmentStore = new SqliteAppointmentLifecycleStore(this.state.storage.sql);
     this.nativeCalendar = new WorkforceCalendarStore(this.state.storage.sql);
+    this.nativeReminders = new NativeReminderStore(this.state.storage.sql);
     this.state.storage.sql.exec('CREATE TABLE IF NOT EXISTS emp002_native_outbound (tenant_id TEXT NOT NULL, message_id TEXT NOT NULL, status TEXT NOT NULL, provider_message_id TEXT, PRIMARY KEY (tenant_id, message_id))');
     this.state.storage.sql.exec('CREATE TABLE IF NOT EXISTS emp002_native_outbound_audit (tenant_id TEXT NOT NULL, message_id TEXT NOT NULL, provider_message_id TEXT NOT NULL, evidence_reference TEXT NOT NULL, actor TEXT NOT NULL, reconciled_at TEXT NOT NULL, PRIMARY KEY (tenant_id, message_id))');
     this.state.storage.sql.exec('CREATE TABLE IF NOT EXISTS emp002_native_receipts (tenant_id TEXT NOT NULL, message_id TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY (tenant_id, message_id))');
@@ -106,7 +109,12 @@ export class EMP002Operations implements DurableObject {
         if (body.operation === 'availability' && body.from && body.to) return Response.json({ ok: true, entries: this.nativeCalendar.busy(tenantId, body.from, body.to) });
         if (body.operation === 'list' && body.from && body.to) return Response.json({ ok: true, entries: this.nativeCalendar.list(tenantId, body.from, body.to) });
         if (body.operation === 'save' && body.entry && Number.isInteger(body.expectedVersion) && body.expectedVersion! >= 0) {
-          const entry = this.nativeCalendar.save({ ...body.entry, tenantId }, body.expectedVersion);
+          const recipient = body.entry.reminderAt && body.entry.status === 'ACTIVE' ? reminderOwnerForTenant(this.env.TENANT_MANIFESTS_JSON, tenantId) : undefined;
+          const entry = this.state.storage.transactionSync(() => {
+            const saved = this.nativeCalendar.save({ ...body.entry!, tenantId }, body.expectedVersion!);
+            this.nativeReminders.replace(saved, recipient);
+            return saved;
+          });
           return Response.json({ ok: true, entry, readBackConfirmed: true });
         }
         return Response.json({ ok: false, error: 'INVALID_NATIVE_CALENDAR_OPERATION' }, { status: 400 });
@@ -116,6 +124,37 @@ export class EMP002Operations implements DurableObject {
       }
     }
 
+
+    // Internal-only handoff: UNKNOWN is committed BEFORE any external send.
+    // Caller must never retry an UNKNOWN action without provider reconciliation.
+    if (request.method === 'POST' && url.pathname === '/internal/native-reminders/claim') {
+      const token = this.env.EMP002_RECONCILIATION_TOKEN?.trim();
+      if (!token || request.headers.get('x-emp002-reconciliation-token') !== token) return Response.json({ok:false,error:'REMINDER_FORBIDDEN'},{status:403});
+      const tenantId = request.headers.get('x-herreb-internal-tenant-id')?.trim() ?? '';
+      if (!/^[a-zA-Z0-9_-]{1,100}$/.test(tenantId)) return Response.json({ok:false,error:'TENANT_SCOPE_REQUIRED'},{status:403});
+      const body = await request.json<{id?:string;version?:number}>().catch(()=>({} as {id?:string;version?:number}));
+      if (!/^[a-zA-Z0-9_-]{1,100}$/.test(body.id ?? '') || !Number.isSafeInteger(body.version) || (body.version ?? 0) < 1) return Response.json({ok:false,error:'INVALID_REMINDER_ACTION'},{status:422});
+      try {
+        const configuredOwner = reminderOwnerForTenant(this.env.TENANT_MANIFESTS_JSON,tenantId);
+        const claim = this.state.storage.transactionSync(()=>{
+          const current=this.nativeCalendar.get(tenantId,body.id!);
+          const result=this.nativeReminders.claim(tenantId,body.id!,body.version!,current,new Date().toISOString());
+          if(result.recipient!==configuredOwner) throw new Error('EMP002_REMINDER_RECIPIENT_CHANGED');
+          return result;
+        });
+        return Response.json({ok:true,status:'UNKNOWN',...claim});
+      } catch(error) {return Response.json({ok:false,error:error instanceof Error?error.message:'REMINDER_CLAIM_FAILED'},{status:409});}
+    }
+    if (request.method === 'POST' && url.pathname === '/internal/native-reminders/reconcile') {
+      const token=this.env.EMP002_RECONCILIATION_TOKEN?.trim();
+      if (!token || request.headers.get('x-emp002-reconciliation-token')!==token) return Response.json({ok:false,error:'REMINDER_FORBIDDEN'},{status:403});
+      const tenantId=request.headers.get('x-herreb-internal-tenant-id')?.trim()??'';
+      const actor=request.headers.get('x-herreb-reconciliation-actor')?.trim()??'';
+      const body=await request.json<{id?:string;version?:number;providerMessageId?:string;evidenceReference?:string}>().catch(()=>({} as {id?:string;version?:number;providerMessageId?:string;evidenceReference?:string}));
+      if (!/^[a-zA-Z0-9_-]{1,100}$/.test(tenantId) || !/^[a-zA-Z0-9@._-]{3,150}$/.test(actor) || !/^[a-zA-Z0-9_-]{1,100}$/.test(body.id??'') || !Number.isSafeInteger(body.version) || (body.version??0)<1 || !/^wamid[.\\w-]{4,255}$/.test(body.providerMessageId??'') || (body.evidenceReference??'').length<12) return Response.json({ok:false,error:'REMINDER_EVIDENCE_REQUIRED'},{status:422});
+      try {this.state.storage.transactionSync(()=>this.nativeReminders.reconcile(tenantId,body.id!,body.version!,body.providerMessageId!,body.evidenceReference!,actor));return Response.json({ok:true,status:'SENT'});}
+      catch {return Response.json({ok:false,error:'REMINDER_RECONCILIATION_CONFLICT'},{status:409});}
+    }
 
     if (request.method === 'POST' && url.pathname === '/appointment/register') {
       const record = await request.json<AppointmentLifecycleRecord>();
