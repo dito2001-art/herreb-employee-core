@@ -26,7 +26,7 @@ export class NativeReminderStore {
   replace(entry: WorkforceCalendarEntry, recipient?: string): void {
     this.sql.exec("UPDATE emp002_native_reminder_actions SET status = 'INVALIDATED' WHERE tenant_id = ? AND calendar_id = ? AND status = 'PENDING'", entry.tenantId, entry.id);
     if (entry.status === 'ACTIVE' && entry.reminderAt) {
-      if (!recipient) throw new Error('EMP002_REMINDER_OWNER_NOT_CONFIGURED');
+      if (!recipient || !/^\d{8,15}$/.test(recipient)) throw new Error('EMP002_REMINDER_OWNER_NOT_CONFIGURED');
       this.sql.exec('INSERT INTO emp002_native_reminder_actions (tenant_id,calendar_id,calendar_version,due_at,recipient,status) VALUES (?,?,?,?,?,?)', entry.tenantId,entry.id,entry.version,new Date(entry.reminderAt).toISOString(),recipient,'PENDING');
     }
   }
@@ -39,6 +39,8 @@ export class NativeReminderStore {
     if (!row || row.status !== 'PENDING') throw new Error('EMP002_REMINDER_ALREADY_CLAIMED');
     if (!current || current.tenantId !== tenantId || current.id !== id || current.version !== version || current.status !== 'ACTIVE' || !current.reminderAt || new Date(current.reminderAt).toISOString() !== row.due_at || row.due_at > new Date(now).toISOString()) throw new Error('EMP002_REMINDER_STALE');
     this.sql.exec("UPDATE emp002_native_reminder_actions SET status = 'UNKNOWN' WHERE tenant_id = ? AND calendar_id = ? AND calendar_version = ? AND status = 'PENDING'",tenantId,id,version);
+    const verified=Array.from(this.sql.exec('SELECT status FROM emp002_native_reminder_actions WHERE tenant_id = ? AND calendar_id = ? AND calendar_version = ?',tenantId,id,version))[0];
+    if(verified?.status!=='UNKNOWN') throw new Error('EMP002_REMINDER_CLAIM_READBACK_FAILED');
     return {recipient:String(row.recipient),actionKey:`emp002-reminder:${tenantId}:${id}:${version}`};
   }
   markSent(tenantId:string,id:string,version:number,providerMessageId:string):void {
@@ -46,6 +48,8 @@ export class NativeReminderStore {
     const rows=Array.from(this.sql.exec('SELECT status FROM emp002_native_reminder_actions WHERE tenant_id = ? AND calendar_id = ? AND calendar_version = ?',tenantId,id,version));
     if (rows.length!==1 || rows[0].status!=='UNKNOWN') throw new Error('EMP002_REMINDER_SEND_STATE_CONFLICT');
     this.sql.exec("UPDATE emp002_native_reminder_actions SET status='SENT',provider_message_id=? WHERE tenant_id=? AND calendar_id=? AND calendar_version=? AND status='UNKNOWN'",providerMessageId,tenantId,id,version);
+    const verified=Array.from(this.sql.exec('SELECT status,provider_message_id FROM emp002_native_reminder_actions WHERE tenant_id=? AND calendar_id=? AND calendar_version=?',tenantId,id,version))[0];
+    if(verified?.status!=='SENT'||verified.provider_message_id!==providerMessageId) throw new Error('EMP002_REMINDER_SENT_READBACK_FAILED');
   }
   reconcile(tenantId:string,id:string,version:number,providerMessageId:string,evidenceReference:string,actor:string):void {
     const rows=Array.from(this.sql.exec('SELECT status FROM emp002_native_reminder_actions WHERE tenant_id = ? AND calendar_id = ? AND calendar_version = ?',tenantId,id,version));
