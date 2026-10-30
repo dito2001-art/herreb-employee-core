@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "herreb-emp002-staging-NOT-DEPLOYABLE",
-  "main": "../src/worker.ts",
+  "main": "./emp002-entry.ts",
   "compatibility_date": "2026-06-11",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
