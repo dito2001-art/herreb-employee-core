@@ -20,3 +20,13 @@ Base de código: PR #321 SHA `19e8ab4671084d0f345831eb6a610363fe55da53`. Prepara
 **Control crítico:** no existe evidencia de que una variable `EMP002_STAGING_SEND_DISABLED` bloquee outbound; fue retirada del esqueleto. La prevención efectiva exige no desplegar, no exponer rutas y, cuando se autorice un staging, controlar explícitamente el egress y el ejecutor. Ningún GO de EMP-003 sirve para EMP-002.
 
 **Decisión:** LOCAL GO, STAGING NO-GO, RELEASE NO-GO. EMP-001/003 NO-GO. Sin merge, deploy, RPC Cloudflare, cron ni Meta real.
+
+## Hallazgo estático bloqueante — entrypoint compartido
+
+El esqueleto `staging/emp002.wrangler.preflight.jsonc` referencia `../src/worker.ts`, el entrypoint compartido de producción. Auditoría del código en SHA base: `src/worker.ts` también maneja `/api/internal/emp003/*`, `/api/internal/emp002/north-star/*`, `/api/internal/emp002/e2e` y `/webhooks/*`. **`workers_dev:false` y `routes:[]` no prueban que esas rutas estén inaccesibles por service bindings, previews o futuras rutas.** El esqueleto no es apto para deploy ni para autorización de staging.
+
+**Acción WF-02 antes de solicitar GO:** diseñar entrypoint exclusivo EMP-002 con allowlist explícita de operaciones autorizadas, autenticación Access verificada en el borde y denegación de rutas ajenas. Asegurar que ninguna llamada de prueba alcance Meta sin mock/egress guard efectivo. Auditar `src/worker.ts` y sus handlers; no asumir que `ACCESS_IDENTITY_MAP_JSON` vacío constituye un control suficiente.
+
+**Acción WF-01:** certificar por lectura los caminos de acceso efectivos, incluida invocación M2M y previews, y validar el entrypoint exclusivo y sus bindings; sin esta evidencia, SECURITY NO-GO.
+
+**Acción WF-04:** rechazar cualquier GO sobre el esqueleto actual; exigir diff revisado del entrypoint, revisión independiente y autorización owner. No inferir que la CI del PR #321 certifica la configuración del PR #322.
