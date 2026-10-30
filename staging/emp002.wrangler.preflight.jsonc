@@ -13,8 +13,7 @@
     "CALENDAR_TENANT_ID": "EMP002_STAGING_UNCONFIGURED",
     "TENANT_MANIFESTS_JSON": "[]",
     "ACCESS_IDENTITY_MAP_JSON": "[]",
-    "WHATSAPP_TENANT_ROUTES_JSON": "[]",
-    "EMP002_STAGING_SEND_DISABLED": "true"
+    "WHATSAPP_TENANT_ROUTES_JSON": "[]"
   },
   "durable_objects": {
     "bindings": [{"name":"EMP002_OPERATIONS","class_name":"EMP002Operations"}]
