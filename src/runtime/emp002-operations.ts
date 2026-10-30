@@ -179,6 +179,16 @@ export class EMP002Operations implements DurableObject {
         return Response.json({ok:results.every(r=>r.status==='SENT'),results},{status:results.every(r=>r.status==='SENT')?200:207});
       } catch(error) {return Response.json({ok:false,error:error instanceof Error?error.message:'REMINDER_DISPATCH_FAILED'},{status:503});}
     }
+    if (request.method === 'POST' && url.pathname === '/internal/native-reminders/status') {
+      const token = this.env.EMP002_RECONCILIATION_TOKEN?.trim();
+      if (!token || request.headers.get('x-emp002-reconciliation-token') !== token) return Response.json({ok:false,error:'REMINDER_FORBIDDEN'},{status:403});
+      const tenantId = request.headers.get('x-herreb-internal-tenant-id')?.trim() ?? '';
+      const body = await request.json<{id?:string;version?:number}>().catch(()=>({} as {id?:string;version?:number}));
+      if (!/^[a-zA-Z0-9_-]{1,100}$/.test(tenantId) || !/^[a-zA-Z0-9_-]{1,100}$/.test(body.id??'') || !Number.isSafeInteger(body.version) || (body.version??0)<1) return Response.json({ok:false,error:'INVALID_REMINDER_STATUS_SCOPE'},{status:422});
+      const rows=Array.from(this.state.storage.sql.exec('SELECT status, provider_message_id FROM emp002_native_reminder_actions WHERE tenant_id = ? AND calendar_id = ? AND calendar_version = ?',tenantId,body.id!,body.version!));
+      if (rows.length!==1) return Response.json({ok:false,error:'REMINDER_NOT_FOUND'},{status:404});
+      return Response.json({ok:true,tenantId,id:body.id,version:body.version,status:rows[0].status,providerMessageId:rows[0].provider_message_id??null});
+    }
     if (request.method === 'POST' && url.pathname === '/internal/native-reminders/claim') {
       const token = this.env.EMP002_RECONCILIATION_TOKEN?.trim();
       if (!token || request.headers.get('x-emp002-reconciliation-token') !== token) return Response.json({ok:false,error:'REMINDER_FORBIDDEN'},{status:403});
