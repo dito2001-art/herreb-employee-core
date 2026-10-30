@@ -203,7 +203,7 @@ export class EMP002Operations implements DurableObject {
       const tenantId=request.headers.get('x-herreb-internal-tenant-id')?.trim()??'';
       const actor=request.headers.get('x-herreb-reconciliation-actor')?.trim()??'';
       const body=await request.json<{id?:string;version?:number;providerMessageId?:string;evidenceReference?:string}>().catch(()=>({} as {id?:string;version?:number;providerMessageId?:string;evidenceReference?:string}));
-      if (!/^[a-zA-Z0-9_-]{1,100}$/.test(tenantId) || !/^[a-zA-Z0-9@._-]{3,150}$/.test(actor) || !/^[a-zA-Z0-9_-]{1,100}$/.test(body.id??'') || !Number.isSafeInteger(body.version) || (body.version??0)<1 || !/^wamid[.\\w-]{4,255}$/.test(body.providerMessageId??'') || (body.evidenceReference??'').length<12) return Response.json({ok:false,error:'REMINDER_EVIDENCE_REQUIRED'},{status:422});
+      if (!/^[a-zA-Z0-9_-]{1,100}$/.test(tenantId) || !/^[a-zA-Z0-9@._-]{3,150}$/.test(actor) || !/^[a-zA-Z0-9_-]{1,100}$/.test(body.id??'') || !Number.isSafeInteger(body.version) || (body.version??0)<1 || !/^wamid[.\w-]{4,255}$/.test(body.providerMessageId??'') || (body.evidenceReference??'').length<12) return Response.json({ok:false,error:'REMINDER_EVIDENCE_REQUIRED'},{status:422});
       try {this.state.storage.transactionSync(()=>this.nativeReminders.reconcile(tenantId,body.id!,body.version!,body.providerMessageId!,body.evidenceReference!,actor));return Response.json({ok:true,status:'SENT'});}
       catch {return Response.json({ok:false,error:'REMINDER_RECONCILIATION_CONFLICT'},{status:409});}
     }
