@@ -288,7 +288,6 @@ export default {
 
     try {
       if (m === 'GET' && p === '/api/v1/tenant-operations') {
-        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS tenant_operations (tenant_id TEXT PRIMARY KEY, operations_json TEXT NOT NULL, updated_at TEXT NOT NULL)`).run();
         const row = await env.DB.prepare('SELECT operations_json,updated_at FROM tenant_operations WHERE tenant_id=?').bind(tid).first();
         return json({ ok: true, tenant_id: tid, operations: row ? JSON.parse(row.operations_json) : {}, updated_at: row?.updated_at || null });
       }
@@ -296,7 +295,6 @@ export default {
       if (m === 'PUT' && p === '/api/v1/tenant-operations') {
         const b = await body(request);
         const operations = b?.operations && typeof b.operations === 'object' && !Array.isArray(b.operations) ? b.operations : {};
-        await env.DB.prepare(`CREATE TABLE IF NOT EXISTS tenant_operations (tenant_id TEXT PRIMARY KEY, operations_json TEXT NOT NULL, updated_at TEXT NOT NULL)`).run();
         await env.DB.prepare('INSERT INTO tenant_operations(tenant_id,operations_json,updated_at) VALUES(?,?,?) ON CONFLICT(tenant_id) DO UPDATE SET operations_json=excluded.operations_json,updated_at=excluded.updated_at').bind(tid, JSON.stringify(operations), now()).run();
         await audit(env, tid, 'ADMIN', 'TENANT_OPERATIONS_UPDATED', 'tenant', tid, operations);
         return json({ ok: true, tenant_id: tid, operations });
