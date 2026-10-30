@@ -11,6 +11,9 @@ export type BoundaryEnv = {
   EMP002_OPERATIONS?: DurableObjectNamespace;
   EMP003_CAMPAIGN_STATE?: DurableObjectNamespace;
 };
+// Hard bound per DO for the nonce prefix, not a time-based deletion promise.
+// Never evict an unexpired nonce to admit another request.
+export const MAX_BOUNDARY_NONCES = 1024;
 const header = "x-workforce-do-capability";
 const safe = (v: unknown): v is string =>
   typeof v === "string" && /^[a-zA-Z0-9_-]{1,100}$/.test(v);
@@ -249,16 +252,44 @@ export async function authorizeBoundary(
       !(await permitted(request, claim, kind))
     )
       return false;
-    return await state.storage.transaction(async (txn) => {
+    const unexpired = () => claim.expires > Date.now();
+    const admitted = await state.storage.transaction(async (txn) => {
+      // Re-check after contention, not just before awaiting the transaction.
+      if (!unexpired()) return false;
       const nonceKey = `i2:nonce:${claim.expires}:${claim.nonce}`;
       if (await txn.get(nonceKey)) return false;
-      // Bounded cleanup on traffic; no alarms, cron, or remote migration.
-      const old = await txn.list({ prefix: "i2:nonce:", limit: 64 });
-      for (const [k] of old)
-        if (Number(k.split(":")[2]) <= now) await txn.delete(k);
+      // Count and reclaim in the SAME transaction as admission. +1 detects a
+      // legacy oversized prefix; drain it without ever admitting more records.
+      const records = await txn.list({
+        prefix: "i2:nonce:",
+        limit: MAX_BOUNDARY_NONCES + 1
+      });
+      let retained = records.size;
+      for (const [k] of records) {
+        const expires = Number(k.split(":")[2]);
+        if (Number.isSafeInteger(expires) && expires <= Date.now()) {
+          await txn.delete(k);
+          retained--;
+        }
+      }
+      if (
+        records.size > MAX_BOUNDARY_NONCES ||
+        retained >= MAX_BOUNDARY_NONCES ||
+        !unexpired()
+      )
+        return false;
       await txn.put(nonceKey, true);
+      // An awaited write can cross the deadline too. Do not dispatch; removing
+      // this expired marker is safe because an expired ticket cannot authorize.
+      if (!unexpired()) {
+        await txn.delete(nonceKey);
+        return false;
+      }
       return true;
     });
+    // Also cover expiry while the transaction commit is awaited. The consumed
+    // marker may remain, but no domain operation runs with this authorization.
+    return admitted && unexpired();
   } catch {
     return false;
   }

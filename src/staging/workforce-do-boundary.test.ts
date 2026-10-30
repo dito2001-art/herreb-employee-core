@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { registerHooks } from "node:module";
 import { DatabaseSync } from "node:sqlite";
 import {
+  MAX_BOUNDARY_NONCES,
   scopeBoundaryNamespace,
   authorizeBoundary,
   type BoundaryEnv,
@@ -85,6 +86,12 @@ async function ticket(
 function state(f = copyFixture(), name = "tenant-a") {
   const storage = {
     ...f.storage,
+    async list<T = unknown>(options: { prefix: string; limit?: number }) {
+      const rows = await f.storage.list<T>(options);
+      return new Map(
+        [...rows].sort(([a], [b]) => a.localeCompare(b)).slice(0, options.limit)
+      );
+    },
     async delete(k: string) {
       f.db.prepare("DELETE FROM records WHERE key=?").run(k);
       return true;
@@ -437,6 +444,185 @@ test("failed calendar construction returns sanitized503 and consumed capability 
     assert.doesNotMatch(await failed.text(), /PRIVATE_SQL_FAILURE/);
     assert.equal((await d.fetch(request.clone() as Request)).status, 403);
   } finally {
+    f.db.close();
+  }
+});
+
+function gate() {
+  let release!: () => void;
+  const promise = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { promise, release };
+}
+async function nonceCount(ctx: DurableObjectState) {
+  return (await ctx.storage.list({ prefix: "i2:nonce:" })).size;
+}
+test("expiry after transaction contention is rejected without consuming a nonce", async () => {
+  const { f, ctx } = state();
+  const realNow = Date.now;
+  let clock = realNow();
+  Date.now = () => clock;
+  const entered = gate(),
+    resume = gate();
+  try {
+    const signed = await ticket(internal());
+    const waiting = {
+      ...ctx,
+      storage: {
+        ...ctx.storage,
+        transaction: async (
+          work: (txn: DurableObjectTransaction) => Promise<boolean>
+        ) => {
+          entered.release();
+          await resume.promise;
+          return ctx.storage.transaction(work);
+        }
+      }
+    } as DurableObjectState;
+    const pending = authorizeBoundary(signed, waiting, env, "marketing");
+    await entered.promise;
+    clock += 30000;
+    resume.release();
+    assert.equal(await pending, false);
+    assert.equal(await nonceCount(ctx), 0);
+  } finally {
+    resume.release();
+    Date.now = realNow;
+    f.db.close();
+  }
+});
+test("expiry during nonce write and while commit is awaited never admits domain dispatch", async () => {
+  for (const phase of ["write", "commit"]) {
+    const { f, ctx } = state();
+    const realNow = Date.now;
+    let clock = realNow();
+    Date.now = () => clock;
+    try {
+      const signed = await ticket(internal());
+      const delayed = {
+        ...ctx,
+        storage: {
+          ...ctx.storage,
+          transaction: async (
+            work: (txn: DurableObjectTransaction) => Promise<boolean>
+          ) => {
+            const result = await ctx.storage.transaction(async (txn) =>
+              work({
+                ...txn,
+                get: txn.get.bind(txn),
+                list: txn.list.bind(txn),
+                delete: txn.delete.bind(txn),
+                put: async (k: string, v: unknown) => {
+                  await txn.put(k, v);
+                  if (phase === "write") clock += 30000;
+                }
+              } as unknown as DurableObjectTransaction)
+            );
+            if (phase === "commit") clock += 30000;
+            return result;
+          }
+        }
+      } as DurableObjectState;
+      assert.equal(
+        await authorizeBoundary(signed, delayed, env, "marketing"),
+        false
+      );
+      assert.equal(await nonceCount(ctx), phase === "write" ? 0 : 1);
+      assert.equal(
+        await authorizeBoundary(signed, ctx, env, "marketing"),
+        false
+      );
+    } finally {
+      Date.now = realNow;
+      f.db.close();
+    }
+  }
+});
+test("nonce capacity is atomic under contention; live entries are never evicted and expired entries reclaim capacity", async () => {
+  const { f, ctx } = state();
+  const realNow = Date.now;
+  let clock = realNow();
+  Date.now = () => clock;
+  try {
+    const first = await ticket(internal());
+    assert.equal(await authorizeBoundary(first, ctx, env, "marketing"), true);
+    for (let i = 1; i < MAX_BOUNDARY_NONCES - 1; i++)
+      await ctx.storage.put(`i2:nonce:${clock + 30000}:seed-${i}`, true);
+    const tickets = await Promise.all([ticket(internal()), ticket(internal())]);
+    const admitted = await Promise.all(
+      tickets.map((t) => authorizeBoundary(t, ctx, env, "marketing"))
+    );
+    assert.deepEqual(admitted.sort(), [false, true]);
+    assert.equal(await nonceCount(ctx), MAX_BOUNDARY_NONCES);
+    assert.equal(await authorizeBoundary(first, ctx, env, "marketing"), false);
+    assert.equal(
+      await authorizeBoundary(await ticket(internal()), ctx, env, "marketing"),
+      false
+    );
+    assert.equal(await nonceCount(ctx), MAX_BOUNDARY_NONCES);
+    clock += 30001;
+    assert.equal(await authorizeBoundary(first, ctx, env, "marketing"), false);
+    assert.equal(
+      await authorizeBoundary(await ticket(internal()), ctx, env, "marketing"),
+      true
+    );
+    assert.equal(await nonceCount(ctx), 1);
+  } finally {
+    Date.now = realNow;
+    f.db.close();
+  }
+});
+test("cleanup rolls back on failure, never evicts live markers, and drains oversized legacy prefixes before admission", async () => {
+  const { f, ctx } = state();
+  const realNow = Date.now;
+  let clock = realNow();
+  Date.now = () => clock;
+  try {
+    const expired = `i2:nonce:${clock - 1}:expired`;
+    await ctx.storage.put(expired, true);
+    const signed = await ticket(internal());
+    const failing = {
+      ...ctx,
+      storage: {
+        ...ctx.storage,
+        transaction: async (
+          work: (txn: DurableObjectTransaction) => Promise<boolean>
+        ) =>
+          ctx.storage.transaction(async (txn) =>
+            work({
+              get: txn.get.bind(txn),
+              list: txn.list.bind(txn),
+              put: txn.put.bind(txn),
+              delete: async (k: string) => {
+                await txn.delete(k);
+                throw Error("CLEANUP_FAILURE");
+              }
+            } as unknown as DurableObjectTransaction)
+          )
+      }
+    } as DurableObjectState;
+    assert.equal(
+      await authorizeBoundary(signed, failing, env, "marketing"),
+      false
+    );
+    assert.equal(await ctx.storage.get(expired), true);
+    assert.equal(await authorizeBoundary(signed, ctx, env, "marketing"), true);
+    assert.equal(await ctx.storage.get(expired), undefined);
+    for (let i = 0; i < MAX_BOUNDARY_NONCES + 2; i++)
+      await ctx.storage.put(`i2:nonce:${clock - 1}:old-${i}`, true);
+    assert.equal(
+      await authorizeBoundary(await ticket(internal()), ctx, env, "marketing"),
+      false
+    );
+    assert.equal(await authorizeBoundary(signed, ctx, env, "marketing"), false);
+    assert.equal(
+      await authorizeBoundary(await ticket(internal()), ctx, env, "marketing"),
+      true
+    );
+    assert.equal(await nonceCount(ctx), 2);
+  } finally {
+    Date.now = realNow;
     f.db.close();
   }
 });
