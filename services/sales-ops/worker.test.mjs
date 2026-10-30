@@ -53,3 +53,23 @@ test('failed transition audit rolls back the state change', async () => {
   assert.equal(f.db.prepare("SELECT count(*) n FROM audit_log WHERE action='ORDER_STATE_PAYMENT_CONFIRMED'").get().n,0);
  } finally { f.db.close(); }
 });
+
+// Security regression: neither diagnostics nor preflight bypass authentication.
+test('unauthenticated health and OPTIONS deny without disclosing service details',async()=>{
+ const f=fixture();
+ for(const method of ['GET','OPTIONS']) {
+  const url=method==='GET'?'https://sales.test/health':'https://sales.test/api/v1/orders';
+  const response=await worker.fetch(new Request(url,{method}),f.env);
+  assert.equal(response.status,401);
+  assert.equal((await response.json()).error,'UNAUTHORIZED');
+ }
+});
+test('authenticated health and OPTIONS retain previous responses',async()=>{
+ const f=fixture();
+ const headers={authorization:'Bearer a','x-tenant-id':'tenant-a'};
+ const health=await worker.fetch(new Request('https://sales.test/health',{headers}),f.env);
+ assert.equal(health.status,200);
+ assert.equal((await health.json()).status,'ok');
+ const preflight=await worker.fetch(new Request('https://sales.test/api/v1/orders',{method:'OPTIONS',headers}),f.env);
+ assert.equal(preflight.status,204);
+});
