@@ -46,3 +46,14 @@ test('matching DO identity still requires internal authorization token', async (
     assert.equal((await response.json() as { error: string }).error, 'REMINDER_FORBIDDEN');
   } finally { db.close(); }
 });
+
+test('authorized tenant DO rejects missing reminder-owner configuration without sending',async()=>{
+ const {operations,db}=createOperations('tenant:tenant-a');
+ try {
+  const response=await operations.fetch(new Request('https://emp002.operations/internal/native-reminders/execute',{
+   method:'POST',headers:{'x-herreb-internal-tenant-id':'tenant-a','x-emp002-reconciliation-token':'test-only-secret'},
+  }));
+  assert.equal(response.status,503);
+  assert.match(JSON.stringify(await response.json()),/EMP002_REMINDER_TENANT_NOT_UNIQUE/);
+ } finally {db.close();}
+});
