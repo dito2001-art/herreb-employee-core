@@ -33,3 +33,14 @@ test('cancel invalidates unsent action',()=>{
   store.replace({...entry(2),status:'CANCELLED'},undefined);
   assert.equal(store.due(tenant,'2026-10-29T14:00:00.000Z').length,0);
 });
+
+test('provider-confirmed delivery transitions UNKNOWN to SENT once',()=>{
+  const db=new DatabaseSync(':memory:');
+  const store=new NativeReminderStore(db as never);
+  store.replace(entry(1),'595981123456');
+  store.claim(tenant,'event-1',1,entry(1),'2026-10-29T14:00:00.000Z');
+  assert.throws(()=>store.markSent(tenant,'event-1',1,'invalid'),/EVIDENCE_MISSING/);
+  store.markSent(tenant,'event-1',1,'wamid.provider-1234');
+  assert.throws(()=>store.markSent(tenant,'event-1',1,'wamid.provider-1234'),/STATE_CONFLICT/);
+  assert.equal(store.due(tenant,'2026-10-29T14:00:00.000Z').length,0);
+});
