@@ -1,0 +1,16 @@
+# EMP-001 Sales Ops — isolated staging candidate (NOT DEPLOYED)
+name = "herreb-emp001-sales-ops-staging"
+main = "worker.js"
+compatibility_date = "2026-10-30"
+workers_dev = false
+preview_urls = false
+
+# No routes, custom domains, triggers, or deployment automation.
+# Binding only to the dedicated, newly created empty D1 database.
+[[d1_databases]]
+binding = "DB"
+database_name = "herreb-emp001-sales-ops-staging-db"
+database_id = "16f59dac-b516-4ebe-9ec3-a10039b1fa29"
+
+# No credentials here. SALES_OPS_CREDENTIALS_JSON must be set as a secret
+# in an approved isolated environment; never commit credentials.
