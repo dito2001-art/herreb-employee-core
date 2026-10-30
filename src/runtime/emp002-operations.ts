@@ -286,6 +286,7 @@ export class EMP002Operations implements DurableObject {
             try {
               const updated = this.state.storage.transactionSync(() => {
                 const saved = this.nativeCalendar.save({ ...target, title: changes.title ?? target.title, startsAt: start, endsAt: end, updatedAt: new Date().toISOString() }, target.version);
+                this.nativeReminders.replace(saved, saved.reminderAt && saved.status === 'ACTIVE' ? reminderOwnerForTenant(this.env.TENANT_MANIFESTS_JSON, message.tenantId) : undefined);
                 this.saveNativeReceipt(message.tenantId, message.messageId, { reply: `Actualicé "${saved.title}" y confirmé el cambio en el calendario de Workforce.`, mode: 'native-calendar-update', recordId: saved.id, version: saved.version });
                 return saved;
               });
@@ -304,6 +305,7 @@ export class EMP002Operations implements DurableObject {
           try {
             const cancelled = this.state.storage.transactionSync(() => {
               const saved = this.nativeCalendar.save({ ...target, status: 'CANCELLED', updatedAt: new Date().toISOString() }, target.version);
+              this.nativeReminders.replace(saved);
               this.saveNativeReceipt(message.tenantId, message.messageId, { reply: `Cancelé "${target.title}" y confirmé el cambio en el calendario de Workforce.`, mode: 'native-calendar-cancel', recordId: target.id, version: saved.version });
               return saved;
             });
@@ -331,6 +333,7 @@ export class EMP002Operations implements DurableObject {
             if (existing && (existing.title !== command.title || existing.startsAt !== start || existing.endsAt !== end || existing.status !== 'ACTIVE')) throw new Error('EMP002_NATIVE_CALENDAR_IDEMPOTENCY_MISMATCH');
             const entry = this.state.storage.transactionSync(() => {
               const saved = existing ?? this.nativeCalendar.save({ tenantId: message.tenantId, id, kind: 'MEETING', title: command.title, startsAt: start, endsAt: end, status: 'ACTIVE', updatedAt: new Date().toISOString() }, 0);
+              if (!existing) this.nativeReminders.replace(saved);
               this.saveNativeReceipt(message.tenantId, message.messageId, { reply: `Agendé "${saved.title}" para ${saved.startsAt} y confirmé que quedó guardada en el calendario de Workforce.`, mode: 'native-calendar-create', recordId: id, version: saved.version });
               return saved;
             });
