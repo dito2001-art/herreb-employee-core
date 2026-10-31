@@ -31,6 +31,12 @@ jobs:
         run: node --import tsx --test src/runtime/emp002-native-reminder-store.test.ts
       - name: Sales Ops authority regression
         run: node --test services/sales-ops/worker.test.mjs
+      - name: Existing EMP-001 and EMP-002 browser integration regressions
+        run: node --import tsx --test src/runtime/emp001-browser-sales.test.ts src/runtime/emp002-browser-calendar.test.ts
+      - name: Existing EMP-003 campaign and approval regressions
+        run: node --import tsx --test src/runtime/emp003-browser-campaign.test.ts src/runtime/emp003-browser-draft-write.test.ts
+      - name: Gateway ingress regression
+        run: node --import tsx --test src/staging/workforce-access-gateway.test.ts
       - name: TypeScript
         run: npx --no-install tsc --noEmit
       - name: Lint changed runtime files
