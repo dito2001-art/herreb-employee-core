@@ -137,3 +137,27 @@ test('losing contender cannot claim after another writer wins between SELECT and
   assert.equal(injected,true);
   assert.equal(db.prepare("SELECT status FROM emp002_native_reminder_actions WHERE tenant_id=? AND calendar_id=? AND calendar_version=?").get(tenant,'event-1',1)?.status,'UNKNOWN');
 });
+
+test('reconciliation loser cannot report success after competing UNKNOWN to SENT update',()=>{
+  const db=new DatabaseSync(':memory:');
+  const adapter=sqlAdapter(db);
+  let injected=false;
+  const store=new NativeReminderStore({
+    exec(query: string,...args: unknown[]) {
+      if (!injected && query.startsWith("UPDATE emp002_native_reminder_actions SET status='SENT', provider_message_id=?")) {
+        injected=true;
+        db.prepare("UPDATE emp002_native_reminder_actions SET status='SENT',provider_message_id=?,evidence_reference=?,reconciled_by=? WHERE tenant_id=? AND calendar_id=? AND calendar_version=? AND status='UNKNOWN'")
+          .run('wamid.winner-1234','winner-evidence','winner',...(args.slice(3,6) as [string,string,number]));
+      }
+      return adapter.exec(query,...args);
+    }
+  } as never);
+  store.replace(entry(1),'595981123456');
+  store.claim(tenant,'event-1',1,entry(1),'2026-10-29T14:00:00.000Z');
+  assert.throws(()=>store.reconcile(tenant,'event-1',1,'wamid.loser-1234','loser-evidence','loser'),/RECONCILIATION_CONFLICT/);
+  assert.equal(injected,true);
+  const persisted=db.prepare('SELECT status,provider_message_id,reconciled_by FROM emp002_native_reminder_actions WHERE tenant_id=? AND calendar_id=? AND calendar_version=?').get(tenant,'event-1',1);
+  assert.equal(persisted?.status,'SENT');
+  assert.equal(persisted?.provider_message_id,'wamid.winner-1234');
+  assert.equal(persisted?.reconciled_by,'winner');
+});
