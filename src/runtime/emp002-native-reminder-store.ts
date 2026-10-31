@@ -39,6 +39,8 @@ export class NativeReminderStore {
     if (!row || row.status !== 'PENDING') throw new Error('EMP002_REMINDER_ALREADY_CLAIMED');
     if (!current || current.tenantId !== tenantId || current.id !== id || current.version !== version || current.status !== 'ACTIVE' || !current.reminderAt || new Date(current.reminderAt).toISOString() !== row.due_at || row.due_at > new Date(now).toISOString()) throw new Error('EMP002_REMINDER_STALE');
     this.sql.exec("UPDATE emp002_native_reminder_actions SET status = 'UNKNOWN' WHERE tenant_id = ? AND calendar_id = ? AND calendar_version = ? AND status = 'PENDING'",tenantId,id,version);
+    const affected = Array.from(this.sql.exec('SELECT changes() AS affected'))[0];
+    if (Number(affected?.affected) !== 1) throw new Error('EMP002_REMINDER_ALREADY_CLAIMED');
     const verified=Array.from(this.sql.exec('SELECT status FROM emp002_native_reminder_actions WHERE tenant_id = ? AND calendar_id = ? AND calendar_version = ?',tenantId,id,version))[0];
     if(verified?.status!=='UNKNOWN') throw new Error('EMP002_REMINDER_CLAIM_READBACK_FAILED');
     return {recipient:String(row.recipient),actionKey:`emp002-reminder:${tenantId}:${id}:${version}`};
