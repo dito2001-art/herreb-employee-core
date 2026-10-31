@@ -25,7 +25,14 @@ async function bundle(source) {
 }
 const gateway = await bundle(`
 import gateway from "./src/staging/workforce-access-gateway";
-export default gateway;
+import { readWorkforceAdminAccessActor } from "./src/runtime/workforce-admin-access-read";
+export default { async fetch(request, env) {
+  if (new URL(request.url).pathname === "/__fixture_diagnostic") {
+    try { const actor = await readWorkforceAdminAccessActor(request, { WORKFORCE_ACCESS_TEAM_DOMAIN: env.STAGING_ACCESS_TEAM_DOMAIN, WORKFORCE_ACCESS_AUDIENCE: env.STAGING_ACCESS_AUDIENCE, ACCESS_IDENTITY_MAP_JSON: env.STAGING_IDENTITY_MAP_JSON, WORKFORCE_PLATFORM_ADMIN_EMAILS_JSON: "[]" }); return Response.json({ ok: true, tenant: actor.tenantId }); }
+    catch (error) { return Response.json({ ok: false, reason: error instanceof Error ? error.message : "UNKNOWN" }, { status: 401 }); }
+  }
+  return gateway.fetch(request, env);
+} };
 `);
 const integrated = await bundle(`
 import { EMP002Operations } from "./src/staging/workforce-durable-objects";
@@ -98,6 +105,8 @@ try {
   const entry = { id: "p0-task", tenantId: "tenant-a", kind: "TASK",
     title: "A private", startsAt: "2026-11-01T12:00:00Z",
     status: "ACTIVE", updatedAt: "2026-10-30T12:00:00Z" };
+  const diagnostic = await mf.dispatchFetch("https://staging.example.test/__fixture_diagnostic", { headers: { "cf-access-jwt-assertion": a } });
+  assert.equal(diagnostic.status, 200, "fixture JWT diagnosis: " + await diagnostic.clone().text());
   const saved = await call(a, { operation: "save", entry, expectedVersion: 0 });
   assert.equal(saved.status, 200, "A save through gateway -> integrated -> DO; response=" + (await saved.clone().text()) + "; unexpectedOutbound=" + unexpectedOutbound);
   const readA = await call(a, { operation: "get", id: entry.id });
