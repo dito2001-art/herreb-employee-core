@@ -55,7 +55,7 @@ export default {
 `);
 const identityMap = JSON.stringify([
   { email: "a@example.test", actorId: "actor-a", tenantId: "tenant-a", role: "owner" },
-  { email: "b@example.test", actorId: "actor-b", tenantId: "tenant-b", role: "user" }
+  { email: "b@example.test", actorId: "actor-b", tenantId: "tenant-b", role: "owner" }
 ]);
 const common = {
   STAGING_ACCESS_TEAM_DOMAIN: "local.cloudflareaccess.com",
@@ -107,6 +107,10 @@ try {
   assert.equal(readB.status, 200);
   assert.equal((await readB.json()).entry, null, "B must not read A");
   assert.equal((await call(b, { operation: "save", entry, expectedVersion: 0 })).status, 403);
+  const bEntry = { ...entry, id: "b-task", tenantId: "tenant-b", title: "B private" };
+  assert.equal((await call(b, { operation: "save", entry: bEntry, expectedVersion: 0 })).status, 200);
+  assert.equal((await (await call(b, { operation: "get", id: bEntry.id })).json()).entry.title, "B private");
+  assert.equal((await (await call(a, { operation: "get", id: bEntry.id })).json()).entry, null);
   assert.equal((await call(jwt("unknown@example.test"), { operation: "get", id: entry.id })).status, 401);
   assert.equal((await call(jwt("a@example.test", "wrong-aud"), { operation: "get", id: entry.id })).status, 401);
   assert.equal((await call("unsigned.jwt.payload", { operation: "get", id: entry.id })).status, 401);
