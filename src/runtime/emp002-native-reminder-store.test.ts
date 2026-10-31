@@ -161,3 +161,26 @@ test('reconciliation loser cannot report success after competing UNKNOWN to SENT
   assert.equal(persisted?.provider_message_id,'wamid.winner-1234');
   assert.equal(persisted?.reconciled_by,'winner');
 });
+
+test('markSent loser cannot overwrite provider evidence after another writer wins',()=>{
+  const db=new DatabaseSync(':memory:');
+  const adapter=sqlAdapter(db);
+  let injected=false;
+  const store=new NativeReminderStore({
+    exec(query: string,...args: unknown[]) {
+      if(!injected && query.startsWith("UPDATE emp002_native_reminder_actions SET status='SENT',provider_message_id=?")) {
+        injected=true;
+        db.prepare("UPDATE emp002_native_reminder_actions SET status='SENT',provider_message_id=? WHERE tenant_id=? AND calendar_id=? AND calendar_version=? AND status='UNKNOWN'")
+          .run('wamid.winner-1234',...(args.slice(1,4) as [string,string,number]));
+      }
+      return adapter.exec(query,...args);
+    }
+  } as never);
+  store.replace(entry(1),'595981123456');
+  store.claim(tenant,'event-1',1,entry(1),'2026-10-29T14:00:00.000Z');
+  assert.throws(()=>store.markSent(tenant,'event-1',1,'wamid.loser-1234'),/SEND_STATE_CONFLICT/);
+  assert.equal(injected,true);
+  const persisted=db.prepare('SELECT status,provider_message_id FROM emp002_native_reminder_actions WHERE tenant_id=? AND calendar_id=? AND calendar_version=?').get(tenant,'event-1',1);
+  assert.equal(persisted?.status,'SENT');
+  assert.equal(persisted?.provider_message_id,'wamid.winner-1234');
+});
