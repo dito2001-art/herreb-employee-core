@@ -99,7 +99,7 @@ try {
     title: "A private", startsAt: "2026-11-01T12:00:00Z",
     status: "ACTIVE", updatedAt: "2026-10-30T12:00:00Z" };
   const saved = await call(a, { operation: "save", entry, expectedVersion: 0 });
-  assert.equal(saved.status, 200, "A save through gateway -> integrated -> DO");
+  assert.equal(saved.status, 200, "A save through gateway -> integrated -> DO; response=" + (await saved.clone().text()) + "; unexpectedOutbound=" + unexpectedOutbound);
   const readA = await call(a, { operation: "get", id: entry.id });
   assert.equal(readA.status, 200);
   assert.equal((await readA.json()).entry.title, "A private");
