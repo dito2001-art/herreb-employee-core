@@ -29,7 +29,7 @@ import { readWorkforceAdminAccessActor } from "./src/runtime/workforce-admin-acc
 export default { async fetch(request, env) {
   if (new URL(request.url).pathname === "/__fixture_diagnostic") {
     try { const actor = await readWorkforceAdminAccessActor(request, { WORKFORCE_ACCESS_TEAM_DOMAIN: env.STAGING_ACCESS_TEAM_DOMAIN, WORKFORCE_ACCESS_AUDIENCE: env.STAGING_ACCESS_AUDIENCE, ACCESS_IDENTITY_MAP_JSON: env.STAGING_IDENTITY_MAP_JSON, WORKFORCE_PLATFORM_ADMIN_EMAILS_JSON: "[]" }); return Response.json({ ok: true, tenant: actor.tenantId }); }
-    catch (error) { return Response.json({ ok: false, reason: error instanceof Error ? error.message : "UNKNOWN" }, { status: 401 }); }
+    catch (error) { const response = await fetch("https://local.cloudflareaccess.com/cdn-cgi/access/certs").catch(() => null); const data = response ? await response.json().catch(() => null) : null; return Response.json({ ok: false, reason: error instanceof Error ? error.message : "UNKNOWN", jwksStatus: response?.status ?? null, keys: Array.isArray(data?.keys) ? data.keys.map(k => ({ kid: k.kid, kty: k.kty, alg: k.alg, use: k.use })) : null }, { status: 401 }); }
   }
   return gateway.fetch(request, env);
 } };
