@@ -116,3 +116,24 @@ test('two asynchronous contenders observe exactly one durable claim',async()=>{
  assert.equal(results.filter(r=>r.status==='rejected').length,1);
  assert.equal(store.due(tenant,'2026-10-29T14:00:00.000Z').length,0);
 });
+
+
+test('losing contender cannot claim after another writer wins between SELECT and UPDATE',()=>{
+  const db=new DatabaseSync(':memory:');
+  const adapter=sqlAdapter(db);
+  let injected=false;
+  const store=new NativeReminderStore({
+    exec(query: string,...args: unknown[]) {
+      if (!injected && query.startsWith("UPDATE emp002_native_reminder_actions SET status = 'UNKNOWN'")) {
+        injected=true;
+        // Contender A commits UNKNOWN after B read PENDING, before B's CAS.
+        db.prepare("UPDATE emp002_native_reminder_actions SET status='UNKNOWN' WHERE tenant_id=? AND calendar_id=? AND calendar_version=? AND status='PENDING'").run(...(args.slice(0,3) as [string,string,number]));
+      }
+      return adapter.exec(query,...args);
+    }
+  } as never);
+  store.replace(entry(1),'595981123456');
+  assert.throws(()=>store.claim(tenant,'event-1',1,entry(1),'2026-10-29T14:00:00.000Z'),/ALREADY_CLAIMED/);
+  assert.equal(injected,true);
+  assert.equal(db.prepare("SELECT status FROM emp002_native_reminder_actions WHERE tenant_id=? AND calendar_id=? AND calendar_version=?").get(tenant,'event-1',1)?.status,'UNKNOWN');
+});
