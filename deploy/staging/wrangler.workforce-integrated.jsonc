@@ -4,12 +4,25 @@
 {
   "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "herreb-workforce-integrated-staging",
+  "account_id": "3519d3ab1a5b1dc4e629e661df78c150",
   "main": "../../src/staging/workforce-integrated-entry.ts",
   "compatibility_date": "2026-06-11",
   "compatibility_flags": [
     "nodejs_compat"
   ],
   "workers_dev": false,
+  "r2_buckets": [
+    {
+      "binding": "EMP003_ASSET_BUCKET",
+      "bucket_name": "herreb-workforce-integrated-staging-copy-assets"
+    }
+  ],
+  "services": [
+    {
+      "binding": "SALES_OPS",
+      "service": "herreb-emp001-sales-ops-stg-a"
+    }
+  ],
   "ai": {
     "binding": "AI",
     "remote": true
