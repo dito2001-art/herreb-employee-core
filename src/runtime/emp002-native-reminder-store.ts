@@ -57,5 +57,9 @@ export class NativeReminderStore {
     const rows=Array.from(this.sql.exec('SELECT status FROM emp002_native_reminder_actions WHERE tenant_id = ? AND calendar_id = ? AND calendar_version = ?',tenantId,id,version));
     if(rows.length!==1 || rows[0].status!=='UNKNOWN') throw new Error('EMP002_REMINDER_RECONCILIATION_CONFLICT');
     this.sql.exec("UPDATE emp002_native_reminder_actions SET status='SENT', provider_message_id=?, evidence_reference=?, reconciled_by=? WHERE tenant_id=? AND calendar_id=? AND calendar_version=? AND status='UNKNOWN'",providerMessageId,evidenceReference,actor,tenantId,id,version);
+    const affected=Array.from(this.sql.exec('SELECT changes() AS affected'))[0];
+    if(Number(affected?.affected)!==1) throw new Error('EMP002_REMINDER_RECONCILIATION_CONFLICT');
+    const verified=Array.from(this.sql.exec('SELECT status,provider_message_id,evidence_reference,reconciled_by FROM emp002_native_reminder_actions WHERE tenant_id=? AND calendar_id=? AND calendar_version=?',tenantId,id,version))[0];
+    if(verified?.status!=='SENT'||verified.provider_message_id!==providerMessageId||verified.evidence_reference!==evidenceReference||verified.reconciled_by!==actor) throw new Error('EMP002_REMINDER_RECONCILIATION_READBACK_FAILED');
   }
 }
