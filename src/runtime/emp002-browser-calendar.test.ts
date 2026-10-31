@@ -37,6 +37,10 @@ async function fixture() {
         role: "owner"
       }
     ]),
+    TENANT_MANIFESTS_JSON: JSON.stringify([
+      { tenantId: "tenant-a", whatsappOwners: ["595981111111"], reminderOwnerWhatsapp: "595981111111" },
+      { tenantId: "tenant-b", whatsappOwners: ["595982222222"], reminderOwnerWhatsapp: "595982222222" }
+    ]),
     EMP002_OPERATIONS: {
       idFromName: (name: string) => name,
       get: (id: unknown) => ({
@@ -72,7 +76,7 @@ async function fixture() {
             }
           };
           // Recreate the object per request to verify persistence beyond one JS instance.
-          return new EMP002Operations(state as never, {}).fetch(request);
+          return new EMP002Operations(state as never, { TENANT_MANIFESTS_JSON: env.TENANT_MANIFESTS_JSON }).fetch(request);
         }
       })
     }
