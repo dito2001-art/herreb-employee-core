@@ -64,3 +64,33 @@ test("reject shared bearer across A/B",async()=>{
 test("reject shared Runtime Service Binding across A/B",async()=>{
  assert.equal((await runner.fetch(request({message:"hola"}),{...env,EMP001_RUNTIME_B:env.EMP001_RUNTIME_A})).status,503);
 });
+
+test("B private preflight uses B binding/token and verifies the runtime tenant",async()=>{
+ const calls=[];
+ const runtimeA={fetch:async()=>{throw Error("A binding must not be called")}};
+ const runtimeB={fetch:async(url,init)=>{calls.push({url,init});return Response.json({ok:true,preflight:"PASS",ai_inference_used:false,openai_used:false,service_binding:"PASS",sales_ops_auth:"PASS",tenant:"tenant-b",products:0,recommendations:0})}};
+ const scoped={...env,EMP001_RUNTIME_A:runtimeA,EMP001_RUNTIME_B:runtimeB};
+ const response=await runner.fetch(request({},jwt({sub:"subject-b",email:"b@example.test"}),"/internal/emp001/preflight"),scoped);
+ assert.equal(response.status,200);
+ const body=await response.json();
+ assert.equal(body.tenant,"tenant-b");
+ assert.equal(body.ai_inference_used,false);
+ assert.equal(calls.length,1);
+ assert.equal(calls[0].url,"https://runtime.internal/preflight");
+ assert.equal(calls[0].init.headers.authorization,"Bearer token-b");
+});
+test("private preflight rejects tenant mismatch and does not report PASS",async()=>{
+ const runtimeA={fetch:async()=>Response.json({ok:true,tenant:"tenant-a"})};
+ const runtimeB={fetch:async()=>Response.json({ok:true,preflight:"PASS",tenant:"tenant-a"})};
+ const response=await runner.fetch(request({},jwt({sub:"subject-b",email:"b@example.test"}),"/internal/emp001/preflight"),{...env,EMP001_RUNTIME_A:runtimeA,EMP001_RUNTIME_B:runtimeB});
+ assert.equal(response.status,502);
+ const body=await response.json();
+ assert.equal(body.error,"tenant_mismatch");
+ assert.equal(body.expected_tenant,"tenant-b");
+ assert.equal(body.actual_tenant,"tenant-a");
+});
+test("private preflight fails closed when disabled or Access JWT is missing",async()=>{
+ assert.equal((await runner.fetch(request({},jwt({sub:"subject-b",email:"b@example.test"}),"/internal/emp001/preflight"),{...env,PRIVATE_RUNNER_ENABLED:"false"})).status,503);
+ const noJwt=new Request("https://private.example.test/internal/emp001/preflight",{method:"GET"});
+ assert.equal((await runner.fetch(noJwt,env)).status,403);
+});
