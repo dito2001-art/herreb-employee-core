@@ -1,6 +1,6 @@
 # EMP-001 private runner candidate
 
-Review-only implementation based on Core PR #330 SHA 4ecd3b2e43818f7b4aac3de8656fa8469a9a7350.
+Review-only candidate initially prepared against Core PR #330 SHA 4ecd3b2e43818f7b4aac3de8656fa8469a9a7350. The current #330 review HEAD is 0c58bd7a22142cb6eef903151e368db492269e89; compatibility with that exact integrated candidate has not yet been demonstrated.
 
 The runner allows POST /internal/emp001/chat only. Its input accepts a message and optional session_id. Access JWT is verified cryptographically with an explicitly configured RS256 public JWKS, issuer, audience and validity times. A server-controlled principal map resolves exact subject and email to one role, tenant and A/B slot. Runtime Service Bindings and bearer tokens are separate per slot.
 
@@ -36,3 +36,16 @@ This section is the executable acceptance contract for WF-01 and WF-04. It does 
 - `RELEASE GO`: requires WF-04 independent acceptance and evidence above.
 - `OWNER AUTHORIZATION`: separately required before provisioning, secrets, migrations, deployment, remote E2E or production changes, even if both reviews are GO.
 - Missing evidence is `NO-GO`, never inferred approval. Do not repeat CI or mocks without code changes. Keep PR #329 and #330 unchanged.
+
+
+## Current Cloudflare read-back (2026-11-01)
+
+The authenticated dashboard read-back found that the actual B downstream Workers are not private at the network edge:
+- `herreb-emp001-runtime-stg-b.dito2001.workers.dev` has the public Worker URL enabled ("Anyone with this URL can visit"); the UI offers "Enable Access".
+- `herreb-emp001-sales-ops-stg-b.dito2001.workers.dev` has the same setting.
+- Preview URL checkboxes were off and no custom domains/routes were listed.
+- Sales Ops B has its own D1 database `herreb-emp001-sales-ops-staging-b-db` (UUID `8530770d-bb37-486a-860b-3cda518c864e`) and tenant API/Sales Ops secrets configured.
+
+These are P0 blockers for private-ingress acceptance. Application-level bearer checks may still reject unauthorized operations, but they do not satisfy the required Access/private ingress boundary. Do not enable the runner or perform remote A/B E2E until workers.dev is disabled or Access is applied and verified on both B Workers. This finding is not a claim of successful unauthorized data access.
+
+The runner manifest is disabled by default and binds to the Runtime A/B service names only. It does not itself bind Sales Ops; Sales Ops access remains a downstream Runtime responsibility and must be independently verified. No Cloudflare configuration was changed.
