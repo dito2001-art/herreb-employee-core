@@ -11,12 +11,7 @@
     "nodejs_compat"
   ],
   "workers_dev": false,
-  "r2_buckets": [
-    {
-      "binding": "EMP003_ASSET_BUCKET",
-      "bucket_name": "herreb-workforce-integrated-staging-copy-assets"
-    }
-  ],
+  "vars": { "STAGING_COPY_DO_STORAGE": "enabled" },
   "services": [
     {
       "binding": "SALES_OPS",
