@@ -1,0 +1,110 @@
+{
+  "version": 1,
+  "status": "PREPARED_NOT_EXECUTED_REMOTE",
+  "accountId": "3519d3ab1a5b1dc4e629e661df78c150",
+  "frozen": {
+    "core": "ac34092a058c414aa911855214af3ee25a1087b9",
+    "emp002Reference": "fbf459d2fe2ad516b8394aff4770ceff443225d5",
+    "emp002CasDelta": "8a500e93b9a45b64734b053f3d25367f3761a379",
+    "runtime": "e66f0cf491c61d2962d5c56ef27e86e3d88c594a",
+    "signedAdapter": "c0f67ee0dc0d4e558b55e4bb1a9581a632f59401",
+    "metaGateway": "1c572051b78c1b0e7c6629fc3ac76582878be740"
+  },
+  "acceptancePolicy": {
+    "localEvidenceIsNotRemoteE2E": true,
+    "productionMutation": false,
+    "realSale": false,
+    "realPayment": false,
+    "externalMarketingPublication": false,
+    "emp002Scope": "G0 native calendar; no Meta/cron/internal execution"
+  },
+  "preconditions": [
+    "Independent WF01 SECURITY GO and WF04 RELEASE GO on one final bundle SHA/config digest; author comments never substitute.",
+    "Specific owner authorization identifies resources, migrations, deploy/read-back and one test window. No action is authorized by this file.",
+    "Authenticated current control-plane inventory: account, Worker version IDs/SHA provenance, DO/D1/KV/Queue/R2 bindings and UUIDs, new isolated namespaces, route/preview/cron state.",
+    "Access issuer/audience/JWKS and verified A/B identities/roles bound to distinct tenants; no client tenant or credentials trusted.",
+    "Actual R2 bucket + server Brand Brain profiles + Workers AI; Sales Ops service/D1 credential-to-tenant binding and isolated router fixed.",
+    "Backup exported/restored and D1 schema/integrity/constraints/trigger verified on authorized copy before migration; preserve ledger.",
+    "Signed Meta gateway preserves raw body; enabled only with separate test app/phone/recipient authorization. Core unsigned proxy excluded.",
+    "CAS delta integrated into reviewed release bundle; remote deployed source must match it or stop.",
+    "No old/generic staging gateway accepted as configured without read-back; privileged operations remain disabled."
+  ],
+  "runOrder": [
+    "control-plane-readback",
+    "EMP001",
+    "EMP002_G0",
+    "EMP003",
+    "bidirectional-isolation-and-post-integrity",
+    "functional-acceptance"
+  ],
+  "cases": {
+    "EMP001": [
+      "Controlled real WhatsApp contact -> natural conversation -> live synthetic catalogue/recommendation/prices -> persisted quote -> explicit confirmation.",
+      "Same tenant/quote/operation: concurrent retries through approved private test transport, not a write-enabled browser dashboard; one order/ledger/ORDER_CREATED audit and one stock delta.",
+      "Independently GET persisted order after lost response; retry same operation reconciles same order. Changed quote with same key conflicts.",
+      "B cannot read/modify A order and A cannot read B. Independently read A after negatives and compare counts, stock, total and provider/order evidence.",
+      "Response reaches approved test recipient only. Order remains PAYMENT_PENDING; no inferred payment confirmation."
+    ],
+    "EMP002_G0": [
+      "POST /api/emp002/calendar with authenticated owner: save expectedVersion 0, then independent get/list. Present America/Asuncion; persist ISO.",
+      "Concurrent saves at same version produce one success and one 409; stale write never mutates winner.",
+      "Cancel via save with current version; independent get confirms CANCELLED/new version and pending reminder superseded.",
+      "Scheduling conflicts rejected; B record actually exists before A/B foreign-ID checks. Browser B/reader cannot gain owner permission via headers/body.",
+      "No execute, claim, reconciliation, Meta egress or cron. UNKNOWN/SENT external delivery is outside G0."
+    ],
+    "EMP003": [
+      "Read tenant-owned Brand Brain/config revision; create persistent campaign with synthetic brief; generate copy using actual approved provider and R2.",
+      "Independent content GET verifies exact bytes/hash/revision; edit with expected base revision/hash creates immutable new revision.",
+      "Stale hash/revision conflicts. Manual text remains DRAFT and never becomes a verified claim.",
+      "Approval binds assetId, exact revision/hash and campaign snapshot. New revision does not inherit approval; old approved bytes remain immutable.",
+      "Calendar projection matches persisted campaign dates after reload; no publication or scheduling external posts.",
+      "B cannot list/read content/status/approval of existing A asset. Independently re-read A bytes/hash/approval afterwards.",
+      "Authorized read-back failure case disables editor/approval; no unverified success."
+    ]
+  },
+  "record": {
+    "fields": [
+      "UTC",
+      "actorAlias",
+      "tenantId",
+      "caseId",
+      "operationId",
+      "correlationId",
+      "HTTPstatus",
+      "WorkerVersion",
+      "sourceSHA",
+      "recordRevision",
+      "contentHash",
+      "result",
+      "independentReadback"
+    ],
+    "exclude": [
+      "JWT",
+      "cookies",
+      "tokens",
+      "app secrets",
+      "private keys",
+      "real customer data"
+    ]
+  },
+  "stopConditions": [
+    "missing authorization or independent GO",
+    "source/config/binding mismatch",
+    "public bypass or production resource",
+    "unauthorized egress/recipient",
+    "cross-tenant disclosure/mutation",
+    "duplicate order/audit/stock effect",
+    "CAS/read-back/hash mismatch",
+    "approved-content mutation",
+    "unverified payment or external publication"
+  ],
+  "recovery": "Stop session; use only previously authorized ingress suspension. Preserve DB/DO/R2/ledger/receipts. No destructive reset or automatic schema/version rollback; reviewed compatible forward-fix or authorized restore.",
+  "currentExternalBlock": "Cloudflare dashboard redirects current available browser to sign-in. Remote inventory not refreshed; historical UI observations must not be reported as current.",
+  "independentApprovalsRecovered": {
+    "core329Reviews": 0,
+    "runtime28Reviews": 0,
+    "runtime29Reviews": 0,
+    "runtime30Reviews": 0,
+    "core329Comment": "author request only: https://github.com/dito2001-art/herreb-employee-core/pull/329#issuecomment-6546433542"
+  }
+}
