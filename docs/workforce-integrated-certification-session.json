@@ -96,10 +96,11 @@
     "duplicate order/audit/stock effect",
     "CAS/read-back/hash mismatch",
     "approved-content mutation",
-    "unverified payment or external publication"
+    "unverified payment or external publication",
+    "Any staging A/B Worker has workers.dev enabled with 'Anyone with this URL can visit' or an unprotected preview/custom route; suspend acceptance until public ingress is disabled or an approved Access gate is proven."
   ],
   "recovery": "Stop session; use only previously authorized ingress suspension. Preserve DB/DO/R2/ledger/receipts. No destructive reset or automatic schema/version rollback; reviewed compatible forward-fix or authorized restore.",
-  "currentExternalBlock": "Cloudflare authenticated dashboard access is available and was inspected on 2026-11-01; the prior sign-in redirect is stale. Runtime A exists with active version 19ece831 and its dashboard preflight showed HTTP 200 / PASS for herreb-client-0. This preflight predates or is not correlated to the latest Sales Ops A secret replacement and does not prove the target binding. Core's currently deployed settings remain single-tenant A: ACCESS_IDENTITY_MAP_JSON and TENANT_MANIFESTS_JSON contain only herreb-client-0; its SALES_OPS binding still points to herreb-emp001-sales-ops-sandbox. Do not treat the proposed integrated manifest as deployed. Refresh effective bindings, Access A/B policy and exact Worker version provenance before remote E2E.",
+  "currentExternalBlock": "Authenticated Cloudflare readback is available. Newly observed P0: Sales Ops B and Runtime B each expose a public workers.dev URL with 'Anyone with this URL can visit' checked; Access UI offers 'Enable Access'. Preview URL checkbox appears disabled and no custom domains/routes were listed. Do not run A/B certification or connect the gateway until public ingress is disabled or protected by a separately approved Access configuration and read back. Sales Ops B has separate D1 UUID 8530770d-bb37-486a-860b-3cda518c864e and secrets EMP001_API_TOKEN, EMP001_API_TOKEN_TENANT_ID, SALES_OPS_CREDENTIALS_JSON. Runtime B / Sales Ops B settings are staging resources; do not infer production exposure.",
   "independentApprovalsRecovered": {
     "core329Reviews": 0,
     "runtime28Reviews": 0,
@@ -135,15 +136,38 @@
       "scope": "authenticated Cloudflare settings tab; not the proposed isolated integrated candidate"
     },
     "salesOpsB": {
-      "runtimePreflightTenant": "herreb-client-b",
-      "salesOpsProductsOwnTenantHttp": 200,
-      "foreignTenantHttp": 404,
-      "scope": "operator-provided curl output; not full integrated E2E"
+      "worker": "herreb-emp001-sales-ops-stg-b",
+      "d1": "herreb-emp001-sales-ops-staging-b-db",
+      "d1Uuid": "8530770d-bb37-486a-860b-3cda518c864e",
+      "secretNames": [
+        "EMP001_API_TOKEN",
+        "EMP001_API_TOKEN_TENANT_ID",
+        "SALES_OPS_CREDENTIALS_JSON"
+      ],
+      "workersDevUrl": "https://herreb-emp001-sales-ops-stg-b.dito2001.workers.dev/",
+      "workersDevPublicAccess": true,
+      "accessApplication": "Enable Access action shown; no Worker Access application configured in this view",
+      "previewUrlPattern": "*-herreb-emp001-sales-ops-stg-b.dito2001.workers.dev",
+      "previewUrlsEnabled": false,
+      "customDomainsOrRoutes": "none observed",
+      "evidence": "Cloudflare authenticated Settings and Domains tabs; public URL checkbox checked and UI text says Anyone with this URL can visit.",
+      "classification": "P0_PUBLIC_INGRESS_NOT_ACCESS_GATED"
     },
     "access": {
       "emp003App": "HerreB EMP003 Staging",
       "policy": "A-only observed; B not authorized in the recorded policy",
       "scope": "administrative settings readback, not JWT A/B session certification"
+    },
+    "runtimeB": {
+      "worker": "herreb-emp001-runtime-stg-b",
+      "workersDevUrl": "https://herreb-emp001-runtime-stg-b.dito2001.workers.dev/",
+      "workersDevPublicAccess": true,
+      "accessApplication": "Enable Access action shown; no Worker Access application configured in this view",
+      "previewUrlPattern": "*-herreb-emp001-runtime-stg-b.dito2001.workers.dev",
+      "previewUrlsEnabled": false,
+      "customDomainsOrRoutes": "none observed",
+      "evidence": "Cloudflare authenticated Domains tab; public URL checkbox checked and UI text says Anyone with this URL can visit.",
+      "classification": "P0_PUBLIC_INGRESS_NOT_ACCESS_GATED"
     }
   }
 }
