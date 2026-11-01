@@ -1,0 +1,22 @@
+name: Validate EMP-001 private runner (no deploy)
+on:
+  push:
+    branches:
+      - fix/emp001-private-runner-p0-20261031
+    paths:
+      - 'deploy/staging/emp001-private-runner/**'
+      - '.github/workflows/validate-emp001-private-runner.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  private-runner:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify private runner tests
+        run: node --test deploy/staging/emp001-private-runner/private-runner.test.mjs
