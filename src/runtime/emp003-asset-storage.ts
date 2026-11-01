@@ -41,7 +41,10 @@ export function createEMP003AssetObjectStorage(
  * This is not a general replacement for R2 or binary creative assets.
  */
 export function createEMP003StagingCopyObjectStorage(
-  storage: Pick<DurableObjectStorage, "get" | "put">
+  storage: {
+    get<T = unknown>(key: string): Promise<T | undefined>;
+    put<T>(key: string, value: T): Promise<void>;
+  }
 ): AssetObjectStorage {
   const prefix = "staging:copy-object:";
   const maxBytes = 64 * 1024;
