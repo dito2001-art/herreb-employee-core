@@ -97,10 +97,11 @@
     "CAS/read-back/hash mismatch",
     "approved-content mutation",
     "unverified payment or external publication",
-    "Any staging A/B Worker has workers.dev enabled with 'Anyone with this URL can visit' or an unprotected preview/custom route; suspend acceptance until public ingress is disabled or an approved Access gate is proven."
+    "Any staging A/B Worker has workers.dev enabled with 'Anyone with this URL can visit' or an unprotected preview/custom route; suspend acceptance until public ingress is disabled or an approved Access gate is proven.",
+    "Runtime B preflight must resolve herreb-client-b (not herreb-client-0); any A tenant resolution from B Runtime is a cross-tenant isolation failure."
   ],
   "recovery": "Stop session; use only previously authorized ingress suspension. Preserve DB/DO/R2/ledger/receipts. No destructive reset or automatic schema/version rollback; reviewed compatible forward-fix or authorized restore.",
-  "currentExternalBlock": "Authenticated Cloudflare readback is available. Newly observed P0: Sales Ops B and Runtime B each expose a public workers.dev URL with 'Anyone with this URL can visit' checked; Access UI offers 'Enable Access'. Preview URL checkbox appears disabled and no custom domains/routes were listed. Do not run A/B certification or connect the gateway until public ingress is disabled or protected by a separately approved Access configuration and read back. Sales Ops B has separate D1 UUID 8530770d-bb37-486a-860b-3cda518c864e and secrets EMP001_API_TOKEN, EMP001_API_TOKEN_TENANT_ID, SALES_OPS_CREDENTIALS_JSON. Runtime B / Sales Ops B settings are staging resources; do not infer production exposure.",
+  "currentExternalBlock": "Two confirmed P0s on Runtime B: Cloudflare preflight of active version prefix 7a0033a6 returned HTTP 200/PASS but tenant=herreb-client-0, products=0, while the B tenant should be herreb-client-b; and its workers.dev URL is public ('Anyone with this URL can visit') with Access not enabled. Sales Ops B workers.dev is also public. Do not use B runner, connect integrated gateway, or perform A/B E2E until both the tenant mapping mismatch and public ingress are fixed and read back. Sales Ops B has separate D1 UUID 8530770d-bb37-486a-860b-3cda518c864e and tenant secrets. No Cloudflare changes made.",
   "independentApprovalsRecovered": {
     "core329Reviews": 0,
     "runtime28Reviews": 0,
@@ -160,14 +161,26 @@
     },
     "runtimeB": {
       "worker": "herreb-emp001-runtime-stg-b",
+      "activeVersionPrefix": "7a0033a6",
+      "preflight": {
+        "http": 200,
+        "ok": true,
+        "preflight": "PASS",
+        "serviceBinding": "PASS",
+        "salesOpsAuth": "PASS",
+        "reportedTenant": "herreb-client-0",
+        "products": 0,
+        "recommendations": 0,
+        "observedAtUtc": "2026-11-01T20:25:22Z"
+      },
+      "expectedTenant": "herreb-client-b",
+      "tenantIsolation": "FAIL",
       "workersDevUrl": "https://herreb-emp001-runtime-stg-b.dito2001.workers.dev/",
       "workersDevPublicAccess": true,
-      "accessApplication": "Enable Access action shown; no Worker Access application configured in this view",
-      "previewUrlPattern": "*-herreb-emp001-runtime-stg-b.dito2001.workers.dev",
+      "access": "Enable Access action shown; public URL checkbox checked ('Anyone with this URL can visit')",
       "previewUrlsEnabled": false,
       "customDomainsOrRoutes": "none observed",
-      "evidence": "Cloudflare authenticated Domains tab; public URL checkbox checked and UI text says Anyone with this URL can visit.",
-      "classification": "P0_PUBLIC_INGRESS_NOT_ACCESS_GATED"
+      "classification": "P0_TENANT_MISMATCH_AND_PUBLIC_INGRESS"
     }
   }
 }
