@@ -25,6 +25,9 @@ const env={
 function request(body,token=jwt(),path="/internal/emp001/chat"){
  return new Request("https://private.example.test"+path,{method:"POST",headers:{"cf-access-jwt-assertion":token},body:JSON.stringify(body)});
 }
+function preflightRequest(token=jwt()){
+ return new Request("https://private.example.test/internal/emp001/preflight",{method:"GET",headers:{"cf-access-jwt-assertion":token}});
+}
 test("A verified JWT maps to tenant A and token A",async()=>{
  requests.length=0;
  assert.equal((await runner.fetch(request({message:"hola"}),env)).status,200);
@@ -70,7 +73,7 @@ test("B private preflight uses B binding/token and verifies the runtime tenant",
  const runtimeA={fetch:async()=>{throw Error("A binding must not be called")}};
  const runtimeB={fetch:async(url,init)=>{calls.push({url,init});return Response.json({ok:true,preflight:"PASS",ai_inference_used:false,openai_used:false,service_binding:"PASS",sales_ops_auth:"PASS",tenant:"tenant-b",products:0,recommendations:0})}};
  const scoped={...env,EMP001_RUNTIME_A:runtimeA,EMP001_RUNTIME_B:runtimeB};
- const response=await runner.fetch(request({},jwt({sub:"subject-b",email:"b@example.test"}),"/internal/emp001/preflight"),scoped);
+ const response=await runner.fetch(preflightRequest(jwt({sub:"subject-b",email:"b@example.test"})),scoped);
  assert.equal(response.status,200);
  const body=await response.json();
  assert.equal(body.tenant,"tenant-b");
@@ -82,7 +85,7 @@ test("B private preflight uses B binding/token and verifies the runtime tenant",
 test("private preflight rejects tenant mismatch and does not report PASS",async()=>{
  const runtimeA={fetch:async()=>Response.json({ok:true,tenant:"tenant-a"})};
  const runtimeB={fetch:async()=>Response.json({ok:true,preflight:"PASS",tenant:"tenant-a"})};
- const response=await runner.fetch(request({},jwt({sub:"subject-b",email:"b@example.test"}),"/internal/emp001/preflight"),{...env,EMP001_RUNTIME_A:runtimeA,EMP001_RUNTIME_B:runtimeB});
+ const response=await runner.fetch(preflightRequest(jwt({sub:"subject-b",email:"b@example.test"})),{...env,EMP001_RUNTIME_A:runtimeA,EMP001_RUNTIME_B:runtimeB});
  assert.equal(response.status,502);
  const body=await response.json();
  assert.equal(body.error,"tenant_mismatch");
@@ -90,7 +93,7 @@ test("private preflight rejects tenant mismatch and does not report PASS",async(
  assert.equal(body.actual_tenant,"tenant-a");
 });
 test("private preflight fails closed when disabled or Access JWT is missing",async()=>{
- assert.equal((await runner.fetch(request({},jwt({sub:"subject-b",email:"b@example.test"}),"/internal/emp001/preflight"),{...env,PRIVATE_RUNNER_ENABLED:"false"})).status,503);
- const noJwt=new Request("https://private.example.test/internal/emp001/preflight",{method:"GET"});
+ assert.equal((await runner.fetch(preflightRequest(jwt({sub:"subject-b",email:"b@example.test"})),{...env,PRIVATE_RUNNER_ENABLED:"false"})).status,503);
+ const noJwt=preflightRequest("");
  assert.equal((await runner.fetch(noJwt,env)).status,403);
 });
