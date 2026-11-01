@@ -99,12 +99,51 @@
     "unverified payment or external publication"
   ],
   "recovery": "Stop session; use only previously authorized ingress suspension. Preserve DB/DO/R2/ledger/receipts. No destructive reset or automatic schema/version rollback; reviewed compatible forward-fix or authorized restore.",
-  "currentExternalBlock": "Cloudflare dashboard redirects current available browser to sign-in. Remote inventory not refreshed; historical UI observations must not be reported as current.",
+  "currentExternalBlock": "Cloudflare authenticated dashboard access is available and was inspected on 2026-11-01; the prior sign-in redirect is stale. Runtime A exists with active version 19ece831 and its dashboard preflight showed HTTP 200 / PASS for herreb-client-0. This preflight predates or is not correlated to the latest Sales Ops A secret replacement and does not prove the target binding. Core's currently deployed settings remain single-tenant A: ACCESS_IDENTITY_MAP_JSON and TENANT_MANIFESTS_JSON contain only herreb-client-0; its SALES_OPS binding still points to herreb-emp001-sales-ops-sandbox. Do not treat the proposed integrated manifest as deployed. Refresh effective bindings, Access A/B policy and exact Worker version provenance before remote E2E.",
   "independentApprovalsRecovered": {
     "core329Reviews": 0,
     "runtime28Reviews": 0,
     "runtime29Reviews": 0,
     "runtime30Reviews": 0,
     "core329Comment": "author request only: https://github.com/dito2001-art/herreb-employee-core/pull/329#issuecomment-6546433542"
+  },
+  "latestExternalReadback": {
+    "observedAt": "2026-11-01",
+    "runtimeA": {
+      "worker": "herreb-emp001-runtime-stg-a",
+      "activeVersionPrefix": "19ece831",
+      "preflightHttp": 200,
+      "preflight": "PASS",
+      "tenant": "herreb-client-0",
+      "serviceBinding": "PASS",
+      "salesOpsAuth": "PASS",
+      "scope": "Cloudflare dashboard preview readback; effective Sales Ops target not identified by this evidence"
+    },
+    "salesOpsA": {
+      "worker": "herreb-emp001-sales-ops-stg-a",
+      "versionId": "a788de81-4acb-40be-a975-11b3f94e6aa2",
+      "d1": "herreb-emp001-sales-ops-staging-db",
+      "secret": "SALES_OPS_CREDENTIALS_JSON",
+      "secretInstall": "operator-reported; post-rotation readback not independently captured",
+      "scope": "private bootstrap reported and deployment readback recorded; not integrated E2E"
+    },
+    "deployedCore": {
+      "worker": "herreb-employee-core",
+      "identityMap": "herreb-client-0 only",
+      "tenantManifest": "herreb-client-0 only",
+      "salesOpsBinding": "herreb-emp001-sales-ops-sandbox",
+      "scope": "authenticated Cloudflare settings tab; not the proposed isolated integrated candidate"
+    },
+    "salesOpsB": {
+      "runtimePreflightTenant": "herreb-client-b",
+      "salesOpsProductsOwnTenantHttp": 200,
+      "foreignTenantHttp": 404,
+      "scope": "operator-provided curl output; not full integrated E2E"
+    },
+    "access": {
+      "emp003App": "HerreB EMP003 Staging",
+      "policy": "A-only observed; B not authorized in the recorded policy",
+      "scope": "administrative settings readback, not JWT A/B session certification"
+    }
   }
 }
