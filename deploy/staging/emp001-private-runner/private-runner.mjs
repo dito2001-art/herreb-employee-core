@@ -17,7 +17,24 @@ export async function verifyJWT(token,env,now=Math.floor(Date.now()/1000)){
  return claims;
 }
 export default {async fetch(req,env){
- if(req.method!=="POST"||new URL(req.url).pathname!=="/internal/emp001/chat")return error(404,"route_disabled");
+ const path=new URL(req.url).pathname;
+ if(req.method==="GET"&&path==="/internal/emp001/preflight"){
+  if(env.PRIVATE_RUNNER_ENABLED!=="true")return error(503,"disabled");
+  let claims;try{claims=await verifyJWT(req.headers.get("cf-access-jwt-assertion"),env)}catch{return error(403,"access_denied")}
+  let principals;try{principals=JSON.parse(env.PRINCIPALS_JSON);if(!Array.isArray(principals))throw Error()}catch{return error(503,"principal_config")}
+  const found=principals.filter(p=>p.sub===claims.sub&&p.email===claims.email&&p.role==="emp001_test_operator"&&["A","B"].includes(p.slot)&&typeof p.tenantId==="string"&&p.tenantId);
+  if(found.length!==1)return error(403,"principal_denied");
+  const p=found[0],runtime=p.slot==="A"?env.EMP001_RUNTIME_A:env.EMP001_RUNTIME_B,token=p.slot==="A"?env.RUNTIME_TOKEN_A:env.RUNTIME_TOKEN_B;
+  if(!runtime?.fetch||!token||!env.RUNTIME_TOKEN_A||!env.RUNTIME_TOKEN_B||env.RUNTIME_TOKEN_A===env.RUNTIME_TOKEN_B||!env.EMP001_RUNTIME_A?.fetch||!env.EMP001_RUNTIME_B?.fetch||env.EMP001_RUNTIME_A===env.EMP001_RUNTIME_B)return error(503,"runtime_config");
+  try{
+   const r=await runtime.fetch("https://runtime.internal/preflight",{method:"GET",headers:{"authorization":"Bearer "+token}});
+   const output=await r.text();if(output.length>16384)return error(502,"upstream_oversize");
+   let data;try{data=JSON.parse(output)}catch{return error(502,"upstream_invalid_json")}
+   if(data.tenant!==p.tenantId)return Response.json({ok:false,error:"tenant_mismatch",expected_tenant:p.tenantId,actual_tenant:typeof data.tenant==="string"?data.tenant:null},{status:502,headers:{"cache-control":"no-store"}});
+   return Response.json(data,{status:r.status,headers:{"cache-control":"no-store"}});
+  }catch{return error(502,"upstream_unavailable")}
+ }
+ if(req.method!=="POST"||path!=="/internal/emp001/chat")return error(404,"route_disabled");
  if(env.PRIVATE_RUNNER_ENABLED!=="true")return error(503,"disabled");
  let claims;try{claims=await verifyJWT(req.headers.get("cf-access-jwt-assertion"),env)}catch{return error(403,"access_denied")}
  let principals;try{principals=JSON.parse(env.PRINCIPALS_JSON);if(!Array.isArray(principals))throw Error()}catch{return error(503,"principal_config")}
