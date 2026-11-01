@@ -47,7 +47,7 @@ export function createEMP003StagingCopyObjectStorage(
   const maxBytes = 64 * 1024;
   return {
     async put(key, bytes, mimeType) {
-      if (mimeType !== "text/plain; charset=utf-8" && mimeType !== "text/plain")
+      if (mimeType !== "text/plain")
         throw new Error("COPY_STAGING_MIME_UNSUPPORTED");
       if (bytes.byteLength > maxBytes)
         throw new Error("COPY_STAGING_OBJECT_TOO_LARGE");
