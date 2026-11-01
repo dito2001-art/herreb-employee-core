@@ -27,7 +27,7 @@ export default {async fetch(req,env){
  if(!body||typeof body!=="object"||Array.isArray(body)||Object.keys(body).some(k=>!["message","session_id"].includes(k)))return error(400,"forbidden_field");
  if(typeof body.message!=="string"||!body.message.trim()||body.message.length>2000||body.session_id!==undefined&&(typeof body.session_id!=="string"||!body.session_id||body.session_id.length>128))return error(400,"invalid_input");
  const p=found[0],runtime=p.slot==="A"?env.EMP001_RUNTIME_A:env.EMP001_RUNTIME_B,token=p.slot==="A"?env.RUNTIME_TOKEN_A:env.RUNTIME_TOKEN_B;
- if(!runtime?.fetch||!token)return error(503,"runtime_config");
+ if(!runtime?.fetch||!token||!env.RUNTIME_TOKEN_A||!env.RUNTIME_TOKEN_B||env.RUNTIME_TOKEN_A===env.RUNTIME_TOKEN_B||!env.EMP001_RUNTIME_A?.fetch||!env.EMP001_RUNTIME_B?.fetch||env.EMP001_RUNTIME_A===env.EMP001_RUNTIME_B)return error(503,"runtime_config");
  try{
  const r=await runtime.fetch("https://runtime.internal/chat",{method:"POST",headers:{"authorization":"Bearer "+token,"content-type":"application/json"},body:JSON.stringify({tenant_id:p.tenantId,channel:"api",message:body.message,session_id:body.session_id})});
  const output=await r.text();if(output.length>65536)return error(502,"upstream_oversize");
