@@ -20,7 +20,7 @@ const env={
  PRINCIPALS_JSON:JSON.stringify([
  {sub:"subject-a",email:"a@example.test",role:"emp001_test_operator",slot:"A",tenantId:"tenant-a"},
  {sub:"subject-b",email:"b@example.test",role:"emp001_test_operator",slot:"B",tenantId:"tenant-b"}]),
- EMP001_RUNTIME_A:runtime,EMP001_RUNTIME_B:runtime,RUNTIME_TOKEN_A:"token-a",RUNTIME_TOKEN_B:"token-b"
+ EMP001_RUNTIME_A:{fetch:runtime.fetch},EMP001_RUNTIME_B:{fetch:runtime.fetch},RUNTIME_TOKEN_A:"token-a",RUNTIME_TOKEN_B:"token-b"
 };
 function request(body,token=jwt(),path="/internal/emp001/chat"){
  return new Request("https://private.example.test"+path,{method:"POST",headers:{"cf-access-jwt-assertion":token},body:JSON.stringify(body)});
@@ -56,4 +56,11 @@ test("deny disabled, missing identity and unexpected routes",async()=>{
  assert.equal((await runner.fetch(request({message:"hola"}),{...env,PRIVATE_RUNNER_ENABLED:"false"})).status,503);
  assert.equal((await runner.fetch(request({message:"hola"},"invalid"),env)).status,403);
  assert.equal((await runner.fetch(request({message:"hola"},jwt(),"/admin/reset-session"),env)).status,404);
+});
+
+test("reject shared bearer across A/B",async()=>{
+ assert.equal((await runner.fetch(request({message:"hola"}),{...env,RUNTIME_TOKEN_B:"token-a"})).status,503);
+});
+test("reject shared Runtime Service Binding across A/B",async()=>{
+ assert.equal((await runner.fetch(request({message:"hola"}),{...env,EMP001_RUNTIME_B:env.EMP001_RUNTIME_A})).status,503);
 });
