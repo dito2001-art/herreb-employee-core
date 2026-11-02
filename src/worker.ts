@@ -44,7 +44,13 @@ export { EMP003CampaignState } from './runtime/emp003-campaign-state';
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url); const runtimeEnv = env as WorkerEnv;
-    if (url.pathname === '/api/internal/workforce/resolve-actor') return handleWorkforceCoreResolveActor(request, runtimeEnv);
+    if (url.pathname === '/api/internal/workforce/resolve-actor') {
+      // This route is addressed only through the private Core Service Binding.
+      // Reject public Worker hostnames even when an Access JWT is present.
+      if (url.hostname !== 'workforce.core.internal')
+        return Response.json({ ok: false, error: 'WORKFORCE_PRIVATE_ROUTE_ONLY' }, { status: 404 });
+      return handleWorkforceCoreResolveActor(request, runtimeEnv);
+    }
     if (url.pathname === '/api/emp003/assets' || url.pathname.startsWith('/api/emp003/assets/')) return handleEMP003CopyAssets(request, runtimeEnv);
     if (url.pathname === '/api/emp003/generate-campaign') return handleEMP003BrowserGenerate(request, runtimeEnv);
     if (url.pathname === '/api/emp001/operations') return handleEMP001BrowserSales(request, runtimeEnv);
