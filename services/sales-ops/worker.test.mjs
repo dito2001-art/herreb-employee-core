@@ -53,3 +53,20 @@ test('failed transition audit rolls back the state change', async () => {
   assert.equal(f.db.prepare("SELECT count(*) n FROM audit_log WHERE action='ORDER_STATE_PAYMENT_CONFIRMED'").get().n,0);
  } finally { f.db.close(); }
 });
+
+test('dedicated EMP001_B_API_TOKEN authenticates only as herreb-client-b without changing A', async () => {
+ const f=fixture();
+ const env={...f.env,EMP001_B_API_TOKEN:'b-only-secret'};
+ const request=(token,tenant)=>new Request('https://sales.test/api/v1/products',{
+  headers:{authorization:`Bearer ${token}`,'x-tenant-id':tenant}
+ });
+ const b=await worker.fetch(request('b-only-secret','herreb-client-b'),env);
+ assert.equal(b.status,200);
+ assert.equal((await b.json()).tenant_id,'herreb-client-b');
+ const forged=await worker.fetch(request('b-only-secret','tenant-a'),env);
+ assert.equal(forged.status,404);
+ const a=await worker.fetch(request('a','tenant-a'),env);
+ assert.equal(a.status,200);
+ assert.equal((await a.json()).tenant_id,'tenant-a');
+ f.db.close();
+});
