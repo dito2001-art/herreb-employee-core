@@ -137,6 +137,7 @@ function credentialTenant(req, env) {
   try { credentials = JSON.parse(env.SALES_OPS_CREDENTIALS_JSON || '[]'); } catch { return null; }
   if (!Array.isArray(credentials)) return null;
   if (env.EMP001_API_TOKEN && env.EMP001_API_TOKEN_TENANT_ID) credentials.push({ token: env.EMP001_API_TOKEN, tenantId: env.EMP001_API_TOKEN_TENANT_ID });
+  if (env.EMP001_B_API_TOKEN) credentials.push({ token: env.EMP001_B_API_TOKEN, tenantId: 'herreb-client-b' });
   if (credentials.some(c => !c || typeof c.token !== 'string' || !c.token || typeof c.tenantId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(c.tenantId))) return null;
   const matches = credentials.filter(c => supplied === `Bearer ${c.token}`);
   return matches.length === 1 ? matches[0].tenantId : null;
