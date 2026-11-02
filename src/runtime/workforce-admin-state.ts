@@ -105,7 +105,8 @@ export class WorkforceAdminState extends DurableObject<AdminStateEnv> {
             requesterActorId: actor.actorId,
             requestId: body.approvalRequestId,
             now: Date.now(),
-            auditId
+            auditId,
+            requesterTenantId: actor.tenantId
           });
           if (!persisted) {
             await audit.append({
