@@ -3,7 +3,7 @@ on:
   pull_request:
     branches:
       - fix/workforce-i32-minimal-integration-20261031
-      - review/workforce-final-bundle-20261102
+      - review/workforce-final-offline-bdb36e6
     paths:
       - 'deploy/staging/emp001-private-runner/**'
       - '.github/workflows/validate-emp001-private-runner.yml'
