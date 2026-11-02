@@ -63,7 +63,8 @@ export async function executeWorkforceAdminMutation(input: {
   const auditId = (input.randomId ?? (() => crypto.randomUUID()))();
   const timestamp = (input.now ?? (() => new Date()))().toISOString();
   // Fail closed by default: YELLOW requires an injected, trusted server-side verifier.\n  // No request body field can grant approval.
-  const permitted = decision === "GREEN" || (decision === "YELLOW" && Boolean(input.authorizeYellow) && await input.authorizeYellow({ actor: input.actor, mutation: input.mutation }));
+  const verifier = input.authorizeYellow;
+  const permitted = decision === "GREEN" || (decision === "YELLOW" && verifier !== undefined && await verifier({ actor: input.actor, mutation: input.mutation }));
   let persisted = false;
 
   if (permitted) {
