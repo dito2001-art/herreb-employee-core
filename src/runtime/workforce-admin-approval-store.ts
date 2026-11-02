@@ -5,6 +5,7 @@ import type { WorkforceAdminMutation } from "../core/workforce-admin-mutations";
 interface ApprovalStorage {
   get<T>(key: string): Promise<T | undefined>;
   put<T>(key: string, value: T): Promise<void>;
+  transaction?<T>(callback: (tx: ApprovalStorage) => Promise<T>): Promise<T>;
 }
 const prefix = "workforce-admin:approval:v1:";
 
@@ -22,8 +23,7 @@ export class DurableIndependentApprovalStore {
     await this.storage.put(key, { ...grant, consumed: false });
   }
 
-  /** Must execute within the same DO serialized mutation/transaction boundary as
-   * the approved registry write. Never expose this method as a public route. */
+  /** A standalone consume is not an authorization to commit a registry write.\n   * The caller must use a storage transaction encompassing both operations. */
   async consume(input: {
     requestId: string;
     requesterActorId: string;
