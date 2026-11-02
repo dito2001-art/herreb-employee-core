@@ -22,6 +22,7 @@ export async function commitApprovedAdminMutation(input: {
   requesterActorId: string;
   requestId: string;
   now: number;
+  auditId?: string;
 }): Promise<boolean> {
   if (input.mutation.type !== "tenant.create" && input.mutation.type !== "identity.delete") return false;
   if (!/^[a-zA-Z0-9_-]{16,128}$/.test(input.requestId)) return false;
@@ -37,6 +38,19 @@ export async function commitApprovedAdminMutation(input: {
     const next = planWorkforceAdminMutation(current, input.mutation);
     await tx.put(stateKey, next);
     await tx.put(key, { ...approval, consumed: true });
+    if (input.auditId) {
+      await tx.put(`workforce-admin:audit:v1:${new Date(input.now).toISOString()}:${input.auditId}`, {
+        auditId: input.auditId,
+        actorId: input.requesterActorId,
+        tenantId: "platform",
+        mutationType: input.mutation.type,
+        decision: "YELLOW",
+        persisted: true,
+        timestamp: new Date(input.now).toISOString(),
+        approvalRequestId: input.requestId,
+        approverActorId: approval.approverActorId
+      });
+    }
     const readBack = await tx.get<WorkforceAdminMutationPlan>(stateKey);
     if (!readBack || JSON.stringify(readBack) !== JSON.stringify(next))
       throw new Error("WORKFORCE_ADMIN_PERSISTENCE_READBACK_FAILED");
