@@ -35,7 +35,9 @@ export async function handleWorkforceCoreResolveActor(
     if (!actor.actorId || !actor.tenantId || (actor.role !== "owner" && actor.role !== "user"))
       return deny(403, "WORKFORCE_ACTOR_FORBIDDEN");
     const manifest = body.state.manifests.find(item => item.tenantId === actor.tenantId);
-    if (!manifest || !Array.isArray(manifest.enabledEmployees))
+    if (!manifest || !Array.isArray(manifest.enabledEmployees) ||
+        !manifest.enabledEmployees.every((employee: unknown) =>
+          employee === "EMP-001" || employee === "EMP-002" || employee === "EMP-003"))
       return deny(403, "WORKFORCE_ACTOR_FORBIDDEN");
     return Response.json({
       ok: true, actorId: actor.actorId, tenantId: actor.tenantId, role: actor.role,
