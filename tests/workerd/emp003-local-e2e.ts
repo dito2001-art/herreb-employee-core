@@ -1,3 +1,4 @@
+import { hashEMP003Blueprint } from "../../src/core/emp003-blueprint-pin";
 import assert from "node:assert/strict";
 import { randomUUID, webcrypto } from "node:crypto";
 import { request as httpRequest } from "node:http";
@@ -343,6 +344,8 @@ const editA = (expectedRevision: number) =>
   });
 assert.equal((await editA(savedA.revision)).status, 200);
 assert.equal((await editA(savedA.revision)).status, 409);
+const currentDraft = (await (await browserRead(validA, campaignA)).json()) as { revision: number; campaign: Record<string, unknown> };
+const reviewHash = await hashEMP003Blueprint(currentDraft.campaign);
 const reviewBrowser = (
   token: string,
   from: string,
@@ -359,6 +362,8 @@ const reviewBrowser = (
       to,
       reason: "Delivery certification",
       idempotencyKey: `browser-${from}-${to}`,
+      blueprintRevision: currentDraft.revision,
+      blueprintHash: reviewHash,
       ...extra
     })
   });
