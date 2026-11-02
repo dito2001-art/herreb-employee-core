@@ -32,19 +32,23 @@ export class DurableApprovalRequests {
       throw new Error("WORKFORCE_APPROVAL_REQUEST_INVALID");
     if (input.mutation.type !== "tenant.create" && input.mutation.type !== "identity.delete")
       throw new Error("WORKFORCE_APPROVAL_MUTATION_NOT_YELLOW");
-    const key = pendingPrefix + input.requestId;
-    if (await this.storage.get(key) !== undefined)
-      throw new Error("WORKFORCE_APPROVAL_REQUEST_CONFLICT");
-    const record: PendingIndependentApproval = {
-      requestId: input.requestId,
-      requesterActorId: input.requesterActorId,
-      mutationSha256: await workforceMutationDigest(input.mutation),
-      createdAt: input.now,
-      expiresAt: input.now + 300_000,
-      approved: false
-    };
-    await this.storage.put(key, record);
-    return record;
+    if (!this.storage.transaction)
+      throw new Error("WORKFORCE_APPROVAL_TRANSACTION_REQUIRED");
+    return this.storage.transaction(async (tx) => {
+      const key = pendingPrefix + input.requestId;
+      if (await tx.get(key) !== undefined || await tx.get(grantPrefix + input.requestId) !== undefined)
+        throw new Error("WORKFORCE_APPROVAL_REQUEST_CONFLICT");
+      const record: PendingIndependentApproval = {
+        requestId: input.requestId,
+        requesterActorId: input.requesterActorId,
+        mutationSha256: await workforceMutationDigest(input.mutation),
+        createdAt: input.now,
+        expiresAt: input.now + 300_000,
+        approved: false
+      };
+      await tx.put(key, record);
+      return record;
+    });
   }
 
   async approve(input: {
