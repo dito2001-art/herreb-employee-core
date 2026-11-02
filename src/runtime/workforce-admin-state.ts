@@ -61,20 +61,23 @@ export class WorkforceAdminState extends DurableObject<AdminStateEnv> {
         // This endpoint never issues grants or accepts caller-provided approver identities.
         const decision = new OwnerScopedAdminPolicy().evaluate(actor, body.mutation);
         if (decision === "YELLOW" && body.approvalRequestId) {
+          const auditId = crypto.randomUUID();
           const persisted = await commitApprovedAdminMutation({
             storage: this.ctx.storage,
             bootstrap,
             mutation: body.mutation,
             requesterActorId: actor.actorId,
             requestId: body.approvalRequestId,
-            now: Date.now()
+            now: Date.now(),
+            auditId
           });
-          const auditId = crypto.randomUUID();
-          await audit.append({
-            auditId, actorId: actor.actorId, tenantId: actor.tenantId,
-            mutationType: body.mutation.type, decision: "YELLOW",
-            persisted, timestamp: new Date().toISOString()
-          });
+          if (!persisted) {
+            await audit.append({
+              auditId, actorId: actor.actorId, tenantId: actor.tenantId,
+              mutationType: body.mutation.type, decision: "YELLOW",
+              persisted: false, timestamp: new Date().toISOString()
+            });
+          }
           return Response.json(
             { ok: persisted, decision: "YELLOW", persisted, auditId },
             { status: persisted ? 200 : 403,
