@@ -5,6 +5,7 @@ type Env = Parameters<typeof readWorkforceAdminAccessActor>[1] & {
   SALES_OPS?: ServiceFetcher;
   SALES_OPS_TOKEN?: string;
   SALES_OPS_TENANT_ID?: string;
+  SALES_OPS_CREDENTIALS_JSON?: string;
 };
 const reply = (status: number, body: unknown) =>
   Response.json(body, {
@@ -15,6 +16,28 @@ const object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v === "object" && !Array.isArray(v);
 const nonnegative = (v: unknown): v is number =>
   typeof v === "number" && Number.isFinite(v) && v >= 0;
+
+/** Credentials are server-only and tenant-bound. Never select them from client input. */
+function salesCredential(env: Env, tenantId: string): string | undefined {
+  if (!/^[a-zA-Z0-9_-]{1,100}$/.test(tenantId)) return undefined;
+  if (env.SALES_OPS_CREDENTIALS_JSON !== undefined) {
+    let parsed: unknown;
+    try { parsed = JSON.parse(env.SALES_OPS_CREDENTIALS_JSON); } catch { return undefined; }
+    if (!Array.isArray(parsed) || parsed.some((entry) =>
+      !object(entry) ||
+      typeof entry.tenantId !== "string" ||
+      !/^[a-zA-Z0-9_-]{1,100}$/.test(entry.tenantId) ||
+      typeof entry.token !== "string" || !entry.token.trim()
+    )) return undefined;
+    const credentials = parsed as Array<{ tenantId: string; token: string }>;
+    if (new Set(credentials.map((entry) => entry.tenantId)).size !== credentials.length ||
+        new Set(credentials.map((entry) => entry.token)).size !== credentials.length)
+      return undefined;
+    return credentials.find((entry) => entry.tenantId === tenantId)?.token;
+  }
+  return env.SALES_OPS_TENANT_ID?.trim() === tenantId && env.SALES_OPS_TOKEN?.trim()
+    ? env.SALES_OPS_TOKEN : undefined;
+}
 
 /** Independent, read-only Sales Ops boundary. No client tenant or credential selectors. */
 export async function handleEMP001BrowserSales(
@@ -41,13 +64,10 @@ export async function handleEMP001BrowserSales(
   const orderId = url.searchParams.get("orderId");
   if (orderId !== null && !/^[a-zA-Z0-9_-]{1,200}$/.test(orderId))
     return reply(400, { ok: false, error: "SALES_INVALID_ORDER_ID" });
-  if (
-    !env.SALES_OPS ||
-    !env.SALES_OPS_TOKEN?.trim() ||
-    !env.SALES_OPS_TENANT_ID?.trim()
-  )
+  if (!env.SALES_OPS)
     return reply(503, { ok: false, error: "SALES_NOT_CONFIGURED" });
-  if (env.SALES_OPS_TENANT_ID.trim() !== actor.tenantId)
+  const token = salesCredential(env, actor.tenantId);
+  if (!token)
     return reply(403, { ok: false, error: "SALES_TENANT_NOT_CONFIGURED" });
   try {
     const upstream = await env.SALES_OPS.fetch(
@@ -59,7 +79,7 @@ export async function handleEMP001BrowserSales(
           redirect: "manual",
           signal: AbortSignal.timeout(10000),
           headers: {
-            authorization: "Bearer " + env.SALES_OPS_TOKEN,
+            authorization: "Bearer " + token,
             "x-tenant-id": actor.tenantId
           }
         }
