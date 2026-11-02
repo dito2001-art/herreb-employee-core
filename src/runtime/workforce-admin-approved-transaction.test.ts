@@ -78,7 +78,7 @@ test("wrong actor cannot consume an approval", async () => {
     consumed: false
   });
   assert.equal(await commitApprovedAdminMutation({
-    storage: h.storage, bootstrap, mutation, requesterActorId: "another", requestId, now
+    storage: h.storage, bootstrap, mutation, requesterActorId: "another", requestId, now, auditId: "wrong-actor-audit", requesterTenantId: "platform"
   }), false);
   assert.equal(h.data.has(stateKey), false);
 });
