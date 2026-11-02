@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { commitApprovedAdminMutation } from "./workforce-admin-approved-transaction";
 import { workforceMutationDigest } from "./workforce-admin-independent-approval";
+import { DurableApprovalRequests } from "./workforce-admin-approval-requests";
 import type { WorkforceAdminMutationPlan } from "../core/workforce-admin-mutations";
 
 const mutation = { type: "tenant.create" as const, tenant: {
@@ -116,4 +117,34 @@ test("approval cannot commit without platform scope or audit ID", async () => {
   }), false);
   assert.equal(h.data.has(stateKey), false);
   assert.equal((h.data.get(approvalKey) as { consumed: boolean }).consumed, false);
+});
+
+test("integrated tenant C lifecycle: request, independent approval, commit, replay denial", async () => {
+  const h = fixture();
+  const storage = {
+    ...h.storage,
+    async get<T>(key: string) { return h.data.get(key) as T | undefined; },
+    async put<T>(key: string, value: T) { h.data.set(key, value); }
+  };
+  const approvals = new DurableApprovalRequests(storage);
+  const requested = await approvals.request({
+    requestId, requesterActorId: "platform-access:requester@example.com", mutation, now
+  });
+  assert.equal(requested.requestId, requestId);
+  assert.equal(await approvals.approve({
+    requestId, approverActorId: "platform-access:requester@example.com", now: now + 1000
+  }), false);
+  assert.equal(await approvals.approve({
+    requestId, approverActorId: "platform-access:reviewer@example.com", now: now + 1000
+  }), true);
+  const input = {
+    storage, bootstrap, mutation, requesterActorId: "platform-access:requester@example.com",
+    requesterTenantId: "platform", requestId, now: now + 2000, auditId: "integrated-tenant-c-audit"
+  };
+  assert.equal(await commitApprovedAdminMutation({
+    ...input, requesterActorId: "platform-access:reviewer@example.com"
+  }), false);
+  assert.equal(await commitApprovedAdminMutation(input), true);
+  assert.equal(await commitApprovedAdminMutation(input), false);
+  assert.equal((h.data.get(stateKey) as WorkforceAdminMutationPlan).manifests.length, 1);
 });
