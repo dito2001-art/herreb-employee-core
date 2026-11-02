@@ -7,7 +7,7 @@ function fixture() {
  const db = new DatabaseSync(':memory:');
  db.exec(`CREATE TABLE tenants(id TEXT PRIMARY KEY,active INT); CREATE TABLE products(sku TEXT,tenant_id TEXT,name TEXT,active INT,stock_qty INT); CREATE TABLE quotes(id TEXT,tenant_id TEXT,customer_id TEXT,status TEXT,quote_json TEXT,total_gs INT); CREATE TABLE orders(id TEXT PRIMARY KEY,tenant_id TEXT,customer_id TEXT,quote_id TEXT,status TEXT,total_gs INT,created_at TEXT,updated_at TEXT,evidence_json TEXT); CREATE TABLE order_lines(id TEXT PRIMARY KEY,tenant_id TEXT,order_id TEXT,sku TEXT,name TEXT,qty INT,unit_price_gs INT,line_total_gs INT); CREATE TABLE audit_log(id TEXT PRIMARY KEY,tenant_id TEXT,ts TEXT,actor TEXT,action TEXT,entity_type TEXT,entity_id TEXT,payload_json TEXT);`);
  db.exec(readFileSync(new URL('./migrations/0001_order_create_operations.sql',import.meta.url),'utf8'));
- for(const tenant of ['tenant-a','tenant-b']) {
+ for(const tenant of ['tenant-a','tenant-b','herreb-client-b']) {
  db.prepare('INSERT INTO tenants VALUES(?,1)').run(tenant);
  db.prepare('INSERT INTO products VALUES(?,?,?,1,10)').run('SKU',tenant,'Product');
  db.prepare('INSERT INTO quotes VALUES(?,?,?,?,?,100)').run('Q1',tenant,'customer','OPEN',JSON.stringify({lines:[{sku:'SKU',name:'Product',qty:2,unit_price_gs:50,line_total_gs:100}]}));
