@@ -25,7 +25,7 @@ export async function commitApprovedAdminMutation(input: {
   auditId?: string;
 }): Promise<boolean> {
   if (input.mutation.type !== "tenant.create" && input.mutation.type !== "identity.delete") return false;
-  if (!/^[a-zA-Z0-9_-]{16,128}$/.test(input.requestId)) return false;
+  if (!/^[a-zA-Z0-9_-]{16,128}$/.test(input.requestId) || !Number.isFinite(input.now)) return false;
   return input.storage.transaction(async (tx) => {
     const key = approvalPrefix + input.requestId;
     const approval = await tx.get<ApprovalGrant & { consumed: boolean }>(key);
