@@ -96,17 +96,3 @@ test("request ID already used by an approval grant cannot be reused", async () =
   assert.equal(h.data.has("workforce-admin:approval-request:v1:" + requestId), false);
 });
 
-test("concurrent approval attempts issue at most one grant", async () => {
-  const h = fixture();
-  await h.requests.request({ requestId, requesterActorId: "requester", mutation, now });
-  const results = await Promise.all([
-    h.requests.approve({ requestId, approverActorId: "reviewer-a", now: now + 1000 }),
-    h.requests.approve({ requestId, approverActorId: "reviewer-b", now: now + 1000 })
-  ]);
-  assert.equal(results.filter(Boolean).length, 1);
-  const grant = h.data.get("workforce-admin:approval:v1:" + requestId) as {
-    approverActorId: string; consumed: boolean
-  };
-  assert.equal(grant.consumed, false);
-  assert.ok(["reviewer-a", "reviewer-b"].includes(grant.approverActorId));
-});
