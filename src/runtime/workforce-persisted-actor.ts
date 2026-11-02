@@ -1,36 +1,35 @@
-import { readWorkforceAdminAccessActor } from "./workforce-admin-access-read";
-import type { WorkforceAdminMutationPlan } from "../core/workforce-admin-mutations";
-
-type StateBinding = {
-  idFromName(name: string): unknown;
-  get(id: unknown): { fetch(url: string, init?: RequestInit): Promise<Response> };
-};
+type CoreAuthority = { fetch(request: Request): Promise<Response> };
 type AuthorityEnv = {
-  WORKFORCE_ACCESS_TEAM_DOMAIN?: string;
-  WORKFORCE_ACCESS_AUDIENCE?: string;
-  WORKFORCE_ADMIN_STATE?: StateBinding;
+  WORKFORCE_CORE?: CoreAuthority;
 };
 
-/** Resolve a verified Access user against the existing persisted Core registry. */
+/**
+ * Read-only Core Service Binding client. No admin Durable Object is exposed to
+ * staging and no static identity map can authorize a request.
+ * The Core endpoint must independently validate the Access JWT and persisted
+ * identity before returning this narrow response.
+ */
 export async function resolvePersistedWorkforceActor(
   request: Request,
-  env: AuthorityEnv,
-  fetcher: typeof fetch = fetch
+  env: AuthorityEnv
 ): Promise<{ actorId: string; tenantId: string; role: "owner" | "user" }> {
-  if (!env.WORKFORCE_ADMIN_STATE) throw new Error("WORKFORCE_AUTHORITY_UNAVAILABLE");
-  const stub = env.WORKFORCE_ADMIN_STATE.get(env.WORKFORCE_ADMIN_STATE.idFromName("global"));
-  const response = await stub.fetch("https://workforce.admin/state", { method: "GET" });
-  if (!response.ok) throw new Error("WORKFORCE_AUTHORITY_UNAVAILABLE");
-  const body = (await response.json()) as { ok?: unknown; state?: WorkforceAdminMutationPlan };
-  if (body.ok !== true || !body.state || !Array.isArray(body.state.manifests) ||
-      !Array.isArray(body.state.identities)) throw new Error("WORKFORCE_AUTHORITY_INVALID");
-  const actor = await readWorkforceAdminAccessActor(request, {
-    WORKFORCE_ACCESS_TEAM_DOMAIN: env.WORKFORCE_ACCESS_TEAM_DOMAIN,
-    WORKFORCE_ACCESS_AUDIENCE: env.WORKFORCE_ACCESS_AUDIENCE,
-    WORKFORCE_PLATFORM_ADMIN_EMAILS_JSON: "[]"
-  }, fetcher, body.state.identities);
-  if ((actor.role !== "owner" && actor.role !== "user") || !actor.actorId || !actor.tenantId ||
-      !body.state.manifests.some((manifest) => manifest.tenantId === actor.tenantId))
-    throw new Error("WORKFORCE_ACTOR_FORBIDDEN");
-  return { actorId: actor.actorId, tenantId: actor.tenantId, role: actor.role };
+  if (!env.WORKFORCE_CORE) throw new Error("WORKFORCE_AUTHORITY_UNAVAILABLE");
+  const jwt = request.headers.get("cf-access-jwt-assertion")?.trim();
+  if (!jwt) throw new Error("WORKFORCE_ACCESS_JWT_REQUIRED");
+  const response = await env.WORKFORCE_CORE.fetch(new Request(
+    "https://workforce.core.internal/api/internal/workforce/resolve-actor",
+    { method: "GET", headers: { "cf-access-jwt-assertion": jwt }, redirect: "manual" }
+  ));
+  if (!response.ok) throw new Error(
+    response.status === 401 || response.status === 403
+      ? "WORKFORCE_ACTOR_FORBIDDEN" : "WORKFORCE_AUTHORITY_UNAVAILABLE"
+  );
+  const body: unknown = await response.json();
+  if (!body || typeof body !== "object") throw new Error("WORKFORCE_AUTHORITY_INVALID");
+  const result = body as Record<string, unknown>;
+  if (result.ok !== true || typeof result.actorId !== "string" ||
+      !result.actorId.trim() || typeof result.tenantId !== "string" ||
+      !result.tenantId.trim() || (result.role !== "owner" && result.role !== "user"))
+    throw new Error("WORKFORCE_AUTHORITY_INVALID");
+  return { actorId: result.actorId, tenantId: result.tenantId, role: result.role };
 }
