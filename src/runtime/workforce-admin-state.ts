@@ -8,6 +8,7 @@ import {
 } from "./workforce-admin-store";
 import { executeWorkforceAdminMutation } from "./workforce-admin-write";
 import { commitApprovedAdminMutation } from "./workforce-admin-approved-transaction";
+import { DurableApprovalRequests } from "./workforce-admin-approval-requests";
 import { OwnerScopedAdminPolicy } from "./workforce-admin-write";
 
 interface AdminStateEnv {
@@ -41,6 +42,41 @@ export class WorkforceAdminState extends DurableObject<AdminStateEnv> {
         { ok: true, state: await store.read() },
         { headers: { "cache-control": "no-store" } }
       );
+    }
+
+    if (request.method === "POST" && (url.pathname === "/approval/request" || url.pathname === "/approval/approve")) {
+      const body = await request.json().catch(() => undefined) as {
+        mutation?: WorkforceAdminMutation; requestId?: string
+      } | undefined;
+      try {
+        const current = await store.read();
+        const actor = resolveWorkforceAdminActor({ request, identities: current.identities });
+        if (actor.role !== "platform_admin") {
+          return Response.json({ ok: false, error: "WORKFORCE_APPROVAL_FORBIDDEN" }, { status: 403 });
+        }
+        const approvals = new DurableApprovalRequests(this.ctx.storage);
+        if (url.pathname === "/approval/request") {
+          if (!body?.mutation || !["tenant.create", "identity.delete"].includes(body.mutation.type))
+            return Response.json({ ok: false, error: "WORKFORCE_APPROVAL_MUTATION_INVALID" }, { status: 400 });
+          const record = await approvals.request({
+            requestId: crypto.randomUUID().replace(/-/g, ""),
+            requesterActorId: actor.actorId,
+            mutation: body.mutation,
+            now: Date.now()
+          });
+          return Response.json({ ok: true, requestId: record.requestId, expiresAt: record.expiresAt }, { headers: { "cache-control": "no-store" } });
+        }
+        if (typeof body?.requestId !== "string")
+          return Response.json({ ok: false, error: "WORKFORCE_APPROVAL_REQUEST_ID_REQUIRED" }, { status: 400 });
+        const approved = await approvals.approve({
+          requestId: body.requestId,
+          approverActorId: actor.actorId,
+          now: Date.now()
+        });
+        return Response.json({ ok: approved }, { status: approved ? 200 : 403, headers: { "cache-control": "no-store" } });
+      } catch (error) {
+        return Response.json({ ok: false, error: error instanceof Error ? error.message : "WORKFORCE_APPROVAL_FAILED" }, { status: 403, headers: { "cache-control": "no-store" } });
+      }
     }
 
     if (request.method === "POST" && url.pathname === "/mutate") {
