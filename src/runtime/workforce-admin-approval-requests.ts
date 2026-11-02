@@ -28,7 +28,7 @@ export class DurableApprovalRequests {
     requestId: string; requesterActorId: string;
     mutation: WorkforceAdminMutation; now: number;
   }): Promise<PendingIndependentApproval> {
-    if (!idPattern.test(input.requestId) || !input.requesterActorId.trim())
+    if (!idPattern.test(input.requestId) || !input.requesterActorId.trim() || !Number.isFinite(input.now))
       throw new Error("WORKFORCE_APPROVAL_REQUEST_INVALID");
     if (input.mutation.type !== "tenant.create" && input.mutation.type !== "identity.delete")
       throw new Error("WORKFORCE_APPROVAL_MUTATION_NOT_YELLOW");
@@ -50,7 +50,7 @@ export class DurableApprovalRequests {
   async approve(input: {
     requestId: string; approverActorId: string; now: number;
   }): Promise<boolean> {
-    if (!idPattern.test(input.requestId) || !input.approverActorId.trim()) return false;
+    if (!idPattern.test(input.requestId) || !input.approverActorId.trim() || !Number.isFinite(input.now)) return false;
     if (!this.storage.transaction) return false;
     return this.storage.transaction(async (tx) => {
     const key = pendingPrefix + input.requestId;
