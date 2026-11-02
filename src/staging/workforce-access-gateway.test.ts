@@ -48,60 +48,45 @@ test("gateway requires isolated binding and Access configuration", async () => {
   assert.equal(response.status, 503);
 });
 
-test("Core-authorized A/B JWTs traverse gateway with tenant identity enforced", async () => {
-  const { generateKeyPairSync, createSign } = await import("node:crypto");
-  const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
-  const jwk = publicKey.export({ format: "jwk" });
-  const base64url = (value: string) => Buffer.from(value).toString("base64url");
-  const now = Math.floor(Date.now() / 1000);
-  const sign = (email: string, audience = "staging-aud") => {
-    const header = base64url(JSON.stringify({ alg: "RS256", kid: "test-key", typ: "JWT" }));
-    const payload = base64url(JSON.stringify({
-      iss: "https://staging.cloudflareaccess.com", aud: audience,
-      email, iat: now - 10, exp: now + 300
-    }));
-    const input = header + "." + payload;
-    return input + "." + createSign("RSA-SHA256").update(input).sign(privateKey).toString("base64url");
+test("gateway preserves independently Core-resolved A/B/C identity and denies revoked actors", async () => {
+  const tenants = new Map([
+    ["jwt-a", { actorId: "actor-a", tenantId: "tenant-a", role: "owner", enabledEmployees: ["EMP-003"] }],
+    ["jwt-b", { actorId: "actor-b", tenantId: "tenant-b", role: "user", enabledEmployees: ["EMP-003"] }],
+    ["jwt-c", { actorId: "actor-c", tenantId: "tenant-c", role: "owner", enabledEmployees: ["EMP-001"] }]
+  ]);
+  const forwarded: Array<{ jwt: string | null; forged: string | null }> = [];
+  const env = {
+    ...ctxEnv,
+    WORKFORCE_CORE: { fetch: async (request: Request) => {
+      const jwt = request.headers.get("cf-access-jwt-assertion") ?? "";
+      const actor = tenants.get(jwt);
+      return actor ? Response.json({ ok: true, ...actor }) : new Response(null, { status: 403 });
+    } },
+    INTEGRATED: { fetch: async (request: Request) => {
+      forwarded.push({
+        jwt: request.headers.get("cf-access-jwt-assertion"),
+        forged: request.headers.get("x-herreb-internal-tenant-id")
+      });
+      return Response.json({ ok: true });
+    } }
   };
-  const originalFetch = globalThis.fetch;
-  const received: Array<{ jwt: string | null; forged: string | null }> = [];
-  globalThis.fetch = (async (input: RequestInfo | URL) => {
-    assert.equal(String(input), "https://staging.cloudflareaccess.com/cdn-cgi/access/certs");
-    return Response.json({ keys: [{ ...jwk, kid: "test-key", alg: "RS256", use: "sig" }] });
-  }) as typeof fetch;
-  try {
-    const env = {
-      ...ctxEnv,
-      INTEGRATED: {
-        fetch: async (request: Request) => {
-          received.push({
-            jwt: request.headers.get("cf-access-jwt-assertion"),
-            forged: request.headers.get("x-herreb-internal-tenant-id")
-          });
-          return Response.json({ ok: true });
-        }
-      }
-    };
-    for (const email of ["a@example.test", "b@example.test"]) {
-      const jwt = sign(email);
-      const result = await gateway.fetch(new Request(base + "/api/emp003/operations", {
-        headers: { "cf-access-jwt-assertion": jwt, "x-herreb-internal-tenant-id": "tenant-a" }
-      }), env);
-      assert.equal(result.status, 200, email);
-      assert.equal(received.at(-1)?.jwt, jwt);
-      assert.equal(received.at(-1)?.forged, null);
-    }
-    assert.equal(received.length, 2);
-    for (const jwt of ["unsigned.jwt.payload"]) {
-      const result = await gateway.fetch(new Request(base + "/api/emp003/operations", {
-        headers: { "cf-access-jwt-assertion": jwt }
-      }), env);
-      assert.equal(result.status, 401);
-    }
-    assert.equal(received.length, 2);
-  } finally {
-    globalThis.fetch = originalFetch;
+  for (const jwt of ["jwt-a", "jwt-b"]) {
+    const result = await gateway.fetch(new Request(base + "/api/emp003/operations", {
+      headers: { "cf-access-jwt-assertion": jwt, "x-herreb-internal-tenant-id": "tenant-other" }
+    }), env);
+    assert.equal(result.status, 200, jwt);
   }
+  assert.deepEqual(forwarded.map(x => x.jwt), ["jwt-a", "jwt-b"]);
+  assert.ok(forwarded.every(x => x.forged === null));
+  const disabled = await gateway.fetch(new Request(base + "/api/emp003/operations", {
+    headers: { "cf-access-jwt-assertion": "jwt-c" }
+  }), env);
+  assert.equal(disabled.status, 403);
+  const revoked = await gateway.fetch(new Request(base + "/api/emp003/operations", {
+    headers: { "cf-access-jwt-assertion": "jwt-revoked" }
+  }), env);
+  assert.equal(revoked.status, 401);
+  assert.equal(forwarded.length, 2);
 });
 
 test("Core entitlements deny disabled employee before integrated binding", async () => {
