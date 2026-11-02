@@ -5,6 +5,7 @@ import type { ApprovalGrant } from "./workforce-admin-independent-approval";
 interface Storage {
   get<T>(key: string): Promise<T | undefined>;
   put<T>(key: string, value: T): Promise<void>;
+  transaction?<T>(callback: (tx: Storage) => Promise<T>): Promise<T>;
 }
 const pendingPrefix = "workforce-admin:approval-request:v1:";
 const grantPrefix = "workforce-admin:approval:v1:";
@@ -50,13 +51,15 @@ export class DurableApprovalRequests {
     requestId: string; approverActorId: string; now: number;
   }): Promise<boolean> {
     if (!idPattern.test(input.requestId) || !input.approverActorId.trim()) return false;
+    if (!this.storage.transaction) return false;
+    return this.storage.transaction(async (tx) => {
     const key = pendingPrefix + input.requestId;
-    const pending = await this.storage.get<PendingIndependentApproval>(key);
+    const pending = await tx.get<PendingIndependentApproval>(key);
     if (!pending || pending.approved || input.now < pending.createdAt ||
         input.now >= pending.expiresAt ||
         pending.requesterActorId === input.approverActorId) return false;
     const grantKey = grantPrefix + input.requestId;
-    if (await this.storage.get(grantKey) !== undefined) return false;
+    if (await tx.get(grantKey) !== undefined) return false;
     const grant: ApprovalGrant & { consumed: boolean } = {
       requestId: input.requestId,
       requesterActorId: pending.requesterActorId,
@@ -65,8 +68,9 @@ export class DurableApprovalRequests {
       expiresAt: pending.expiresAt,
       consumed: false
     };
-    await this.storage.put(grantKey, grant);
-    await this.storage.put(key, { ...pending, approved: true });
+    await tx.put(grantKey, grant);
+    await tx.put(key, { ...pending, approved: true });
     return true;
+    });
   }
 }
