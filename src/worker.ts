@@ -9,7 +9,7 @@ import { isEMP003M2MBlueprintTenant, parseEMP003M2MDraftRevision } from './runti
 import { handleEMP003BrowserOperations } from './runtime/emp003-browser-operations';
 import { resolvePlatformAdminCredential } from './runtime/workforce-platform-admin-auth';
 import { resolveScopedM2MOwner } from './runtime/workforce-admin-tenant-owner';
-import { handleWorkforceAdminGet, readWorkforceAdminAccessActor } from './runtime/workforce-admin-access-read';
+import { handleWorkforceAdminGet, readWorkforceAdminAccessActor, readIndependentWorkforceReviewer } from './runtime/workforce-admin-access-read';
 import { extractMetaTextMessages, handleMetaWhatsAppWebhook } from './runtime';
 import { routeWorkforceWhatsAppMessage } from './runtime/workforce-whatsapp-router';
 import { dispatchEMP002ScheduledActions } from './runtime/emp002-scheduler-dispatcher';
@@ -285,16 +285,16 @@ export default {
       });
       if (!actor && request.headers.has('cf-access-jwt-assertion')) {
         try {
-          const stateResponse = await stub.fetch('https://workforce.admin/state', { method: 'GET' });
-          if (!stateResponse.ok) return Response.json({ ok: false, error: 'WORKFORCE_ADMIN_STATE_UNAVAILABLE' }, { status: 503 });
-          const state = await stateResponse.json() as { state?: { identities?: Array<{ email: string; actorId: string; tenantId: string; role: 'owner' | 'user' }> } };
-          actor = await readWorkforceAdminAccessActor(request, runtimeEnv, fetch, state.state?.identities);
-          if (actor.role === 'platform_admin') {
-            // Bind the verified human principal rather than the shared
-            // platform credential identity; this prevents self-approval.
-              // This header is not cryptographic evidence. Refuse review until
-            // the verified JWT principal is exposed by the verifier.
-            if (isReview) return Response.json({ ok: false, error: 'WORKFORCE_APPROVAL_VERIFIED_REVIEWER_NOT_CONFIGURED' }, { status: 503 });
+          if (isReview) {
+            actor = await readIndependentWorkforceReviewer(request, runtimeEnv);
+          } else {
+            const stateResponse = await stub.fetch('https://workforce.admin/state', { method: 'GET' });
+            if (!stateResponse.ok) return Response.json({ ok: false, error: 'WORKFORCE_ADMIN_STATE_UNAVAILABLE' }, { status: 503 });
+            const state = await stateResponse.json() as { state?: { identities?: Array<{ email: string; actorId: string; tenantId: string; role: 'owner' | 'user' }> } };
+            actor = await readWorkforceAdminAccessActor(request, runtimeEnv, fetch, state.state?.identities);
+            // Access-verified requesters must have their own stable principal ID,
+            // otherwise the shared platform ID could approve its own request.
+            if (actor.role === 'platform_admin') actor = await readIndependentWorkforceReviewer(request, runtimeEnv);
           }
         } catch { return Response.json({ ok: false, error: 'WORKFORCE_APPROVAL_AUTH_REQUIRED' }, { status: 401 }); }
       }
