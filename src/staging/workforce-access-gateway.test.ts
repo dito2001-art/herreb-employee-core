@@ -6,10 +6,11 @@ const base = "https://staging.example.test";
 const ctxEnv = {
   STAGING_ACCESS_TEAM_DOMAIN: "staging.cloudflareaccess.com",
   STAGING_ACCESS_AUDIENCE: "staging-aud",
-  STAGING_IDENTITY_MAP_JSON: JSON.stringify([
-    { email: "a@example.test", actorId: "actor-a", tenantId: "tenant-a", role: "owner" },
-    { email: "b@example.test", actorId: "actor-b", tenantId: "tenant-b", role: "user" }
-  ]),
+  WORKFORCE_CORE: { fetch: async (request: Request) => {
+    const jwt = request.headers.get("cf-access-jwt-assertion");
+    if (!jwt || jwt === "unsigned.jwt.payload") return new Response(null, { status: 401 });
+    return Response.json({ ok: true, actorId: "actor-a", tenantId: "tenant-a", role: "owner", enabledEmployees: ["EMP-003"] });
+  } },
   INTEGRATED: { fetch: async () => Response.json({ ok: true }) }
 };
 const call = (path: string, method = "GET", headers: Record<string, string> = {}) =>
@@ -47,7 +48,7 @@ test("gateway requires isolated binding and Access configuration", async () => {
   assert.equal(response.status, 503);
 });
 
-test("signed RS256 A/B JWTs traverse the gateway binding with tenant identity enforced", async () => {
+test("Core-authorized A/B JWTs traverse gateway with tenant identity enforced", async () => {
   const { generateKeyPairSync, createSign } = await import("node:crypto");
   const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
   const jwk = publicKey.export({ format: "jwk" });
@@ -91,7 +92,7 @@ test("signed RS256 A/B JWTs traverse the gateway binding with tenant identity en
       assert.equal(received.at(-1)?.forged, null);
     }
     assert.equal(received.length, 2);
-    for (const jwt of [sign("unknown@example.test"), sign("a@example.test", "wrong-audience")]) {
+    for (const jwt of ["unsigned.jwt.payload"]) {
       const result = await gateway.fetch(new Request(base + "/api/emp003/operations", {
         headers: { "cf-access-jwt-assertion": jwt }
       }), env);
@@ -101,4 +102,19 @@ test("signed RS256 A/B JWTs traverse the gateway binding with tenant identity en
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("Core entitlements deny disabled employee before integrated binding", async () => {
+  let called = false;
+  const response = await gateway.fetch(new Request(base + "/api/emp003/operations", {
+    headers: { "cf-access-jwt-assertion": "valid-jwt" }
+  }), {
+    ...ctxEnv,
+    WORKFORCE_CORE: { fetch: async () => Response.json({
+      ok: true, actorId: "actor-c", tenantId: "tenant-c", role: "owner", enabledEmployees: ["EMP-001"]
+    }) },
+    INTEGRATED: { fetch: async () => { called = true; return Response.json({ ok: true }); } }
+  });
+  assert.equal(response.status, 403);
+  assert.equal(called, false);
 });
