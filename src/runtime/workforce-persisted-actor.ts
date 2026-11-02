@@ -12,7 +12,7 @@ type AuthorityEnv = {
 export async function resolvePersistedWorkforceActor(
   request: Request,
   env: AuthorityEnv
-): Promise<{ actorId: string; tenantId: string; role: "owner" | "user" }> {
+): Promise<{ actorId: string; tenantId: string; role: "owner" | "user"; enabledEmployees: string[] }> {
   if (!env.WORKFORCE_CORE) throw new Error("WORKFORCE_AUTHORITY_UNAVAILABLE");
   const jwt = request.headers.get("cf-access-jwt-assertion")?.trim();
   if (!jwt) throw new Error("WORKFORCE_ACCESS_JWT_REQUIRED");
@@ -29,7 +29,10 @@ export async function resolvePersistedWorkforceActor(
   const result = body as Record<string, unknown>;
   if (result.ok !== true || typeof result.actorId !== "string" ||
       !result.actorId.trim() || typeof result.tenantId !== "string" ||
-      !result.tenantId.trim() || (result.role !== "owner" && result.role !== "user"))
+      !result.tenantId.trim() || (result.role !== "owner" && result.role !== "user") ||
+      !Array.isArray(result.enabledEmployees) ||
+      !result.enabledEmployees.every((employee: unknown) =>
+        employee === "EMP-001" || employee === "EMP-002" || employee === "EMP-003"))
     throw new Error("WORKFORCE_AUTHORITY_INVALID");
-  return { actorId: result.actorId, tenantId: result.tenantId, role: result.role };
+  return { actorId: result.actorId, tenantId: result.tenantId, role: result.role, enabledEmployees: result.enabledEmployees as string[] };
 }
