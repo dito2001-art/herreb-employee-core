@@ -1,3 +1,4 @@
+import { bindVerifiedStagingActor } from "../runtime/workforce-admin-access-read";
 import employeeWorker from "../worker";
 import { resolvePersistedWorkforceActor } from "../runtime/workforce-persisted-actor";
 import {
@@ -149,6 +150,7 @@ export default {
           )
         : undefined
     };
+    bindVerifiedStagingActor(request, actor);
     return employeeWorker.fetch(request, scopedEnv as unknown as Env, ctx);
   }
 };
