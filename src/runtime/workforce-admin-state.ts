@@ -7,6 +7,8 @@ import {
   DurableWorkforceAdminStore,
 } from "./workforce-admin-store";
 import { executeWorkforceAdminMutation } from "./workforce-admin-write";
+import { commitApprovedAdminMutation } from "./workforce-admin-approved-transaction";
+import { OwnerScopedAdminPolicy } from "./workforce-admin-write";
 
 interface AdminStateEnv {
   TENANT_MANIFESTS_JSON?: string;
@@ -44,7 +46,7 @@ export class WorkforceAdminState extends DurableObject<AdminStateEnv> {
     if (request.method === "POST" && url.pathname === "/mutate") {
       const probe = doReceiveProbe(request);
       const body = (await request.json().catch(() => undefined)) as
-        | { mutation?: WorkforceAdminMutation; approveYellow?: boolean }
+        | { mutation?: WorkforceAdminMutation; approveYellow?: boolean; approvalRequestId?: string }
         | undefined;
       if (!body?.mutation) {
         return Response.json(
@@ -55,6 +57,30 @@ export class WorkforceAdminState extends DurableObject<AdminStateEnv> {
       try {
         const current = await store.read();
         const actor = resolveWorkforceAdminActor({ request, identities: current.identities });
+        // A YELLOW request may only consume an independently issued grant.
+        // This endpoint never issues grants or accepts caller-provided approver identities.
+        const decision = new OwnerScopedAdminPolicy().evaluate(actor, body.mutation);
+        if (decision === "YELLOW" && body.approvalRequestId) {
+          const persisted = await commitApprovedAdminMutation({
+            storage: this.ctx.storage,
+            bootstrap,
+            mutation: body.mutation,
+            requesterActorId: actor.actorId,
+            requestId: body.approvalRequestId,
+            now: Date.now()
+          });
+          const auditId = crypto.randomUUID();
+          await audit.append({
+            auditId, actorId: actor.actorId, tenantId: actor.tenantId,
+            mutationType: body.mutation.type, decision: "YELLOW",
+            persisted, timestamp: new Date().toISOString()
+          });
+          return Response.json(
+            { ok: persisted, decision: "YELLOW", persisted, auditId },
+            { status: persisted ? 200 : 403,
+              headers: { "cache-control": "no-store", ...probe } }
+          );
+        }
         const result = await executeWorkforceAdminMutation({
           actor,
           mutation: body.mutation,
