@@ -229,3 +229,29 @@ test("independent order GET checks every line tenant and order ID", async () => 
   );
   assert.equal(r.status, 502);
 });
+
+test("server-only multi-tenant credentials route A without accepting B token or ambiguous mappings", async () => {
+  const f = await fixture();
+  const credentials = JSON.stringify([
+    { tenantId: "tenant-a", token: "token-a" },
+    { tenantId: "tenant-b", token: "token-b" }
+  ]);
+  const env = { ...f.env, SALES_OPS_CREDENTIALS_JSON: credentials };
+  const success = await handleEMP001BrowserSales(f.request(), env, f.fetcher);
+  assert.equal(success.status, 200);
+  assert.equal(f.calls.at(-1)?.headers.get("authorization"), "Bearer token-a");
+  assert.equal(f.calls.at(-1)?.headers.get("x-tenant-id"), "tenant-a");
+  const calls = f.calls.length;
+  for (const malformed of [
+    JSON.stringify([{ tenantId: "tenant-b", token: "token-b" }]),
+    JSON.stringify([{ tenantId: "tenant-a", token: "shared" }, { tenantId: "tenant-b", token: "shared" }]),
+    JSON.stringify([{ tenantId: "tenant-a", token: "first" }, { tenantId: "tenant-a", token: "second" }]),
+    "not-json"
+  ]) {
+    const denied = await handleEMP001BrowserSales(f.request(), {
+      ...env, SALES_OPS_CREDENTIALS_JSON: malformed
+    }, f.fetcher);
+    assert.equal(denied.status, 403);
+  }
+  assert.equal(f.calls.length, calls);
+});
