@@ -64,7 +64,7 @@ export async function handleEMP001BrowserSales(
   const orderId = url.searchParams.get("orderId");
   if (orderId !== null && !/^[a-zA-Z0-9_-]{1,200}$/.test(orderId))
     return reply(400, { ok: false, error: "SALES_INVALID_ORDER_ID" });
-  if (!env.SALES_OPS)
+  if (!env.SALES_OPS || (env.SALES_OPS_CREDENTIALS_JSON === undefined && (!env.SALES_OPS_TOKEN?.trim() || !env.SALES_OPS_TENANT_ID?.trim())))
     return reply(503, { ok: false, error: "SALES_NOT_CONFIGURED" });
   const token = salesCredential(env, actor.tenantId);
   if (!token)
