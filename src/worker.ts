@@ -274,29 +274,17 @@ export default {
       if (request.method !== 'POST') return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405 });
       if (!runtimeEnv.WORKFORCE_ADMIN_STATE) return Response.json({ ok: false, error: 'WORKFORCE_ADMIN_STATE_BINDING_MISSING' }, { status: 503 });
       const stub = runtimeEnv.WORKFORCE_ADMIN_STATE.get(runtimeEnv.WORKFORCE_ADMIN_STATE.idFromName('global'));
-      // The requester may use the platform credential, but the reviewer MUST
-      // authenticate independently with a verified Cloudflare Access JWT.
+      // Both request and approval require a distinct, cryptographically
+      // verified human principal. Shared M2M credentials cannot initiate
+      // independently reviewed mutations.
       const isReview = url.pathname.endsWith('/approve');
+      if (!request.headers.has('cf-access-jwt-assertion'))
+        return Response.json({ ok: false, error: 'WORKFORCE_APPROVAL_ACCESS_REQUIRED' }, { status: 401 });
       let actor: WorkforceAdminResolvedActor | undefined;
-      if (!isReview) actor = resolvePlatformAdminCredential({
-        expectedToken: runtimeEnv.WORKFORCE_PLATFORM_ADMIN_TOKEN,
-        suppliedToken: request.headers.get('x-herreb-workforce-platform-token'),
-        actorId: runtimeEnv.WORKFORCE_PLATFORM_ADMIN_ACTOR_ID
-      });
-      if (!actor && request.headers.has('cf-access-jwt-assertion')) {
-        try {
-          if (isReview) {
-            actor = await readIndependentWorkforceReviewer(request, runtimeEnv);
-          } else {
-            const stateResponse = await stub.fetch('https://workforce.admin/state', { method: 'GET' });
-            if (!stateResponse.ok) return Response.json({ ok: false, error: 'WORKFORCE_ADMIN_STATE_UNAVAILABLE' }, { status: 503 });
-            const state = await stateResponse.json() as { state?: { identities?: Array<{ email: string; actorId: string; tenantId: string; role: 'owner' | 'user' }> } };
-            actor = await readWorkforceAdminAccessActor(request, runtimeEnv, fetch, state.state?.identities);
-            // Access-verified requesters must have their own stable principal ID,
-            // otherwise the shared platform ID could approve its own request.
-            if (actor.role === 'platform_admin') actor = await readIndependentWorkforceReviewer(request, runtimeEnv);
-          }
-        } catch { return Response.json({ ok: false, error: 'WORKFORCE_APPROVAL_AUTH_REQUIRED' }, { status: 401 }); }
+      try {
+        actor = await readIndependentWorkforceReviewer(request, runtimeEnv);
+      } catch {
+        return Response.json({ ok: false, error: 'WORKFORCE_APPROVAL_AUTH_REQUIRED' }, { status: 401 });
       }
       if (!actor || actor.role !== 'platform_admin') return Response.json({ ok: false, error: 'WORKFORCE_APPROVAL_AUTH_REQUIRED' }, { status: 401 });
       const headers = new Headers({ 'content-type': 'application/json' });
