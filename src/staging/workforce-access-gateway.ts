@@ -1,10 +1,10 @@
-import { readWorkforceAdminAccessActor } from "../runtime/workforce-admin-access-read";
+import { resolvePersistedWorkforceActor } from "../runtime/workforce-persisted-actor";
 
 interface GatewayEnv {
   INTEGRATED: { fetch(request: Request): Promise<Response> };
   STAGING_ACCESS_TEAM_DOMAIN?: string;
   STAGING_ACCESS_AUDIENCE?: string;
-  STAGING_IDENTITY_MAP_JSON?: string;
+  WORKFORCE_CORE?: { fetch(request: Request): Promise<Response> };
 }
 
 const methods = new Map<string, ReadonlySet<string>>([
@@ -42,17 +42,11 @@ export default {
     if (!methods.get(url.pathname)?.has(request.method) && !isAsset)
       return deny(404, "GATEWAY_ROUTE_DISABLED");
     if (!env.INTEGRATED || !env.STAGING_ACCESS_TEAM_DOMAIN ||
-      !env.STAGING_ACCESS_AUDIENCE || !env.STAGING_IDENTITY_MAP_JSON)
+      !env.STAGING_ACCESS_AUDIENCE || !env.WORKFORCE_CORE)
       return deny(503, "GATEWAY_NOT_CONFIGURED");
 
-    const accessEnv = {
-      WORKFORCE_ACCESS_TEAM_DOMAIN: env.STAGING_ACCESS_TEAM_DOMAIN,
-      WORKFORCE_ACCESS_AUDIENCE: env.STAGING_ACCESS_AUDIENCE,
-      ACCESS_IDENTITY_MAP_JSON: env.STAGING_IDENTITY_MAP_JSON,
-      WORKFORCE_PLATFORM_ADMIN_EMAILS_JSON: "[]"
-    };
     try {
-      const actor = await readWorkforceAdminAccessActor(request, accessEnv);
+      const actor = await resolvePersistedWorkforceActor(request, env);
       if (!actor.actorId || !actor.tenantId || !["owner", "user"].includes(actor.role))
         return deny(403, "GATEWAY_ACTOR_FORBIDDEN");
     } catch {
@@ -74,7 +68,7 @@ export default {
       redirect: "manual"
     });
     // Keep original host in URL; the integrated worker independently verifies
-    // the same Access JWT and resolves tenant from its own server-side map.
+    // the same Access JWT and resolves tenant through the same persisted Core authority.
     const response = await env.INTEGRATED.fetch(forwarded);
     const responseHeaders = new Headers(response.headers);
     responseHeaders.set("cache-control", "private, no-store");
