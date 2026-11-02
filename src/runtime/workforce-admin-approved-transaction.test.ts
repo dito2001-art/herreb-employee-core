@@ -82,3 +82,20 @@ test("wrong actor cannot consume an approval", async () => {
   }), false);
   assert.equal(h.data.has(stateKey), false);
 });
+
+test("approved mutation rejects mismatched payload and expired grant without side effects", async () => {
+  const h = fixture();
+  h.data.set(approvalKey, {
+    requestId, requesterActorId: "requester", approverActorId: "reviewer",
+    mutationSha256: await workforceMutationDigest(mutation), expiresAt: now + 60_000,
+    consumed: false
+  });
+  const wrongMutation = { ...mutation, tenant: { ...mutation.tenant, name: "Different client" } };
+  const base = { storage: h.storage, bootstrap, requesterActorId: "requester", requestId,
+    auditId: "negative-integral-audit", requesterTenantId: "platform" };
+  assert.equal(await commitApprovedAdminMutation({ ...base, mutation: wrongMutation, now }), false);
+  assert.equal(await commitApprovedAdminMutation({ ...base, mutation, now: now + 60_000 }), false);
+  assert.equal(h.data.has(stateKey), false);
+  assert.equal((h.data.get(approvalKey) as { consumed: boolean }).consumed, false);
+  assert.equal([...h.data.keys()].some(key => key.includes("negative-integral-audit")), false);
+});
