@@ -261,3 +261,33 @@ test("Core-authorized tenant C reads only its Sales Ops products through integra
   assert.equal(payload.products[0]?.sku, "SKU-C");
   assert.equal(upstreamCalls, 1);
 });
+
+test("Core-authorized tenant C reads its EMP-003 campaigns through scoped Durable Object", async () => {
+  const calls: string[] = [];
+  const id = { toString: () => "tenant-c-object" };
+  const env = {
+    STAGING_ACCESS_TEAM_DOMAIN: "staging.cloudflareaccess.com",
+    STAGING_ACCESS_AUDIENCE: "staging-only-aud",
+    STAGING_DO_BOUNDARY_KEY: "test-only-boundary-key-longer-than-32-bytes",
+    EMP003_CAMPAIGN_STATE: {
+      idFromName: (name: string) => { calls.push("id:" + name); return id; },
+      get: () => ({ fetch: async (request: Request) => {
+        calls.push("fetch:" + new URL(request.url).searchParams.get("tenantId"));
+        assert.ok(request.headers.has("x-workforce-do-capability"));
+        return Response.json({ tenantId: "tenant-c", campaigns: [] });
+      } })
+    },
+    WORKFORCE_CORE: { fetch: async () => Response.json({
+      ok: true, actorId: "actor-c", tenantId: "tenant-c", role: "owner", enabledEmployees: ["EMP-003"]
+    }) }
+  } as unknown as typeof empty;
+  const response = await call("/api/emp003/operations", "GET", {
+    "cf-access-jwt-assertion": "core-authorized-c"
+  }, env);
+  assert.equal(response.status, 200, await response.clone().text());
+  const payload = await response.json() as { tenantId: string; campaigns: unknown[] };
+  assert.equal(payload.tenantId, "tenant-c");
+  assert.deepEqual(payload.campaigns, []);
+  assert.ok(calls.includes("fetch:tenant-c"));
+  assert.ok(!calls.some((x) => x.includes("tenant-a")));
+});
