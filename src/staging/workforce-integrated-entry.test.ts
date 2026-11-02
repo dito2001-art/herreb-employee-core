@@ -67,20 +67,7 @@ test("forged email headers and tenant selectors never authorize access", async (
   const env = {
     STAGING_ACCESS_TEAM_DOMAIN: "staging.cloudflareaccess.com",
     STAGING_ACCESS_AUDIENCE: "staging-only-aud",
-    STAGING_IDENTITY_MAP_JSON: JSON.stringify([
-      {
-        email: "a@example.test",
-        actorId: "a",
-        tenantId: "tenant-a",
-        role: "owner"
-      },
-      {
-        email: "b@example.test",
-        actorId: "b",
-        tenantId: "tenant-b",
-        role: "user"
-      }
-    ])
+    WORKFORCE_CORE: { fetch: async () => new Response(null, { status: 401 }) }
   } as unknown as typeof empty;
   for (const path of [
     "/api/emp001/operations?tenantId=tenant-b",
@@ -103,20 +90,7 @@ test("staging config never trusts a forged Access email or an unsigned JWT", asy
   const env = {
     STAGING_ACCESS_TEAM_DOMAIN: "staging.cloudflareaccess.com",
     STAGING_ACCESS_AUDIENCE: "staging-only-aud",
-    STAGING_IDENTITY_MAP_JSON: JSON.stringify([
-      {
-        email: "a@example.test",
-        actorId: "a",
-        tenantId: "tenant-a",
-        role: "owner"
-      },
-      {
-        email: "b@example.test",
-        actorId: "b",
-        tenantId: "tenant-b",
-        role: "owner"
-      }
-    ])
+    WORKFORCE_CORE: { fetch: async () => new Response(null, { status: 401 }) }
   } as unknown as typeof empty;
   for (const email of ["a@example.test", "b@example.test"]) {
     const res = await call(
