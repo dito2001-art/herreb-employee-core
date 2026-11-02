@@ -15,6 +15,13 @@ interface AccessReadEnv {
 type Jwks = { keys: Array<JsonWebKey & { kid?: string; kty?: string }> };
 type Fetcher = typeof fetch;
 
+const verifiedStagingActors = new WeakMap<Request, AdminReadActor>();
+/** Server-side only. Never sourced from request headers or a tenant selector. */
+export function bindVerifiedStagingActor(request: Request, actor: AdminReadActor): void {
+  verifiedStagingActors.set(request, actor);
+}
+
+
 const headers = { "cache-control": "no-store" };
 const fail = (status: number, error: string) =>
   Response.json({ ok: false, error }, { status, headers });
@@ -84,6 +91,8 @@ export async function readWorkforceAdminAccessActor(
   fetcher: Fetcher = fetch,
   persistedIdentities?: WorkforceAdminMutationPlan["identities"]
 ): Promise<AdminReadActor> {
+  const stagingActor = verifiedStagingActors.get(request);
+  if (stagingActor) return stagingActor;
   const config = accessConfig(env);
   const jwt = request.headers.get("cf-access-jwt-assertion")?.trim();
   if (!jwt) throw new Error("WORKFORCE_ACCESS_JWT_REQUIRED");
