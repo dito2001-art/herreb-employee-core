@@ -270,6 +270,43 @@ export default {
       if (!body.appointmentId || !body.now || !body.startsAt) return Response.json({ ok: false, error: 'EMP002_E2E_INPUT_REQUIRED' }, { status: 400 });
       try { const result = await runEMP002LifecycleE2EHarness(runtimeEnv.EMP002_OPERATIONS, { tenantId: owner.tenantId, whatsapp, appointmentId: body.appointmentId, now: body.now, startsAt: body.startsAt }); return Response.json(result); } catch (error) { return Response.json({ ok: false, error: error instanceof Error ? error.message : 'EMP002_E2E_FAILED' }, { status: 503 }); }
     }
+    if (url.pathname === '/api/admin/workforce/approval/request' || url.pathname === '/api/admin/workforce/approval/approve') {
+      if (request.method !== 'POST') return Response.json({ ok: false, error: 'METHOD_NOT_ALLOWED' }, { status: 405 });
+      if (!runtimeEnv.WORKFORCE_ADMIN_STATE) return Response.json({ ok: false, error: 'WORKFORCE_ADMIN_STATE_BINDING_MISSING' }, { status: 503 });
+      const stub = runtimeEnv.WORKFORCE_ADMIN_STATE.get(runtimeEnv.WORKFORCE_ADMIN_STATE.idFromName('global'));
+      // The requester may use the platform credential, but the reviewer MUST
+      // authenticate independently with a verified Cloudflare Access JWT.
+      const isReview = url.pathname.endsWith('/approve');
+      let actor: WorkforceAdminResolvedActor | undefined;
+      if (!isReview) actor = resolvePlatformAdminCredential({
+        expectedToken: runtimeEnv.WORKFORCE_PLATFORM_ADMIN_TOKEN,
+        suppliedToken: request.headers.get('x-herreb-workforce-platform-token'),
+        actorId: runtimeEnv.WORKFORCE_PLATFORM_ADMIN_ACTOR_ID
+      });
+      if (!actor && request.headers.has('cf-access-jwt-assertion')) {
+        try {
+          const stateResponse = await stub.fetch('https://workforce.admin/state', { method: 'GET' });
+          if (!stateResponse.ok) return Response.json({ ok: false, error: 'WORKFORCE_ADMIN_STATE_UNAVAILABLE' }, { status: 503 });
+          const state = await stateResponse.json() as { state?: { identities?: Array<{ email: string; actorId: string; tenantId: string; role: 'owner' | 'user' }> } };
+          actor = await readWorkforceAdminAccessActor(request, runtimeEnv, fetch, state.state?.identities);
+          if (actor.role === 'platform_admin') {
+            // Bind the verified human principal rather than the shared
+            // platform credential identity; this prevents self-approval.
+              // This header is not cryptographic evidence. Refuse review until
+            // the verified JWT principal is exposed by the verifier.
+            if (isReview) return Response.json({ ok: false, error: 'WORKFORCE_APPROVAL_VERIFIED_REVIEWER_NOT_CONFIGURED' }, { status: 503 });
+          }
+        } catch { return Response.json({ ok: false, error: 'WORKFORCE_APPROVAL_AUTH_REQUIRED' }, { status: 401 }); }
+      }
+      if (!actor || actor.role !== 'platform_admin') return Response.json({ ok: false, error: 'WORKFORCE_APPROVAL_AUTH_REQUIRED' }, { status: 401 });
+      const headers = new Headers({ 'content-type': 'application/json' });
+      headers.set('x-herreb-internal-actor-id', actor.actorId);
+      headers.set('x-herreb-internal-tenant-id', 'platform');
+      headers.set('x-herreb-internal-role', 'platform_admin');
+      const endpoint = isReview ? 'approve' : 'request';
+      const response = await stub.fetch('https://workforce.admin/approval/' + endpoint, { method: 'POST', headers, body: request.body });
+      return new Response(response.body, { status: response.status, headers: { 'cache-control': 'no-store' } });
+    }
     if (url.pathname === '/api/admin/workforce') {
       if (!runtimeEnv.WORKFORCE_ADMIN_STATE) return Response.json({ ok: false, error: 'WORKFORCE_ADMIN_STATE_BINDING_MISSING' }, { status: 503 });
       const id = runtimeEnv.WORKFORCE_ADMIN_STATE.idFromName('global'); const stub = runtimeEnv.WORKFORCE_ADMIN_STATE.get(id);
