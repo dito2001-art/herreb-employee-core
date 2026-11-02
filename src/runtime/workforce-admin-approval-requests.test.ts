@@ -86,3 +86,12 @@ test("nonfinite approval request clock is rejected", async () => {
   }), /INVALID/);
   assert.equal(h.data.size, 0);
 });
+
+test("request ID already used by an approval grant cannot be reused", async () => {
+  const h = fixture();
+  h.data.set("workforce-admin:approval:v1:" + requestId, { consumed: true });
+  await assert.rejects(() => h.requests.request({
+    requestId, requesterActorId: "requester", mutation, now
+  }), /CONFLICT/);
+  assert.equal(h.data.has("workforce-admin:approval-request:v1:" + requestId), false);
+});
