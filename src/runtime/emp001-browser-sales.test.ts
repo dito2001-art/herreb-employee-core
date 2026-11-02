@@ -230,7 +230,7 @@ test("independent order GET checks every line tenant and order ID", async () => 
   assert.equal(r.status, 502);
 });
 
-test("server-only multi-tenant credentials route A without accepting B token or ambiguous mappings", async () => {
+test("server-only multi-tenant credentials route A and deny ambiguous mappings", async () => {
   const f = await fixture();
   const credentials = JSON.stringify([
     { tenantId: "tenant-a", token: "token-a" },
@@ -254,4 +254,57 @@ test("server-only multi-tenant credentials route A without accepting B token or 
     assert.equal(denied.status, 403);
   }
   assert.equal(f.calls.length, calls);
+});
+
+test("independent B identity uses only B credential and rejects A upstream data", async () => {
+  const f = await fixture();
+  const { webcrypto } = await import("node:crypto");
+  const pair = await webcrypto.subtle.generateKey({
+    name: "RSASSA-PKCS1-v1_5", modulusLength: 2048,
+    publicExponent: new Uint8Array([1, 0, 1]), hash: "SHA-256"
+  }, true, ["sign", "verify"]);
+  const jwk = await webcrypto.subtle.exportKey("jwk", pair.publicKey);
+  const now = Math.floor(Date.now() / 1000);
+  const data = encode({ alg: "RS256", kid: "b-key" }) + "." + encode({
+    iss: "https://sales-test.cloudflareaccess.com", aud: "sales",
+    email: "b@test.invalid", iat: now - 5, exp: now + 600
+  });
+  const signature = await webcrypto.subtle.sign(
+    "RSASSA-PKCS1-v1_5", pair.privateKey, new TextEncoder().encode(data)
+  );
+  const jwt = data + "." + Buffer.from(signature).toString("base64url");
+  const calls: Request[] = [];
+  let returnForeign = false;
+  const env = {
+    ...f.env,
+    ACCESS_IDENTITY_MAP_JSON: JSON.stringify([
+      { email: "b@test.invalid", actorId: "actor-b", tenantId: "tenant-b", role: "owner" }
+    ]),
+    SALES_OPS_CREDENTIALS_JSON: JSON.stringify([
+      { tenantId: "tenant-a", token: "token-a" },
+      { tenantId: "tenant-b", token: "token-b" }
+    ]),
+    SALES_OPS: { fetch: async (request: Request) => {
+      calls.push(request);
+      const tenant = returnForeign ? "tenant-a" : "tenant-b";
+      return Response.json({ ok: true, tenant_id: tenant, products: [{
+        tenant_id: tenant, sku: "sku-b", name: "B", price_gs: 100, stock_qty: 1
+      }] });
+    } }
+  };
+  const fetcher = (async () => Response.json({
+    keys: [{ ...jwk, kid: "b-key", alg: "RS256", use: "sig" }]
+  })) as typeof fetch;
+  const request = new Request("https://portal.test/api/emp001/operations", {
+    headers: { "cf-access-jwt-assertion": jwt }
+  });
+  const success = await handleEMP001BrowserSales(request, env, fetcher);
+  assert.equal(success.status, 200);
+  assert.equal((await success.json() as { tenantId: string }).tenantId, "tenant-b");
+  assert.equal(calls[0].headers.get("authorization"), "Bearer token-b");
+  assert.equal(calls[0].headers.get("x-tenant-id"), "tenant-b");
+  returnForeign = true;
+  const foreign = await handleEMP001BrowserSales(request, env, fetcher);
+  assert.equal(foreign.status, 502);
+  assert.equal(JSON.stringify(await foreign.json()).includes("sku-b"), false);
 });
