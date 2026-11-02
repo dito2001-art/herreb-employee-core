@@ -1,0 +1,45 @@
+import type { WorkforceAdminMutation, WorkforceAdminMutationPlan } from "../core/workforce-admin-mutations";
+import { planWorkforceAdminMutation } from "../core/workforce-admin-mutations";
+import type { ApprovalGrant } from "./workforce-admin-independent-approval";
+import { validateIndependentApproval } from "./workforce-admin-independent-approval";
+
+const stateKey = "workforce-admin:state:v1";
+const approvalPrefix = "workforce-admin:approval:v1:";
+
+interface Transaction {
+  get<T>(key: string): Promise<T | undefined>;
+  put<T>(key: string, value: T): Promise<void>;
+}
+export interface TransactionalAdminStorage {
+  transaction<T>(callback: (tx: Transaction) => Promise<T>): Promise<T>;
+}
+
+/** Commit the registry update and approval consumption in one storage transaction. */
+export async function commitApprovedAdminMutation(input: {
+  storage: TransactionalAdminStorage;
+  bootstrap: WorkforceAdminMutationPlan;
+  mutation: WorkforceAdminMutation;
+  requesterActorId: string;
+  requestId: string;
+  now: number;
+}): Promise<boolean> {
+  if (input.mutation.type !== "tenant.create" && input.mutation.type !== "identity.delete") return false;
+  if (!/^[a-zA-Z0-9_-]{16,128}$/.test(input.requestId)) return false;
+  return input.storage.transaction(async (tx) => {
+    const key = approvalPrefix + input.requestId;
+    const approval = await tx.get<ApprovalGrant & { consumed: boolean }>(key);
+    if (!approval || approval.consumed) return false;
+    if (!await validateIndependentApproval({
+      grant: approval, mutation: input.mutation,
+      requesterActorId: input.requesterActorId, now: input.now
+    })) return false;
+    const current = (await tx.get<WorkforceAdminMutationPlan>(stateKey)) ?? input.bootstrap;
+    const next = planWorkforceAdminMutation(current, input.mutation);
+    await tx.put(stateKey, next);
+    await tx.put(key, { ...approval, consumed: true });
+    const readBack = await tx.get<WorkforceAdminMutationPlan>(stateKey);
+    if (!readBack || JSON.stringify(readBack) !== JSON.stringify(next))
+      throw new Error("WORKFORCE_ADMIN_PERSISTENCE_READBACK_FAILED");
+    return true;
+  });
+}
