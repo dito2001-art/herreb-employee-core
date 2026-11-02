@@ -99,3 +99,21 @@ test("approved mutation rejects mismatched payload and expired grant without sid
   assert.equal((h.data.get(approvalKey) as { consumed: boolean }).consumed, false);
   assert.equal([...h.data.keys()].some(key => key.includes("negative-integral-audit")), false);
 });
+
+test("approval cannot commit without platform scope or audit ID", async () => {
+  const h = fixture();
+  h.data.set(approvalKey, {
+    requestId, requesterActorId: "requester", approverActorId: "reviewer",
+    mutationSha256: await workforceMutationDigest(mutation), expiresAt: now + 60_000,
+    consumed: false
+  });
+  const base = { storage: h.storage, bootstrap, mutation, requesterActorId: "requester", requestId, now };
+  assert.equal(await commitApprovedAdminMutation({
+    ...base, requesterTenantId: "client-c", auditId: "audit-negative"
+  }), false);
+  assert.equal(await commitApprovedAdminMutation({
+    ...base, requesterTenantId: "platform", auditId: ""
+  }), false);
+  assert.equal(h.data.has(stateKey), false);
+  assert.equal((h.data.get(approvalKey) as { consumed: boolean }).consumed, false);
+});
