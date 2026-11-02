@@ -1,5 +1,5 @@
 import employeeWorker from "../worker";
-import { readWorkforceAdminAccessActor } from "../runtime/workforce-admin-access-read";
+import { resolvePersistedWorkforceActor } from "../runtime/workforce-persisted-actor";
 import {
   scopeBoundaryNamespace,
   type BoundaryActor,
@@ -14,7 +14,7 @@ type StagingEnv = Env &
   BoundaryEnv & {
     STAGING_ACCESS_TEAM_DOMAIN?: string;
     STAGING_ACCESS_AUDIENCE?: string;
-    STAGING_IDENTITY_MAP_JSON?: string;
+    WORKFORCE_CORE?: { fetch(request: Request): Promise<Response> };
     ASSETS?: { fetch(request: Request): Promise<Response> };
   };
 const allowed = new Map<string, Set<string>>([
@@ -83,24 +83,21 @@ export default {
     if (
       !env.STAGING_ACCESS_TEAM_DOMAIN?.trim() ||
       !env.STAGING_ACCESS_AUDIENCE?.trim() ||
-      !env.STAGING_IDENTITY_MAP_JSON?.trim()
+      !env.WORKFORCE_CORE
     )
       return denied(503, "STAGING_ACCESS_NOT_CONFIGURED");
     const isolatedEnv = {
       ...env,
       WORKFORCE_ACCESS_TEAM_DOMAIN: env.STAGING_ACCESS_TEAM_DOMAIN,
       WORKFORCE_ACCESS_AUDIENCE: env.STAGING_ACCESS_AUDIENCE,
-      ACCESS_IDENTITY_MAP_JSON: env.STAGING_IDENTITY_MAP_JSON,
+      ACCESS_IDENTITY_MAP_JSON: undefined,
       WORKFORCE_PLATFORM_ADMIN_EMAILS_JSON: "[]",
       WORKFORCE_PLATFORM_ADMIN_TOKEN: undefined,
       WORKFORCE_PLATFORM_ADMIN_ACTOR_ID: undefined
     };
     let actor: BoundaryActor;
     try {
-      const verified = await readWorkforceAdminAccessActor(
-        request,
-        isolatedEnv
-      );
+      const verified = await resolvePersistedWorkforceActor(request, env);
       actor = verified as BoundaryActor;
       if (
         !["owner", "user"].includes(actor.role) ||
