@@ -55,13 +55,15 @@ export async function executeWorkforceAdminMutation(input: {
 
   now?: () => Date;
   randomId?: () => string;
+  /** Trusted server-side verifier, never sourced from the mutation request. */
+  authorizeYellow?: (context: { actor: WorkforceAdminWriteActor; mutation: WorkforceAdminMutation }) => Promise<boolean>;
 }): Promise<{ ok: boolean; decision: AdminWriteDecision; persisted: boolean; auditId: string }> {
   const policy = input.policy ?? new OwnerScopedAdminPolicy();
   const decision = policy.evaluate(input.actor, input.mutation);
   const auditId = (input.randomId ?? (() => crypto.randomUUID()))();
   const timestamp = (input.now ?? (() => new Date()))().toISOString();
-  // Fail closed: YELLOW remains non-persistent until a separately authenticated approval workflow exists.
-  const permitted = decision === "GREEN";
+  // Fail closed by default: YELLOW requires an injected, trusted server-side verifier.\n  // No request body field can grant approval.
+  const permitted = decision === "GREEN" || (decision === "YELLOW" && Boolean(input.authorizeYellow) && await input.authorizeYellow({ actor: input.actor, mutation: input.mutation }));
   let persisted = false;
 
   if (permitted) {
