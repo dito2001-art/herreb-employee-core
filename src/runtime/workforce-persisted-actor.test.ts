@@ -36,10 +36,10 @@ test("returns only authorized actor fields and forwards JWT alone", async () => 
   }), {
     WORKFORCE_CORE: { fetch: async request => {
       received = request;
-      return Response.json({ ok: true, actorId: "actor-a", tenantId: "A", role: "owner", secret: "do-not-return" });
+      return Response.json({ ok: true, actorId: "actor-a", tenantId: "A", role: "owner", enabledEmployees: ["EMP-001"], secret: "do-not-return" });
     } }
   });
-  assert.deepEqual(actor, { actorId: "actor-a", tenantId: "A", role: "owner" });
+  assert.deepEqual(actor, { actorId: "actor-a", tenantId: "A", role: "owner", enabledEmployees: ["EMP-001"] });
   assert.equal(received?.headers.get("x-herreb-internal-tenant-id"), null);
   assert.equal(received?.headers.get("cf-access-jwt-assertion"), "test-jwt");
 });
