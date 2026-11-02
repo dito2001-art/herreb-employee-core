@@ -43,3 +43,21 @@ test("returns only authorized actor fields and forwards JWT alone", async () => 
   assert.equal(received?.headers.get("x-herreb-internal-tenant-id"), null);
   assert.equal(received?.headers.get("cf-access-jwt-assertion"), "test-jwt");
 });
+
+test("rejects missing or invalid employee entitlements", async () => {
+  for (const enabledEmployees of [undefined, ["EMP-004"], "EMP-001"]) {
+    await assert.rejects(resolvePersistedWorkforceActor(jwtRequest, {
+      WORKFORCE_CORE: { fetch: async () => Response.json({
+        ok: true, actorId: "actor-a", tenantId: "A", role: "owner", enabledEmployees
+      }) }
+    }), /WORKFORCE_AUTHORITY_INVALID/);
+  }
+});
+test("accepts empty entitlements without granting any employee", async () => {
+  const actor = await resolvePersistedWorkforceActor(jwtRequest, {
+    WORKFORCE_CORE: { fetch: async () => Response.json({
+      ok: true, actorId: "actor-c", tenantId: "C", role: "user", enabledEmployees: []
+    }) }
+  });
+  assert.deepEqual(actor.enabledEmployees, []);
+});
