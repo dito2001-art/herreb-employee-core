@@ -4,6 +4,7 @@ on:
     branches:
       - feat/workforce-client0-functional-20261029
       - fix/workforce-i32-minimal-integration-20261031
+      - review/workforce-final-bundle-20261102
     paths:
       - 'src/staging/workforce-integrated-entry.ts'
       - 'src/staging/workforce-integrated-entry.test.ts'
