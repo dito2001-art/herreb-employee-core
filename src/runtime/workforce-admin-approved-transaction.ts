@@ -22,10 +22,12 @@ export async function commitApprovedAdminMutation(input: {
   requesterActorId: string;
   requestId: string;
   now: number;
-  auditId?: string;
+  auditId: string;
+  requesterTenantId: string;
 }): Promise<boolean> {
   if (input.mutation.type !== "tenant.create" && input.mutation.type !== "identity.delete") return false;
-  if (!/^[a-zA-Z0-9_-]{16,128}$/.test(input.requestId) || !Number.isFinite(input.now)) return false;
+  if (!/^[a-zA-Z0-9_-]{16,128}$/.test(input.requestId) || !Number.isSafeInteger(input.now) ||
+      !input.auditId.trim() || input.requesterTenantId !== "platform") return false;
   return input.storage.transaction(async (tx) => {
     const key = approvalPrefix + input.requestId;
     const approval = await tx.get<ApprovalGrant & { consumed: boolean }>(key);
@@ -38,11 +40,11 @@ export async function commitApprovedAdminMutation(input: {
     const next = planWorkforceAdminMutation(current, input.mutation);
     await tx.put(stateKey, next);
     await tx.put(key, { ...approval, consumed: true });
-    if (input.auditId) {
+    {
       await tx.put(`workforce-admin:audit:v1:${new Date(input.now).toISOString()}:${input.auditId}`, {
         auditId: input.auditId,
         actorId: input.requesterActorId,
-        tenantId: "platform",
+        tenantId: input.requesterTenantId,
         mutationType: input.mutation.type,
         decision: "YELLOW",
         persisted: true,
