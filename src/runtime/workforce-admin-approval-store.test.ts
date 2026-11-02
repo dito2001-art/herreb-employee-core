@@ -21,9 +21,10 @@ test("persisted independent approval is bound to exact request and cannot be rep
     requestId, requesterActorId: "platform-admin", approverActorId: "separate-reviewer",
     mutationSha256: await workforceMutationDigest(mutation), expiresAt: now + 60_000
   });
+  const digest = await workforceMutationDigest(mutation);
   await assert.rejects(() => approvals.issue({
     requestId, requesterActorId: "platform-admin", approverActorId: "separate-reviewer",
-    mutationSha256: await workforceMutationDigest(mutation), expiresAt: now + 60_000
+    mutationSha256: digest, expiresAt: now + 60_000
   }), /CONFLICT/);
   assert.equal(await approvals.consume({
     requestId, requesterActorId: "different-admin", mutation, now
