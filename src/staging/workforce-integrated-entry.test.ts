@@ -173,3 +173,22 @@ test("integrated entry fails closed when Core cannot resolve a revoked actor", a
     "cf-access-jwt-assertion": "revoked-jwt"
   }, env)).status, 401);
 });
+
+test("Core-authorized EMP-001 reaches the actual handler without legacy identity lookup", async () => {
+  let coreCalls = 0;
+  const env = {
+    STAGING_ACCESS_TEAM_DOMAIN: "staging.cloudflareaccess.com",
+    STAGING_ACCESS_AUDIENCE: "staging-only-aud",
+    STAGING_DO_BOUNDARY_KEY: "test-only-boundary-key-longer-than-32-bytes",
+    WORKFORCE_CORE: { fetch: async () => {
+      coreCalls++;
+      return Response.json({ ok: true, actorId: "actor-c", tenantId: "tenant-c", role: "owner", enabledEmployees: ["EMP-001"] });
+    } }
+  } as unknown as typeof empty;
+  const response = await call("/api/emp001/operations", "GET", {
+    "cf-access-jwt-assertion": "core-authorized-c"
+  }, env);
+  assert.equal(response.status, 503);
+  assert.equal((await response.json() as { error: string }).error, "SALES_NOT_CONFIGURED");
+  assert.equal(coreCalls, 1);
+});
