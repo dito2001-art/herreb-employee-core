@@ -291,3 +291,39 @@ test("Core-authorized tenant C reads its EMP-003 campaigns through scoped Durabl
   assert.ok(calls.includes("fetch:tenant-c"));
   assert.ok(!calls.some((x) => x.includes("tenant-a")));
 });
+
+test("Core-authorized tenant C lists only its native EMP-002 calendar entries", async () => {
+  const id = { toString: () => "calendar-tenant-c-object" };
+  const calls: string[] = [];
+  const env = {
+    STAGING_ACCESS_TEAM_DOMAIN: "staging.cloudflareaccess.com",
+    STAGING_ACCESS_AUDIENCE: "staging-only-aud",
+    STAGING_DO_BOUNDARY_KEY: "test-only-boundary-key-longer-than-32-bytes",
+    EMP002_OPERATIONS: {
+      idFromName: (name: string) => { calls.push("id:" + name); return id; },
+      get: () => ({ fetch: async (request: Request) => {
+        assert.ok(request.headers.has("x-workforce-do-capability"));
+        assert.equal(request.headers.get("x-herreb-internal-tenant-id"), "tenant-c");
+        const body = await request.json() as { operation: string };
+        assert.equal(body.operation, "list");
+        calls.push("list");
+        return Response.json({ ok: true, entries: [] });
+      } })
+    },
+    WORKFORCE_CORE: { fetch: async () => Response.json({
+      ok: true, actorId: "actor-c", tenantId: "tenant-c", role: "owner", enabledEmployees: ["EMP-002"]
+    }) }
+  } as unknown as typeof empty;
+  const response = await ingress.fetch(new Request("https://staging.example.test/api/emp002/calendar", {
+    method: "POST",
+    headers: { "cf-access-jwt-assertion": "core-authorized-c", "content-type": "application/json" },
+    body: JSON.stringify({ operation: "list" })
+  }), env, ctx);
+  assert.equal(response.status, 200, await response.clone().text());
+  const payload = await response.json() as { tenantId: string; entries: unknown[] };
+  assert.equal(payload.tenantId, "tenant-c");
+  assert.deepEqual(payload.entries, []);
+  assert.ok(calls.includes("id:tenant:tenant-c"));
+  assert.ok(calls.includes("list"));
+  assert.ok(!calls.some(x => x.includes("tenant-a")));
+});
