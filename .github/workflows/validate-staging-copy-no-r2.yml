@@ -1,0 +1,37 @@
+name: Validate R2-Free Staging Copy Adapter
+on:
+  pull_request:
+    paths:
+      - 'src/runtime/emp003-asset-storage.ts'
+      - 'src/runtime/emp003-copy-do.ts'
+      - 'src/runtime/emp003-staging-copy-storage.test.ts'
+      - 'deploy/staging/wrangler.workforce-integrated.jsonc'
+      - '.github/workflows/validate-staging-copy-no-r2.yml'
+permissions:
+  contents: read
+jobs:
+  adapter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Exact SHA
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Staging copy adapter tests
+        run: node --import tsx --test src/runtime/emp003-staging-copy-storage.test.ts
+      - name: Existing copy lifecycle and storage tests
+        run: node --import tsx --test src/runtime/emp003-copy-lifecycle.test.ts src/runtime/emp003-copy-service.test.ts src/runtime/emp003-durable-storage.test.ts
+      - name: TypeScript
+        run: node node_modules/typescript/bin/tsc --noEmit
+      - name: Lint
+        run: node node_modules/oxlint/bin/oxlint src/runtime/emp003-asset-storage.ts src/runtime/emp003-copy-do.ts src/runtime/emp003-staging-copy-storage.test.ts
