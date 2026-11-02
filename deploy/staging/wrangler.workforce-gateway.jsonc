@@ -10,6 +10,7 @@
   "routes": [],
   "triggers": { "crons": [] },
   "services": [
-    { "binding": "INTEGRATED", "service": "herreb-workforce-integrated-staging" }
+    { "binding": "INTEGRATED", "service": "herreb-workforce-integrated-staging" },
+    { "binding": "WORKFORCE_CORE", "service": "herreb-employee-core" }
   ]
 }
