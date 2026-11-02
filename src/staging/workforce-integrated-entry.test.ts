@@ -141,3 +141,35 @@ test("copy allowlist is exact for all lifecycle methods", async () => {
     );
   }
 });
+
+
+test("integrated entry independently rejects disabled C employee before Durable Objects", async () => {
+  let coreCalls = 0;
+  const env = {
+    STAGING_ACCESS_TEAM_DOMAIN: "staging.cloudflareaccess.com",
+    STAGING_ACCESS_AUDIENCE: "staging-only-aud",
+    WORKFORCE_CORE: { fetch: async (request: Request) => {
+      coreCalls++;
+      assert.equal(new URL(request.url).pathname, "/api/internal/workforce/resolve-actor");
+      assert.equal(request.headers.get("cf-access-jwt-assertion"), "tenant-c-jwt");
+      return Response.json({ ok: true, actorId: "actor-c", tenantId: "tenant-c", role: "owner", enabledEmployees: ["EMP-001"] });
+    } }
+  } as unknown as typeof empty;
+  const response = await call("/api/emp003/operations", "GET", {
+    "cf-access-jwt-assertion": "tenant-c-jwt",
+    "x-herreb-internal-tenant-id": "tenant-a"
+  }, env);
+  assert.equal(response.status, 403);
+  assert.equal(coreCalls, 1);
+});
+
+test("integrated entry fails closed when Core cannot resolve a revoked actor", async () => {
+  const env = {
+    STAGING_ACCESS_TEAM_DOMAIN: "staging.cloudflareaccess.com",
+    STAGING_ACCESS_AUDIENCE: "staging-only-aud",
+    WORKFORCE_CORE: { fetch: async () => new Response(null, { status: 403 }) }
+  } as unknown as typeof empty;
+  assert.equal((await call("/api/emp001/operations", "GET", {
+    "cf-access-jwt-assertion": "revoked-jwt"
+  }, env)).status, 401);
+});
