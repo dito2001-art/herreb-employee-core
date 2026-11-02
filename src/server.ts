@@ -10,6 +10,7 @@ import { createWorkersAI } from "workers-ai-provider";
 import type { MarketingContentProvider, ServiceFetcher } from "./adapters";
 import { buildEmployeeTools } from "./agent/tools";
 import { StaticModelRouter } from "./core";
+import { createNativeCalendarReadAdapter } from './runtime/emp002-native-calendar-read';
 import {
   accessAgentInstanceSuffix,
   accessIdentityProvenance,
@@ -28,6 +29,7 @@ const DEFAULT_MODEL = "@cf/zai-org/glm-4.7-flash";
 const EMPLOYEE_HOST = "employee.herreb.com";
 
 type RuntimeEnv = Env & {
+  EMP002_OPERATIONS?: Parameters<typeof createNativeCalendarReadAdapter>[0];
   SALES_OPS?: ServiceFetcher;
   SALES_OPS_TOKEN?: string;
   AG002_GATEWAY?: ServiceFetcher;
@@ -164,6 +166,13 @@ export class ChatAgent extends AIChatAgent<Env, Record<string, unknown>, AgentPr
       ? { ...runtimeEnv, AG002_GATEWAY: undefined, RUNTIME_GATEWAY_TOKEN: undefined, HERREB_RUNTIME_TOKEN: undefined, CALENDAR_READ: undefined, CALENDAR_READ_TOKEN: undefined, MARKETING_CONTENT_PROVIDER: marketingContentProvider }
       : { ...runtimeEnv, MARKETING_CONTENT_PROVIDER: marketingContentProvider };
     const bootstrap = buildTenantReadOnlyRuntime(capabilityEnv, tenantId, emp002NativeOnly ? [] : tenantCapabilityBindings(runtimeEnv));
+    const nativeCalendarNamespace = emp002NativeOnly && verifiedIdentity ? runtimeEnv.EMP002_OPERATIONS : undefined;
+    const nativeCalendarConnected = !!nativeCalendarNamespace;
+    if (nativeCalendarNamespace) {
+      bootstrap.adapters.push(createNativeCalendarReadAdapter(nativeCalendarNamespace, tenantId));
+      bootstrap.connectedCapabilities = new Set([...bootstrap.connectedCapabilities, 'calendar.read']);
+      bootstrap.diagnostics.calendar = 'CONNECTED';
+    }
     console.log(JSON.stringify({ event: "EMP002_RUNTIME_DIAGNOSTIC", tenantId, calendarDiagnostic: bootstrap.diagnostics.calendar, calendarCapabilityConnected: bootstrap.connectedCapabilities.has("calendar.read"), crmWriteConnected: bootstrap.connectedCapabilities.has("crm.write"), accessIdentityVerified: Boolean(verifiedIdentity) }));
     const runtime = new HerreBEmployeeRuntime({
       modelRouter,
@@ -177,7 +186,7 @@ export class ChatAgent extends AIChatAgent<Env, Record<string, unknown>, AgentPr
     const systemPrompt = session.manifest.id === "EMP-002"
       ? [
           buildEMP002ConversationSystemPrompt({ context: session.context, manifest: session.manifest }),
-          "The native Workforce calendar is not yet connected. Do not use legacy CRM, personal CRM, Google Calendar, old conversation history or model memory as current agenda evidence. Never present historical tasks as today's agenda. State that live agenda access is unavailable until the native tenant calendar is connected.",
+          nativeCalendarConnected ? "Use the native Workforce calendar.read tool for current agenda and availability. Never use CRM, Google Calendar, old conversation history or model memory as current agenda evidence. Mutations must be made in Agenda y tareas; do not claim a conversational write succeeded." : "The native Workforce calendar is not connected. Do not use CRM, Google Calendar, old conversation history or model memory as current agenda evidence. State that live agenda access is unavailable.",
           "Distinguish tasks, meetings and events. Never claim a meeting was created, modified, cancelled or read back without a successful tenant-scoped tool result.",
           "Tenant timezone: America/Asuncion.",
           `Current server time (UTC): ${new Date().toISOString()}.`

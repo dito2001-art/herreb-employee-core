@@ -1,23 +1,43 @@
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { Button, Badge } from "@cloudflare/kumo";
-import { ChatCircleDotsIcon, GearIcon, MegaphoneIcon } from "@phosphor-icons/react";
-import { WorkforceAdminPanel } from "./workforce-admin-panel";
-import { EMP003CampaignDashboard } from "./emp003-campaign-dashboard";
+import {
+  ChatCircleDotsIcon,
+  GearIcon,
+  MegaphoneIcon
+} from "@phosphor-icons/react";
+import { EMP002CalendarDashboard } from "./emp002-calendar-dashboard";
+import { EMP001SalesDashboard } from "./emp001-sales-dashboard";
+import { EMP003Workspace } from "./emp003-workspace";
 
-export type WorkforceView = "assistant" | "admin" | "marketer";
+export type WorkforceView =
+  | "assistant"
+  | "admin"
+  | "marketer"
+  | "calendar"
+  | "sales";
 
-export function WorkforceShell({ assistant }: { assistant: ReactNode }) {
-  const [view, setView] = useState<WorkforceView>("assistant");
+export function WorkforceShell() {
+  const [view, setView] = useState<WorkforceView>("calendar");
 
   return (
     <div className="h-screen flex flex-col bg-kumo-elevated">
-      <nav className="px-5 py-3 bg-kumo-base border-b border-kumo-line" aria-label="HerreB AI Workforce navigation">
+      <nav
+        className="px-5 py-3 bg-kumo-base border-b border-kumo-line"
+        aria-label="HerreB AI Workforce navigation"
+      >
         <div className="max-w-5xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <strong className="text-kumo-default">HerreB AI Workforce</strong>
-            <Badge variant="secondary">Client 0</Badge>
+            <Badge variant="secondary">Workforce</Badge>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant={view === "sales" ? "primary" : "secondary"}
+              onClick={() => setView("sales")}
+            >
+              EMP-001
+            </Button>
             <Button
               size="sm"
               variant={view === "assistant" ? "primary" : "secondary"}
@@ -25,6 +45,13 @@ export function WorkforceShell({ assistant }: { assistant: ReactNode }) {
               onClick={() => setView("assistant")}
             >
               EMP-002
+            </Button>
+            <Button
+              size="sm"
+              variant={view === "calendar" ? "primary" : "secondary"}
+              onClick={() => setView("calendar")}
+            >
+              Agenda y tareas
             </Button>
             <Button
               size="sm"
@@ -46,14 +73,34 @@ export function WorkforceShell({ assistant }: { assistant: ReactNode }) {
         </div>
       </nav>
       <main className="min-h-0 flex-1">
-        {view === "assistant" ? assistant : view === "marketer" ? (
+        {view === "assistant" ? (
+          <section aria-label="Capacidad no disponible" className="p-5">
+            <h2>Chat del asistente no conectado</h2>
+            <p>
+              Usá Agenda y tareas para consultar y gestionar el calendario
+              nativo. Este ingreso no habilita chat ni recordatorios WhatsApp.
+            </p>
+          </section>
+        ) : view === "sales" ? (
           <div className="max-w-5xl mx-auto p-5 overflow-y-auto h-full">
-            <EMP003CampaignDashboard />
+            <EMP001SalesDashboard />
+          </div>
+        ) : view === "calendar" ? (
+          <div className="max-w-5xl mx-auto p-5 overflow-y-auto h-full">
+            <EMP002CalendarDashboard />
+          </div>
+        ) : view === "marketer" ? (
+          <div className="max-w-5xl mx-auto p-5 overflow-y-auto h-full">
+            <EMP003Workspace />
           </div>
         ) : (
-          <div className="max-w-5xl mx-auto p-5 overflow-y-auto h-full">
-            <WorkforceAdminPanel />
-          </div>
+          <section aria-label="Capacidad no disponible" className="p-5">
+            <h2>Administración no habilitada</h2>
+            <p>
+              La configuración y los permisos requieren un ingreso de
+              administración autorizado.
+            </p>
+          </section>
         )}
       </main>
     </div>

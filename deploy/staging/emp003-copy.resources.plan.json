@@ -1,0 +1,14 @@
+{
+  "status": "PROPOSED_ONLY_NOT_A_WRANGLER_MANIFEST",
+  "account_id": "43147827695cce6931d9dc625ec240a7",
+  "worker": "herreb-emp003-staging",
+  "proposed_r2_binding": {"binding":"EMP003_ASSET_BUCKET","bucket_name":"herreb-emp003-pilot-copy-assets"},
+  "public_access": false,
+  "custom_domains": [],
+  "new_do_classes": [],
+  "new_migrations": [],
+  "configuration_required": "EMP003_COPY_CONTEXTS_JSON: validated tenant brand/knowledge/claims and explicit campaign revision bindings; no default or simulated claims",
+  "quota": "Configured per tenant, 1–20 provider invocations per UTC day; errors consume reserved quota; no automatic refunds or ambiguous retries",
+  "activation_requires": ["owner authorization for resource/binding/configuration and exact deploy SHA","private R2 availability and terms confirmed in pilot account","authoritative non-secret tenant profile and verified knowledge/claims supplied or approved","PR304 real E2E closed"],
+  "recovery": "Disable pilot ingress; preserve existing DO data and private bucket; retain STARTED/GENERATED ledgers and quota; review forward-fix; never delete resources or replay ambiguous generation automatically"
+}

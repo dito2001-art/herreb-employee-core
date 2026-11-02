@@ -243,3 +243,37 @@ test("platform admin cannot silently transfer an existing email to another tenan
   assert.equal(h.getState().identities[0]?.actorId, "owner");
   assert.equal(h.audits[0]?.decision, "RED");
 });
+
+test("trusted YELLOW verifier is required, cannot authorize RED, and records persisted decision", async () => {
+  const h = harness();
+  const platform = { actorId: "platform", tenantId: "platform", role: "platform_admin" as const };
+  const mutation = { type: "tenant.create" as const, tenant: {
+    tenantId: "client-c", name: "Client C", enabledEmployees: ["EMP-001" as const],
+    knowledgeNamespace: "client-c:k", offeringNamespace: "client-c:o"
+  }};
+  const denied = await executeWorkforceAdminMutation({
+    actor: platform, mutation, store: h.store, audit: h.audit,
+    authorizeYellow: async () => false
+  });
+  assert.equal(denied.persisted, false);
+  assert.equal(h.getState().manifests.length, 1);
+  const approved = await executeWorkforceAdminMutation({
+    actor: platform, mutation, store: h.store, audit: h.audit,
+    authorizeYellow: async ({ actor, mutation: candidate }) =>
+      actor.actorId === "platform" && candidate.type === "tenant.create" &&
+      candidate.tenant.tenantId === "client-c"
+  });
+  assert.equal(approved.decision, "YELLOW");
+  assert.equal(approved.persisted, true);
+  assert.equal(h.getState().manifests.length, 2);
+  assert.equal(h.audits.at(-1)?.persisted, true);
+  let verifierCalled = false;
+  const red = await executeWorkforceAdminMutation({
+    actor: owner, mutation: { type: "identity.delete", email: "owner@herreb.test" },
+    store: h.store, audit: h.audit,
+    authorizeYellow: async () => { verifierCalled = true; return true; }
+  });
+  assert.equal(red.decision, "RED");
+  assert.equal(red.persisted, false);
+  assert.equal(verifierCalled, false);
+});

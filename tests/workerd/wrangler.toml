@@ -1,0 +1,13 @@
+name = "wf00-emp003-workerd-local-fixture"
+main = "./emp003-fixture.ts"
+compatibility_date = "2026-06-11"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = false
+
+[[durable_objects.bindings]]
+name = "EMP003_CAMPAIGN_STATE"
+class_name = "EMP003CampaignState"
+
+[[migrations]]
+tag = "fixture-v1"
+new_sqlite_classes = ["EMP003CampaignState"]

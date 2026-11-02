@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   platform-admin-security:
-    name: Platform admin authorization tests
+    name: Validate Workforce Platform Admin Security
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

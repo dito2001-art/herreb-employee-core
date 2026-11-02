@@ -1,0 +1,71 @@
+// I2 candidate for a NEW isolated Worker and new namespaces only. Not an upgrade manifest.
+// Requires reviewed Access configuration and a dedicated STAGING_DO_BOUNDARY_KEY secret.
+// No resource creation, secret installation, or deployment is authorized by this file.
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "herreb-workforce-integrated-staging",
+  "account_id": "3519d3ab1a5b1dc4e629e661df78c150",
+  "main": "../../src/staging/workforce-integrated-entry.ts",
+  "compatibility_date": "2026-06-11",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": false,
+  "vars": { "STAGING_COPY_DO_STORAGE": "enabled" },
+  "services": [
+    {
+      "binding": "WORKFORCE_CORE",
+      "service": "herreb-employee-core"
+    },
+    {
+      "binding": "SALES_OPS",
+      "service": "herreb-emp001-sales-ops-stg-a"
+    }
+  ],
+  "ai": {
+    "binding": "AI",
+    "remote": true
+  },
+  "assets": {
+    "directory": "../../dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+  "build": {
+    "command": "npm run build:console"
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "EMP002Operations",
+        "name": "EMP002_OPERATIONS"
+      },
+      {
+        "class_name": "EMP003CampaignState",
+        "name": "EMP003_CAMPAIGN_STATE"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "integrated-i2-v1",
+      "new_sqlite_classes": [
+        "EMP002Operations",
+        "EMP003CampaignState"
+      ]
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    }
+  },
+  "preview_urls": false,
+  "routes": [],
+  "triggers": {
+    "crons": []
+  }
+}

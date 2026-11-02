@@ -1,0 +1,514 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createEMP003CopyService } from "./emp003-copy-service";
+import {
+  createEMP003AssetMetadataStorage,
+  createEMP003AssetObjectStorage
+} from "./emp003-asset-storage";
+import { resolveCopyGeneration } from "./emp003-copy-context";
+import {
+  copyFixture,
+  copyContext,
+  copyBlueprint,
+  copyRequest
+} from "./emp003-copy-fixture.test-support";
+function setup(limit = 3) {
+  const fixture = copyFixture();
+  let calls = 0;
+  let fail = false;
+  let writable = true;
+  const service = createEMP003CopyService({
+    metadata: createEMP003AssetMetadataStorage(
+      fixture.storage as unknown as DurableObjectStorage
+    ),
+    objects: createEMP003AssetObjectStorage(fixture.bucket),
+    contextJson: JSON.stringify([{ ...copyContext, dailyLimit: limit }]),
+    generator: {
+      async generate() {
+        calls++;
+        if (fail) throw Error("provider secret error");
+        return {
+          headline: "Probá el servicio",
+          body: "Consultanos por la consultoría.",
+          claimIds: ["claim"]
+        };
+      }
+    },
+    async loadCampaign(t, c) {
+      return t === "tenant-a" && c === "campaign"
+        ? { campaign: copyBlueprint, revision: 1 }
+        : undefined;
+    },
+    async canGenerate() {
+      return writable;
+    },
+    now: () => new Date("2026-10-28T20:00:00Z")
+  });
+  return {
+    ...fixture,
+    service,
+    calls: () => calls,
+    setFail: () => {
+      fail = true;
+    },
+    review: () => {
+      writable = false;
+    }
+  };
+}
+test("generation→registration→list→exact bytes, immutable revisions and operation replay", async () => {
+  const f = setup();
+  try {
+    const first = await f.service.generate("tenant-a", copyRequest);
+    assert.equal(first.state, "SUCCEEDED");
+    assert.equal(first.record?.revision, 1);
+    assert.equal((await f.service.list("tenant-a", "campaign")).length, 1);
+    assert.equal(
+      new TextDecoder().decode(
+        (await f.service.read("tenant-a", "campaign", "copy", 1))!.content
+      ),
+      "Probá el servicio\n\nConsultanos por la consultoría."
+    );
+    assert.deepEqual(await f.service.generate("tenant-a", copyRequest), first);
+    assert.equal(f.calls(), 1);
+    await assert.rejects(
+      () =>
+        f.service.generate("tenant-a", { ...copyRequest, channel: "other" }),
+      /IDEMPOTENCY_CONFLICT/
+    );
+    await assert.rejects(
+      () =>
+        f.service.generate("tenant-a", {
+          ...copyRequest,
+          operationId: "stale"
+        }),
+      /REVISION_CONFLICT/
+    );
+    assert.equal(f.calls(), 1);
+    await f.service.generate("tenant-a", {
+      ...copyRequest,
+      operationId: "op-2",
+      expectedRevision: 1
+    });
+    assert.equal(
+      (await f.service.read("tenant-a", "campaign", "copy", 1))!.record
+        .revision,
+      1
+    );
+    assert.equal(
+      (await f.service.read("tenant-a", "campaign", "copy"))!.record.revision,
+      2
+    );
+    assert.equal(
+      (await f.service.status("tenant-a", "campaign", "op-1"))?.state,
+      "SUCCEEDED"
+    );
+  } finally {
+    f.db.close();
+  }
+});
+test("atomic quota, concurrent duplicate, provider failure and tenant/review boundaries", async () => {
+  const f = setup(2);
+  try {
+    const concurrent = await Promise.all([
+      f.service.generate("tenant-a", copyRequest),
+      f.service.generate("tenant-a", copyRequest)
+    ]);
+    assert.equal(f.calls(), 1);
+    assert.ok(concurrent.some((x) => x.state === "SUCCEEDED"));
+    f.setFail();
+    const request = {
+      ...copyRequest,
+      assetId: "failed",
+      operationId: "failed"
+    };
+    assert.equal(
+      (await f.service.generate("tenant-a", request)).state,
+      "FAILED"
+    );
+    assert.equal(
+      (await f.service.generate("tenant-a", request)).state,
+      "FAILED"
+    );
+    assert.equal(f.calls(), 2);
+    assert.equal(
+      await f.service.read("tenant-a", "campaign", "failed"),
+      undefined
+    );
+    await assert.rejects(
+      () =>
+        f.service.generate("tenant-a", {
+          ...copyRequest,
+          assetId: "quota",
+          operationId: "quota"
+        }),
+      /QUOTA_EXHAUSTED/
+    );
+    assert.equal(f.calls(), 2);
+    await assert.rejects(
+      () => f.service.list("tenant-b", "campaign"),
+      /NOT_FOUND/
+    );
+    await assert.rejects(
+      () => f.service.read("tenant-a", "other", "copy"),
+      /NOT_FOUND/
+    );
+    f.review();
+    await assert.rejects(
+      () =>
+        f.service.generate("tenant-a", {
+          ...copyRequest,
+          operationId: "reviewed",
+          expectedRevision: 1
+        }),
+      /IMMUTABLE/
+    );
+    assert.ok(await f.service.read("tenant-a", "campaign", "copy"));
+  } finally {
+    f.db.close();
+  }
+});
+test("ambiguous STARTED never calls provider again, GENERATED can recover without another model call", async () => {
+  const f = setup();
+  try {
+    const { copyHash } = await import("./emp003-copy-service");
+    const fingerprint = await copyHash(JSON.stringify(copyRequest));
+    const key = "emp003:copy:tenant-a:op:op-1";
+    await f.storage.put(
+      key,
+      JSON.stringify({
+        fingerprint,
+        state: "STARTED",
+        createdAt: "2026-10-28T20:00:00Z",
+        campaignId: "campaign"
+      })
+    );
+    assert.equal(
+      (await f.service.generate("tenant-a", copyRequest)).state,
+      "STARTED"
+    );
+    assert.equal(f.calls(), 0);
+    await f.storage.put(
+      key,
+      JSON.stringify({
+        fingerprint,
+        state: "GENERATED", contextHash: await copyHash(JSON.stringify(copyContext)),
+        createdAt: "2026-10-28T20:00:00Z",
+        campaignId: "campaign",
+        draft: {
+          tenantId: "tenant-a",
+          offeringId: "offering",
+          audienceId: "audience",
+          channel: "Email",
+          headline: "h",
+          body: "b",
+          claimIds: ["claim"],
+          sourceKnowledgeIds: ["knowledge"],
+          status: "DRAFT"
+        }
+      })
+    );
+    await f.storage.put("emp003:copy:tenant-a:asset:campaign:copy", "op-1");
+    assert.equal(
+      (await f.service.generate("tenant-a", copyRequest)).state,
+      "SUCCEEDED"
+    );
+    assert.equal(f.calls(), 0);
+    const record = (await f.service.read("tenant-a", "campaign", "copy"))!
+      .record;
+    f.objects.set(record.objectKey, new TextEncoder().encode("corrupted"));
+    await assert.rejects(
+      () => f.service.read("tenant-a", "campaign", "copy"),
+      /READBACK_FAILED/
+    );
+  } finally {
+    f.db.close();
+  }
+});
+test("authoritative context rejects missing config, cross-tenant knowledge, stale campaign and invented lineage", () => {
+  const generator = {
+    async generate() {
+      throw Error("must not call");
+    }
+  };
+  const stored = { campaign: copyBlueprint, revision: 1 };
+  const resolve = (context: unknown, request = copyRequest) =>
+    resolveCopyGeneration(
+      context === undefined ? undefined : JSON.stringify(context),
+      "tenant-a",
+      request,
+      stored,
+      generator
+    );
+  assert.throws(() => resolve(undefined), /NOT_CONFIGURED/);
+  assert.throws(
+    () =>
+      resolve([
+        {
+          ...copyContext,
+          knowledge: [{ ...copyContext.knowledge[0], tenantId: "tenant-b" }]
+        }
+      ]),
+    /ISOLATION/
+  );
+  assert.throws(
+    () => resolve([copyContext], { ...copyRequest, campaignRevision: 2 }),
+    /REVISION_CONFLICT/
+  );
+  assert.throws(
+    () =>
+      resolve([
+        {
+          ...copyContext,
+          claims: [{ ...copyContext.claims[0], verified: false }]
+        }
+      ]),
+    /VERIFIED_KNOWLEDGE/
+  );
+  assert.throws(
+    () =>
+      resolve([
+        {
+          ...copyContext,
+          campaigns: [{ ...copyContext.campaigns[0], audienceId: "invented" }]
+        }
+      ]),
+    /MISMATCH/
+  );
+});
+
+test("quota race across distinct assets reserves exactly one provider invocation", async () => {
+  const f = setup(1);
+  try {
+    const results = await Promise.allSettled([
+      f.service.generate("tenant-a", copyRequest),
+      f.service.generate("tenant-a", {
+        ...copyRequest,
+        assetId: "another",
+        operationId: "another"
+      })
+    ]);
+    assert.equal(results.filter((x) => x.status === "fulfilled").length, 1);
+    const rejected = results.find(
+      (x) => x.status === "rejected"
+    ) as PromiseRejectedResult;
+    assert.match(String(rejected.reason), /COPY_QUOTA_EXHAUSTED/);
+    assert.equal(f.calls(), 1);
+    assert.equal(
+      await f.storage.get("emp003:copy:tenant-a:quota:2026-10-28"),
+      "1"
+    );
+  } finally {
+    f.db.close();
+  }
+});
+
+test("two concurrent GENERATED recoveries register one revision and never call AI", { timeout: 5000 }, async () => {
+  const f = setup();
+  try {
+    const { copyHash } = await import("./emp003-copy-service");
+    const fingerprint = await copyHash(JSON.stringify(copyRequest));
+    await f.storage.put("emp003:copy:tenant-a:op:op-1", JSON.stringify({
+      fingerprint, state: "GENERATED", contextHash: await copyHash(JSON.stringify(copyContext)), createdAt: "2026-10-28T20:00:00Z",
+      campaignId: "campaign",
+      draft: {
+        tenantId: "tenant-a", offeringId: "offering", audienceId: "audience",
+        channel: "Email", headline: "h", body: "b",
+        claimIds: ["claim"], sourceKnowledgeIds: ["knowledge"], status: "DRAFT"
+      }
+    }));
+    await f.storage.put("emp003:copy:tenant-a:asset:campaign:copy", "op-1");
+    // Force both requests to read the GENERATED receipt before either may
+    // finish. This is a deterministic collision, not a scheduler-dependent race.
+    const base = createEMP003AssetMetadataStorage(
+      f.storage as unknown as DurableObjectStorage
+    );
+    let arrivals = 0;
+    let recoveryProviderCalls = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const recover = createEMP003CopyService({
+      metadata: base,
+      objects: createEMP003AssetObjectStorage(f.bucket),
+      contextJson: JSON.stringify([copyContext]),
+      generator: {
+        async generate() {
+          recoveryProviderCalls++;
+          throw Error("RECOVERY_MUST_NOT_CALL_AI");
+        }
+      },
+      async loadCampaign(t, campaignId) {
+        return t === "tenant-a" && campaignId === "campaign"
+          ? { campaign: copyBlueprint, revision: 1 }
+          : undefined;
+      },
+      async canGenerate() {
+        arrivals++;
+        if (arrivals <= 2) {
+          if (arrivals === 2) release();
+          await gate;
+        }
+        return true;
+      },
+      now: () => new Date("2026-10-28T20:00:00Z")
+    });
+    const results = await Promise.all([
+      recover.generate("tenant-a", copyRequest),
+      recover.generate("tenant-a", copyRequest)
+    ]);
+    assert.equal(arrivals >= 2, true);
+    assert.deepEqual(results.map((x) => x.state), ["SUCCEEDED", "SUCCEEDED"]);
+    assert.deepEqual(results.map((x) => x.record?.revision), [1, 1]);
+    assert.equal(recoveryProviderCalls, 0);
+    assert.equal(f.calls(), 0);
+    assert.equal((await f.service.list("tenant-a", "campaign")).length, 1);
+    assert.equal(await f.storage.get("emp003:copy:tenant-a:asset:campaign:copy"), "");
+  } finally {
+    f.db.close();
+  }
+});
+
+test("ambiguous STARTED stays pending without retrying AI and lock remains owned", async () => {
+  const f = setup();
+  try {
+    const { copyHash } = await import("./emp003-copy-service");
+    const fingerprint = await copyHash(JSON.stringify(copyRequest));
+    await f.storage.put("emp003:copy:tenant-a:op:op-1", JSON.stringify({
+      fingerprint, state: "STARTED", createdAt: "2026-10-28T20:00:00Z",
+      campaignId: "campaign"
+    }));
+    await f.storage.put("emp003:copy:tenant-a:asset:campaign:copy", "op-1");
+    const result = await Promise.all([
+      f.service.generate("tenant-a", copyRequest),
+      f.service.generate("tenant-a", copyRequest)
+    ]);
+    assert.deepEqual(result.map((x) => x.state), ["STARTED", "STARTED"]);
+    assert.equal(f.calls(), 0);
+    assert.equal(await f.storage.get("emp003:copy:tenant-a:asset:campaign:copy"), "op-1");
+  } finally {
+    f.db.close();
+  }
+});
+
+test("GENERATED recovery refuses a lock owned by another operation", async () => {
+  const f = setup();
+  try {
+    const { copyHash } = await import("./emp003-copy-service");
+    const fingerprint = await copyHash(JSON.stringify(copyRequest));
+    await f.storage.put("emp003:copy:tenant-a:op:op-1", JSON.stringify({
+      fingerprint, state: "GENERATED", contextHash: await copyHash(JSON.stringify(copyContext)), createdAt: "2026-10-28T20:00:00Z",
+      campaignId: "campaign",
+      draft: {
+        tenantId: "tenant-a", offeringId: "offering", audienceId: "audience",
+        channel: "Email", headline: "h", body: "b",
+        claimIds: ["claim"], sourceKnowledgeIds: ["knowledge"], status: "DRAFT"
+      }
+    }));
+    await f.storage.put("emp003:copy:tenant-a:asset:campaign:copy", "other-operation");
+    await assert.rejects(
+      () => f.service.generate("tenant-a", copyRequest),
+      /COPY_RECOVERY_RECONCILIATION_REQUIRED/
+    );
+    assert.equal(f.calls(), 0);
+    assert.equal(await f.service.read("tenant-a", "campaign", "copy"), undefined);
+  } finally {
+    f.db.close();
+  }
+});
+
+test("reservation-lost branch reads receipt once, never recursively generates", async () => {
+  const f = copyFixture();
+  try {
+    const { copyHash } = await import("./emp003-copy-service");
+    const fingerprint = await copyHash(JSON.stringify(copyRequest));
+    const operationKey = "emp003:copy:tenant-a:op:op-1";
+    await f.storage.put(operationKey, JSON.stringify({
+      fingerprint, state: "STARTED", createdAt: "2026-10-28T20:00:00Z",
+      campaignId: "campaign"
+    }));
+    const underlying = createEMP003AssetMetadataStorage(
+      f.storage as unknown as DurableObjectStorage
+    );
+    let masked = false;
+    let providerCalls = 0;
+    const service = createEMP003CopyService({
+      metadata: {
+        transaction(work) {
+          return underlying.transaction((storage) =>
+            work({
+              ...storage,
+              async get(key) {
+                if (key === operationKey && !masked) {
+                  masked = true;
+                  return undefined;
+                }
+                return storage.get(key);
+              }
+            })
+          );
+        }
+      },
+      objects: createEMP003AssetObjectStorage(f.bucket),
+      contextJson: JSON.stringify([copyContext]),
+      generator: {
+        async generate() {
+          providerCalls++;
+          throw Error("unexpected provider call");
+        }
+      },
+      async loadCampaign(t, campaignId) {
+        return t === "tenant-a" && campaignId === "campaign"
+          ? { campaign: copyBlueprint, revision: 1 }
+          : undefined;
+      },
+      async canGenerate() { return true; },
+      now: () => new Date("2026-10-28T20:00:00Z")
+    });
+    const result = await service.generate("tenant-a", copyRequest);
+    assert.equal(masked, true);
+    assert.equal(result.state, "STARTED");
+    assert.equal(providerCalls, 0);
+    assert.equal(await f.storage.get("emp003:copy:tenant-a:quota:2026-10-28"), undefined);
+  } finally {
+    f.db.close();
+  }
+});
+
+test("GENERATED recovery rejects changed authoritative claims without invoking the provider", async () => {
+  const f = setup();
+  try {
+    const { copyHash } = await import("./emp003-copy-service");
+    await f.storage.put(
+      "emp003:copy:tenant-a:op:op-1",
+      JSON.stringify({
+        fingerprint: await copyHash(JSON.stringify(copyRequest)),
+        state: "GENERATED",
+        contextHash: "0".repeat(64),
+        createdAt: "2026-10-28T20:00:00Z",
+        campaignId: "campaign",
+        draft: {
+          tenantId: "tenant-a",
+          offeringId: "offering",
+          audienceId: "audience",
+          channel: "Email",
+          headline: "h",
+          body: "b",
+          claimIds: ["claim"],
+          sourceKnowledgeIds: ["knowledge"],
+          status: "DRAFT"
+        }
+      })
+    );
+    await assert.rejects(
+      () => f.service.generate("tenant-a", copyRequest),
+      /COPY_CONTEXT_CHANGED/
+    );
+    assert.equal(f.calls(), 0);
+    assert.equal(
+      await f.service.read("tenant-a", "campaign", "copy"),
+      undefined
+    );
+  } finally {
+    f.db.close();
+  }
+});
