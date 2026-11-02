@@ -47,6 +47,11 @@ export default {
 
     try {
       const actor = await resolvePersistedWorkforceActor(request, env);
+      const employee = url.pathname.startsWith("/api/emp001/") ? "EMP-001" :
+        url.pathname.startsWith("/api/emp002/") ? "EMP-002" :
+        url.pathname.startsWith("/api/emp003/") ? "EMP-003" : undefined;
+      if (employee && !actor.enabledEmployees.includes(employee))
+        return deny(403, "GATEWAY_EMPLOYEE_DISABLED");
       if (!actor.actorId || !actor.tenantId || !["owner", "user"].includes(actor.role))
         return deny(403, "GATEWAY_ACTOR_FORBIDDEN");
     } catch {
