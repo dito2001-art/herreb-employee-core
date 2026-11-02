@@ -132,6 +132,41 @@ export async function readWorkforceAdminAccessActor(
   });
 }
 
+/** Independent reviewer identity is derived exclusively from the verified Access
+ * JWT and the configured platform email allowlist. A shared platform actor ID
+ * cannot represent two distinct human reviewers. */
+export async function readIndependentWorkforceReviewer(
+  request: Request,
+  env: AccessReadEnv,
+  fetcher: Fetcher = fetch
+): Promise<AdminReadActor> {
+  const config = accessConfig(env);
+  const jwt = request.headers.get("cf-access-jwt-assertion")?.trim();
+  if (!jwt) throw new Error("WORKFORCE_ACCESS_JWT_REQUIRED");
+  const response = await fetcher(config.jwksUrl, {
+    method: "GET", redirect: "manual", signal: AbortSignal.timeout(5000),
+    headers: { accept: "application/json" }
+  });
+  if (!response.ok) throw new Error("WORKFORCE_ACCESS_JWKS_UNAVAILABLE");
+  const jwks = await response.json() as Jwks;
+  if (!jwks || !Array.isArray(jwks.keys) || jwks.keys.length > 50)
+    throw new Error("WORKFORCE_ACCESS_JWKS_INVALID");
+  const principal = await verifyWorkforceAccessJwt({
+    jwt, jwks, issuer: config.issuer, audience: config.audience,
+    nowSeconds: Math.floor(Date.now() / 1000)
+  });
+  const allowed = configuredPlatformEmails(env);
+  if (allowed.filter((email) => email === principal.email).length !== 1)
+    throw new Error("WORKFORCE_APPROVAL_REVIEWER_FORBIDDEN");
+  if (!env.WORKFORCE_PLATFORM_ADMIN_ACTOR_ID?.trim() || !env.WORKFORCE_PLATFORM_ADMIN_TOKEN)
+    throw new Error("WORKFORCE_PLATFORM_ADMIN_CONFIG_INVALID");
+  return {
+    actorId: "platform-access:" + principal.email,
+    tenantId: "platform",
+    role: "platform_admin"
+  };
+}
+
 /** Read path only. Never forward an external request, including caller-supplied headers, to the Durable Object. */
 export async function handleWorkforceAdminGet(
   request: Request,
