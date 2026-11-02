@@ -14,6 +14,10 @@
   "vars": { "STAGING_COPY_DO_STORAGE": "enabled" },
   "services": [
     {
+      "binding": "WORKFORCE_CORE",
+      "service": "herreb-employee-core"
+    },
+    {
       "binding": "SALES_OPS",
       "service": "herreb-emp001-sales-ops-stg-a"
     }
