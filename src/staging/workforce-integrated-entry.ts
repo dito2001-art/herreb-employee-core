@@ -98,6 +98,11 @@ export default {
     let actor: BoundaryActor;
     try {
       const verified = await resolvePersistedWorkforceActor(request, env);
+      const employee = url.pathname.startsWith("/api/emp001/") ? "EMP-001" :
+        url.pathname.startsWith("/api/emp002/") ? "EMP-002" :
+        url.pathname.startsWith("/api/emp003/") ? "EMP-003" : undefined;
+      if (employee && !verified.enabledEmployees.includes(employee))
+        return denied(403, "STAGING_EMPLOYEE_DISABLED");
       actor = verified as BoundaryActor;
       if (
         !["owner", "user"].includes(actor.role) ||
