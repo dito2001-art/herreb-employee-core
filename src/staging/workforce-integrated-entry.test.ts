@@ -192,3 +192,42 @@ test("Core-authorized EMP-001 reaches the actual handler without legacy identity
   assert.equal((await response.json() as { error: string }).error, "SALES_NOT_CONFIGURED");
   assert.equal(coreCalls, 1);
 });
+
+test("Core-authorized EMP-002 reaches calendar handler without legacy identity lookup", async () => {
+  let coreCalls = 0;
+  const env = {
+    STAGING_ACCESS_TEAM_DOMAIN: "staging.cloudflareaccess.com",
+    STAGING_ACCESS_AUDIENCE: "staging-only-aud",
+    STAGING_DO_BOUNDARY_KEY: "test-only-boundary-key-longer-than-32-bytes",
+    WORKFORCE_CORE: { fetch: async () => {
+      coreCalls++;
+      return Response.json({ ok: true, actorId: "actor-c", tenantId: "tenant-c", role: "owner", enabledEmployees: ["EMP-002"] });
+    } }
+  } as unknown as typeof empty;
+  const response = await call("/api/emp002/calendar", "POST", {
+    "cf-access-jwt-assertion": "core-authorized-c",
+    "content-type": "application/json"
+  }, env);
+  assert.equal(response.status, 503);
+  assert.equal((await response.json() as { error: string }).error, "NATIVE_CALENDAR_UNAVAILABLE");
+  assert.equal(coreCalls, 1);
+});
+
+test("Core-authorized EMP-003 reaches marketing handler without legacy identity lookup", async () => {
+  let coreCalls = 0;
+  const env = {
+    STAGING_ACCESS_TEAM_DOMAIN: "staging.cloudflareaccess.com",
+    STAGING_ACCESS_AUDIENCE: "staging-only-aud",
+    STAGING_DO_BOUNDARY_KEY: "test-only-boundary-key-longer-than-32-bytes",
+    WORKFORCE_CORE: { fetch: async () => {
+      coreCalls++;
+      return Response.json({ ok: true, actorId: "actor-c", tenantId: "tenant-c", role: "owner", enabledEmployees: ["EMP-003"] });
+    } }
+  } as unknown as typeof empty;
+  const response = await call("/api/emp003/operations", "GET", {
+    "cf-access-jwt-assertion": "core-authorized-c"
+  }, env);
+  assert.equal(response.status, 503);
+  assert.equal((await response.json() as { error: string }).error, "EMP003_BROWSER_STORAGE_UNAVAILABLE");
+  assert.equal(coreCalls, 1);
+});
