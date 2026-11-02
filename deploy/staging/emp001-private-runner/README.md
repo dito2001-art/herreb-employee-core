@@ -1,6 +1,6 @@
 # EMP-001 private runner candidate
 
-Review-only candidate initially prepared against Core PR #330 SHA 4ecd3b2e43818f7b4aac3de8656fa8469a9a7350. The current #330 review HEAD is 0c58bd7a22142cb6eef903151e368db492269e89; compatibility with that exact integrated candidate has not yet been demonstrated.
+Review-only candidate stacked in Core PR #334 on top of PR #330 HEAD `4f20f415b14911be95d02ccfe44b6b5e231c955b`. The exact consolidated bundle HEAD is recorded in PR #334. The candidate's CI proves its offline contract only; it does not certify live Access, Cloudflare resources, or deployment.
 
 The runner allows POST /internal/emp001/chat only. Its input accepts a message and optional session_id. Access JWT is verified cryptographically with an explicitly configured RS256 public JWKS, issuer, audience and validity times. A server-controlled principal map resolves exact subject and email to one role, tenant and A/B slot. Runtime Service Bindings and bearer tokens are separate per slot.
 
@@ -49,3 +49,16 @@ The authenticated dashboard read-back found that the actual B downstream Workers
 These are P0 blockers for private-ingress acceptance. Application-level bearer checks may still reject unauthorized operations, but they do not satisfy the required Access/private ingress boundary. Do not enable the runner or perform remote A/B E2E until workers.dev is disabled or Access is applied and verified on both B Workers. This finding is not a claim of successful unauthorized data access.
 
 The runner manifest is disabled by default and binds to the Runtime A/B service names only. It does not itself bind Sales Ops; Sales Ops access remains a downstream Runtime responsibility and must be independently verified. No Cloudflare configuration was changed.
+
+
+## Current release-gate delta (2026-11-02; read-only)
+
+- PR #334 consolidates the exact PR #330 base plus the EMP-003 staging-copy, Sales Ops B credential, and private-runner candidates. Its four exact-HEAD CI workflows passed. PR #334 remains Draft; no independent WF-01/WF-04 review exists.
+- The Cloudflare Access Applications inventory currently shows only four apps: EMP003 Staging, Workforce Staging Gateway, Employee Core, and Workforce Admin. The gateway app is associated with the shared `HerreB Owner` policy. This does not establish a dedicated EMP-001 test-operator identity/policy. Do not reuse EMP-003's app or the shared Owner policy as a substitute.
+- The integrated Worker manifest is explicitly for a NEW isolated Worker and NEW DO namespaces. It has no public routes, workers.dev, preview URLs, or cron. It requires independently configured `STAGING_ACCESS_TEAM_DOMAIN`, `STAGING_ACCESS_AUDIENCE`, `STAGING_IDENTITY_MAP_JSON`, and `STAGING_DO_BOUNDARY_KEY` (minimum 32 bytes); none is provisioned by the PR. Its Access identity map must resolve the exact authenticated A/B actors to authorized tenant roles.
+- Runtime B's current Settings page confirms encrypted secret names and distinct B Service Bindings/SQLite DO. Secret values remain unreadable. The prior Domains read-back still showed public workers.dev access for Runtime B and Sales Ops B; no newer Domains read-back has been captured.
+- Runtime A staging service `herreb-emp001-runtime-stg-a` was previously checked using Wrangler and returned Cloudflare error 10007 (Worker does not exist). Do not substitute the production Runtime A service.
+- The runner requires distinct A/B Runtime Service Bindings and bearer tokens. It is disabled by default and has no public route. The runner's private caller path must be documented and independently authenticated; an Access app on the runner itself is not implied by a private Service Binding. The ingress Access policy must protect the actual user-facing caller/gateway.
+- EMP-002 remains G0 (native calendar operations only; no Meta/cron/internal delivery). EMP-003 fallback storage is restricted to text/plain <=64 KiB; it is not general binary asset storage and does not replace R2.
+
+**Operational status: NO-GO.** Required before SECURITY/RELEASE GO: provision/verify the new isolated staging Worker and DO namespaces; configure its dedicated Access trust/identity map and boundary key securely; provision isolated Runtime A (never production); close direct public ingress on Runtime B and Sales Ops B; prove distinct A/B effective tenant/token values; run exact, approved live preflight and A/B negative tests; then obtain independent WF-01 SECURITY and WF-04 RELEASE approvals on one exact SHA/config digest. Owner authorization remains separately required for any migration, secret mutation, deployment or production change.
