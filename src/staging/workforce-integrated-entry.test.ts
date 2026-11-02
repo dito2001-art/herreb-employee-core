@@ -231,3 +231,33 @@ test("Core-authorized EMP-003 reaches marketing handler without legacy identity 
   assert.equal((await response.json() as { error: string }).error, "EMP003_BROWSER_STORAGE_UNAVAILABLE");
   assert.equal(coreCalls, 1);
 });
+
+test("Core-authorized tenant C reads only its Sales Ops products through integrated entry", async () => {
+  let upstreamCalls = 0;
+  const env = {
+    STAGING_ACCESS_TEAM_DOMAIN: "staging.cloudflareaccess.com",
+    STAGING_ACCESS_AUDIENCE: "staging-only-aud",
+    STAGING_DO_BOUNDARY_KEY: "test-only-boundary-key-longer-than-32-bytes",
+    SALES_OPS_TOKEN: "isolated-test-token",
+    SALES_OPS_TENANT_ID: "tenant-c",
+    SALES_OPS: { fetch: async (request: Request) => {
+      upstreamCalls++;
+      assert.equal(new URL(request.url).pathname, "/api/v1/products");
+      assert.equal(request.headers.get("x-tenant-id"), "tenant-c");
+      return Response.json({ ok: true, tenant_id: "tenant-c", products: [
+        { tenant_id: "tenant-c", sku: "SKU-C", name: "C product", price_gs: 100, stock_qty: 3 }
+      ] });
+    } },
+    WORKFORCE_CORE: { fetch: async () => Response.json({
+      ok: true, actorId: "actor-c", tenantId: "tenant-c", role: "owner", enabledEmployees: ["EMP-001"]
+    }) }
+  } as unknown as typeof empty;
+  const response = await call("/api/emp001/operations", "GET", {
+    "cf-access-jwt-assertion": "core-authorized-c"
+  }, env);
+  assert.equal(response.status, 200, await response.clone().text());
+  const payload = await response.json() as { tenantId: string; products: Array<{ sku: string }> };
+  assert.equal(payload.tenantId, "tenant-c");
+  assert.equal(payload.products[0]?.sku, "SKU-C");
+  assert.equal(upstreamCalls, 1);
+});
