@@ -46,7 +46,7 @@ test("atomic approval commits tenant C once and rejects replay", async () => {
     mutationSha256: await workforceMutationDigest(mutation), expiresAt: now + 60_000,
     consumed: false
   });
-  const input = { storage: h.storage, bootstrap, mutation, requesterActorId: "requester", requestId, now, auditId: "audit-transaction-1" };
+  const input = { storage: h.storage, bootstrap, mutation, requesterActorId: "requester", requestId, now, auditId: "audit-transaction-1", requesterTenantId: "platform" };
   assert.equal(await commitApprovedAdminMutation(input), true);
   assert.equal((h.data.get(stateKey) as WorkforceAdminMutationPlan).manifests[0]?.tenantId, "client-c");
   assert.equal(await commitApprovedAdminMutation(input), false);
@@ -63,7 +63,7 @@ test("failed approval consumption rolls back registry write", async () => {
     consumed: false
   });
   await assert.rejects(() => commitApprovedAdminMutation({
-    storage: h.storage, bootstrap, mutation, requesterActorId: "requester", requestId, now, auditId: "rollback-audit"
+    storage: h.storage, bootstrap, mutation, requesterActorId: "requester", requestId, now, auditId: "rollback-audit", requesterTenantId: "platform"
   }), /INJECTED_STORAGE_FAILURE/);
   assert.equal([...h.data.keys()].some((key) => key.endsWith(":rollback-audit")), false);
   assert.equal(h.data.has(stateKey), false);
