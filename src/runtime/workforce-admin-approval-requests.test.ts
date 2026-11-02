@@ -10,7 +10,20 @@ function fixture() {
   const data = new Map<string, unknown>();
   const storage = {
     async get<T>(key: string) { return data.get(key) as T | undefined; },
-    async put<T>(key: string, value: T) { data.set(key, value); }
+    async put<T>(key: string, value: T) { data.set(key, value); },
+    async transaction<T>(callback: (tx: {
+      get<V>(key: string): Promise<V | undefined>;
+      put<V>(key: string, value: V): Promise<void>;
+    }) => Promise<T>): Promise<T> {
+      const pending = new Map(data);
+      const result = await callback({
+        async get<V>(key: string) { return pending.get(key) as V | undefined; },
+        async put<V>(key: string, value: V) { pending.set(key, value); }
+      });
+      data.clear();
+      for (const [key, value] of pending) data.set(key, value);
+      return result;
+    }
   };
   return { data, requests: new DurableApprovalRequests(storage) };
 }
