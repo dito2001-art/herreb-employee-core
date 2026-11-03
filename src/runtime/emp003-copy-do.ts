@@ -8,7 +8,7 @@ import {
 import type { ContentGenerator } from "../core/marketing-content-orchestrator";
 import { createPersistentBlueprintRepository } from "../core/marketing-blueprint-persistent";
 import { createEMP003DurableStorageAdapter } from "./emp003-durable-storage";
-import { createEMP003AssetObjectStorage } from "./emp003-asset-storage";
+import { createEMP003AssetObjectStorage, createEMP003StagingCopyObjectStorage } from "./emp003-asset-storage";
 import { createEMP003CopyService } from "./emp003-copy-service";
 import { createEMP003CopyGenerator } from "./emp003-copy-generator";
 import { CopyGenerateInput, CopyId } from "./emp003-copy-context";
@@ -18,6 +18,7 @@ import { reviewKey } from "./emp003-review-transaction";
 type CopyBindings = {
   AI?: Ai;
   EMP003_ASSET_BUCKET?: R2Bucket;
+  STAGING_COPY_DO_STORAGE?: string;
   EMP003_COPY_CONTEXTS_JSON?: string;
 };
 export async function handleEMP003CopyDO(
@@ -51,7 +52,7 @@ export async function handleEMP003CopyDO(
           : undefined;
     if (input && input.campaignId !== campaignId)
       throw Error("COPY_CONTEXT_SCOPE_REJECTED");
-    if (!env.EMP003_ASSET_BUCKET)
+    if (!env.EMP003_ASSET_BUCKET && env.STAGING_COPY_DO_STORAGE !== "enabled")
       return reply(503, {
         ok: false,
         error: "COPY_BUCKET_NOT_CONFIGURED",
@@ -63,7 +64,9 @@ export async function handleEMP003CopyDO(
     const dependencies = {
       contextJson: env.EMP003_COPY_CONTEXTS_JSON,
       actorId: request.headers.get("x-emp003-copy-actor") ?? undefined,
-      objects: createEMP003AssetObjectStorage(env.EMP003_ASSET_BUCKET),
+      objects: env.EMP003_ASSET_BUCKET
+        ? createEMP003AssetObjectStorage(env.EMP003_ASSET_BUCKET)
+        : createEMP003StagingCopyObjectStorage(storage),
       metadata: {
         transaction<T>(
           work: (
