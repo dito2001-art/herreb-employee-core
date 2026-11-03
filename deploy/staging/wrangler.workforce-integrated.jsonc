@@ -18,6 +18,10 @@
       "service": "herreb-employee-core"
     },
     {
+      "binding": "WORKFORCE_CORE",
+      "service": "herreb-workforce-core-staging-isolated"
+    },
+    {
       "binding": "SALES_OPS",
       "service": "herreb-emp001-sales-ops-stg-a"
     }
