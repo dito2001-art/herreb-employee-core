@@ -11,6 +11,6 @@
   "triggers": { "crons": [] },
   "services": [
     { "binding": "INTEGRATED", "service": "herreb-workforce-integrated-staging" },
-    { "binding": "WORKFORCE_CORE", "service": "herreb-employee-core" }
+    { "binding": "WORKFORCE_CORE", "service": "herreb-workforce-core-staging-isolated" }
   ]
 }

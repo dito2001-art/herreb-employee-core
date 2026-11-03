@@ -15,7 +15,7 @@
   "services": [
     {
       "binding": "WORKFORCE_CORE",
-      "service": "herreb-employee-core"
+      "service": "herreb-workforce-core-staging-isolated"
     },
     {
       "binding": "SALES_OPS",
