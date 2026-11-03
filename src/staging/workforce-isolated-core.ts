@@ -1,5 +1,24 @@
 import { handleWorkforceCoreResolveActor } from "../runtime/workforce-core-resolve-actor";
-export { WorkforceAdminState } from "../runtime/workforce-admin-state";
+import { WorkforceAdminState as SharedWorkforceAdminState } from "../runtime/workforce-admin-state";
+import { bootstrapWorkforceAdminState } from "../runtime/workforce-admin-store";
+import { initializeIsolatedWorkforceStateOnce } from "./workforce-isolated-bootstrap";
+
+// This subclass is exported only by the dedicated staging Worker. Shared Core
+// and its existing Durable Object remain unchanged.
+export class WorkforceAdminState extends SharedWorkforceAdminState {
+  constructor(
+    ctx: ConstructorParameters<typeof SharedWorkforceAdminState>[0],
+    env: ConstructorParameters<typeof SharedWorkforceAdminState>[1]
+  ) {
+    super(ctx, env);
+    ctx.blockConcurrencyWhile(async () => {
+      await initializeIsolatedWorkforceStateOnce(ctx.storage, bootstrapWorkforceAdminState({
+        tenantManifestsJson: env.TENANT_MANIFESTS_JSON,
+        accessIdentityMapJson: env.ACCESS_IDENTITY_MAP_JSON
+      }));
+    });
+  }
+}
 
 // Dedicated private-only authority for isolated staging. No public ingress.
 export default {
