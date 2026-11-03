@@ -15,10 +15,6 @@
   "services": [
     {
       "binding": "WORKFORCE_CORE",
-      "service": "herreb-employee-core"
-    },
-    {
-      "binding": "WORKFORCE_CORE",
       "service": "herreb-workforce-core-staging-isolated"
     },
     {
