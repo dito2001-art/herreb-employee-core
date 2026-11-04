@@ -1,76 +1,24 @@
-import { useState } from "react";
-
-/**
- * EMP-001 configuration shell. All fields are explicitly read-only until the
- * tenant-scoped, authenticated configuration API is integrated.
- * This component does not store secrets, invent persistence or enable a live agent.
- */
-type Tab = "seller" | "knowledge" | "sales" | "team" | "connections";
-const tabs: { id: Tab; label: string }[] = [
-  { id: "seller", label: "Mi vendedor" },
-  { id: "knowledge", label: "Conocimiento" },
-  { id: "sales", label: "Ventas" },
-  { id: "team", label: "Equipo" },
-  { id: "connections", label: "Conexiones" },
-];
-
-function Item({ title, detail }: { title: string; detail: string }) {
-  return <div className="rounded-xl border p-4 space-y-1"><h3 className="font-semibold">{title}</h3><p className="text-sm opacity-70">{detail}</p></div>;
-}
-
-export function Emp001Configuration({ tenantId }: { tenantId: string }) {
-  const [tab, setTab] = useState<Tab>("seller");
-  const [sellerName, setSellerName] = useState("");
-  const [tone, setTone] = useState("professional");
-  const [goal, setGoal] = useState("close");
-  const [upsell, setUpsell] = useState(true);
-  const [discounts, setDiscounts] = useState(false);
-  const validTenant = /^[a-z0-9][a-z0-9-]{1,62}$/.test(tenantId);
-  if (!validTenant) return <section role="alert">Identificador de empresa inválido.</section>;
-
-  return <section aria-label="Configuración de EMP-001" className="mx-auto max-w-5xl p-5 space-y-5">
-    <header className="space-y-1">
-      <p className="text-xs uppercase tracking-widest opacity-60">HerreB Workforce</p>
-      <h1 className="text-2xl font-semibold">Configurar vendedor IA</h1>
-      <p className="text-sm opacity-70">Empresa: {tenantId}</p>
-      <p role="status" className="rounded-lg border p-3 text-sm">Borrador local de interfaz: los cambios no se guardan en el servidor ni afectan al vendedor activo.</p>
-    </header>
-    <nav aria-label="Secciones de configuración" className="flex flex-wrap gap-2">
-      {tabs.map(({ id, label }) => <button key={id} type="button" aria-current={tab === id ? "page" : undefined}
-        onClick={() => setTab(id)} className={`rounded-lg border px-3 py-2 text-sm ${tab === id ? "font-bold bg-neutral-200 text-black" : ""}`}>{label}</button>)}
-    </nav>
-    <div role="region" aria-label={tabs.find(x => x.id === tab)?.label} className="grid gap-3 md:grid-cols-2">
-      {tab === "seller" && <>
-        <label className="block text-sm space-y-1">Nombre del vendedor<input className="block w-full rounded-lg border p-2 bg-transparent" value={sellerName} maxLength={80} onChange={e => setSellerName(e.target.value)} placeholder="Ej. Sofía" /></label>
-        <label className="block text-sm space-y-1">Estilo de comunicación<select className="block w-full rounded-lg border p-2 bg-transparent" value={tone} onChange={e => setTone(e.target.value)}><option value="professional">Profesional y cercano</option><option value="formal">Formal</option><option value="friendly">Amigable y directo</option></select></label>
-        <label className="block text-sm space-y-1">Objetivo principal<select className="block w-full rounded-lg border p-2 bg-transparent" value={goal} onChange={e => setGoal(e.target.value)}><option value="close">Cerrar ventas</option><option value="leads">Generar oportunidades</option></select></label>
-      </>}
-      {tab === "knowledge" && <>
-        <Item title="Catálogo" detail="SKU, descripción, fotos, medidas, materiales, precio y stock." />
-        <Item title="Negocio" detail="Horarios, ubicaciones, garantías y preguntas frecuentes." />
-        <Item title="Documentos" detail="Fichas técnicas y políticas aprobadas." />
-      </>}
-      {tab === "sales" && <>
-        <Item title="Reglas comerciales" detail="Precios, descuentos máximos y promociones autorizadas." />
-        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={upsell} onChange={e => setUpsell(e.target.checked)} />Recomendar productos complementarios</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={discounts} onChange={e => setDiscounts(e.target.checked)} />Permitir descuentos autorizados (requiere reglas del servidor)</label>
-        <Item title="Cierre" detail="Cotizar, crear pedido y solicitar confirmación humana cuando corresponda." />
-      </>}
-      {tab === "team" && <>
-        <Item title="Responsable principal" detail="Recibe pedidos y situaciones excepcionales." />
-        <Item title="Tesorería" detail="Verifica pagos; la IA no declara un cobro sin evidencia." />
-        <Item title="Logística" detail="Coordina retiro, envío y entrega." />
-        <Item title="Catálogo" detail="Aclara características y disponibilidad." />
-      </>}
-      {tab === "connections" && <>
-        <Item title="WhatsApp" detail="Canal de EMP-001 V1. Requiere autorización y verificación del número." />
-        <Item title="Instagram Direct" detail="Reservado para la siguiente versión; no habilitado en V1." />
-      </>}
-    </div>
-    <footer className="flex flex-wrap gap-3 items-center border-t pt-4">
-      <button type="button" disabled title="Pendiente de API y persistencia verificadas" className="rounded-lg border px-4 py-2 opacity-50">Guardar configuración</button>
-      <button type="button" disabled title="Pendiente de simulador aislado real" className="rounded-lg border px-4 py-2 opacity-50">Probar vendedor</button>
-      <button type="button" disabled title="Pendiente de validaciones y aprobación" className="rounded-lg border px-4 py-2 opacity-50">Activar vendedor</button>
-      <span className="text-xs opacity-60">Sin cambios en el vendedor operativo.</span>
-    </footer>
-  </section>;
+import {useEffect,useState} from 'react';
+type Tab='seller'|'knowledge'|'sales'|'team'|'connections';
+const tabs:{id:Tab;label:string;note:string}[]=[{id:'seller',label:'Mi vendedor',note:'Identidad y estilo'},{id:'knowledge',label:'Conocimiento',note:'Lo que debe saber'},{id:'sales',label:'Ventas',note:'Cómo cerrar'},{id:'team',label:'Equipo',note:'Personas y coordinación'},{id:'connections',label:'Conexiones',note:'Dónde conversa'}];
+const Field=({label,placeholder,multiline=false}:{label:string;placeholder:string;multiline?:boolean})=><label className="field"><span>{label}</span>{multiline?<textarea placeholder={placeholder} rows={4}/>:<input placeholder={placeholder}/>}</label>;
+const Pending=()=> <span className="pill muted">Próxima conexión</span>;
+function Card({title,detail,children}:{title:string;detail?:string;children?:React.ReactNode}){return <article className="card"><h3>{title}</h3>{detail&&<p className="detail">{detail}</p>}{children}</article>}
+export function Emp001Configuration({tenantId}:{tenantId:string}){
+ const [tab,setTab]=useState<Tab>('seller'),[guide,setGuide]=useState(false),[access,setAccess]=useState<'loading'|'ready'|'denied'>('loading'),[operations,setOperations]=useState<Record<string,unknown>>({});
+ useEffect(()=>{let live=true;if(!/^[a-z0-9][a-z0-9-]{1,62}$/.test(tenantId)){setAccess('denied');return;}fetch(`/api/tenants/${encodeURIComponent(tenantId)}/emp001/configuration`,{cache:'no-store'}).then(async r=>{const b=await r.json();if(!r.ok||!b.ok||b.tenantId!==tenantId)throw Error('access');if(live){setOperations(b.operations);setAccess('ready')}}).catch(()=>{if(live)setAccess('denied')});return()=>{live=false}},[tenantId]);
+ if(access==='loading')return <main className="loading">Verificando tu acceso…</main>;
+ if(access==='denied')return <main className="loading"><h1>Acceso no disponible</h1><p>No tenés permisos para configurar esta empresa.</p></main>;
+ return <div className="app"><aside className="sidebar"><a className="brand" href="empresas.html"><span className="brandmark">B</span><span>HerreB<small>WORKFORCE</small></span></a><div className="workspace"><span className="avatar">H</span><div>Empresa de prueba<small>Espacio privado</small></div></div><p className="navtitle">TU VENDEDOR IA</p><nav role="tablist" aria-label="Configuración del vendedor">{tabs.map((t,i)=><button role="tab" aria-selected={tab===t.id} aria-controls={'panel-'+t.id} id={'tab-'+t.id} key={t.id} onClick={()=>setTab(t.id)} className={tab===t.id?'active':''}><span className="navnum">0{i+1}</span><span>{t.label}<small>{t.note}</small></span></button>)}</nav><div className="sidebottom"><span className="dot"/>Entorno de prueba<p>Tu vendedor activo continúa sin cambios.</p></div></aside>
+ <main className="main"><header className="topbar"><span>EMP-001 <span className="slash">/</span> Configuración</span><span className="pill"><span className="dot"/>Vista previa V1</span></header><section className="pagehead"><div><p className="eyebrow">HECHO PARA VENDER COMO VOS</p><h1>Tu vendedor, a tu manera.</h1><p className="lead">Definí qué sabe, cómo conversa y cuándo debe pedir ayuda.</p></div><button className="secondary" onClick={()=>{setGuide(!guide);setTab('seller')}}>{guide?'Cerrar guía':'Configuración guiada'} <span>↗</span></button></section>
+ <div className="reviewnotice"><span className="noticeicon">i</span><div><strong>Revisá el nuevo panel</strong><p>Podés recorrer y completar los campos para evaluar el diseño. Estos cambios aún no se guardan ni se aplican al vendedor.</p></div></div>
+ {guide&&<section className="guide"><div><p className="eyebrow">CONFIGURACIÓN INICIAL</p><strong>Paso {tabs.findIndex(t=>t.id===tab)+1} de 5 · {tabs.find(t=>t.id===tab)?.label}</strong><p>Recorré cada sección. El guardado y la publicación se conectarán después de aprobar esta vista.</p></div><button className="primary" onClick={()=>{const i=tabs.findIndex(t=>t.id===tab);if(i===4)setGuide(false);else setTab(tabs[i+1].id)}}>{tab==='connections'?'Terminar recorrido':'Siguiente paso'} →</button></section>}
+ <div className="contentgrid"><div role="tabpanel" id={'panel-'+tab} aria-labelledby={'tab-'+tab} className="panels"><div className="sectionheading"><span className="sectionindex">0{tabs.findIndex(t=>t.id===tab)+1}</span><div><h2>{tabs.find(t=>t.id===tab)?.label}</h2><p>{tabs.find(t=>t.id===tab)?.note}</p></div></div>
+ {tab==='seller'&&<><Card title="Dale identidad" detail="Una voz reconocible, alineada con tu marca."><div className="formgrid"><Field label="Nombre del vendedor" placeholder="Ej. Sofía"/><label className="field"><span>Tono de comunicación</span><select defaultValue="Profesional y cercano"><option>Profesional y cercano</option><option>Formal y preciso</option><option>Amigable y directo</option></select></label></div><Field label="Personalidad" placeholder="Ej. Atento, resolutivo y seguro. Ayuda sin presionar." multiline/></Card><Card title="Marcá el rumbo"><label className="field"><span>Objetivo comercial</span><select><option>Asesorar y cerrar ventas</option><option>Calificar oportunidades</option><option>Guiar la elección del producto</option></select></label><Field label="Instrucciones de comportamiento" placeholder="Ej. Hablá de vos, respondé con claridad y confirmá cantidad antes de cotizar." multiline/></Card></>}
+ {tab==='knowledge'&&<><Card title="Catálogo de productos" detail="La información que respalda cada recomendación."><Pending/><div className="tablewrap"><table><thead><tr>{['Producto / SKU','Fotografías','Precio','Stock'].map(x=><th key={x}>{x}</th>)}</tr></thead><tbody><tr><td colSpan={4} className="empty">Tu catálogo existente se conectará aquí. No se muestran productos ni precios inventados.</td></tr></tbody></table></div><p className="caption">Incluye características, medidas, materiales y disponibilidad.</p></Card><Card title="Información del negocio" detail="Datos actuales leídos desde la configuración de tu empresa."><dl className="business">{[['Lugar de retiro','pickupLocation'],['Horario de retiro','pickupHours'],['Cobertura de entrega','deliveryCoverage'],['Costo de entrega','deliveryCostGs'],['Instrucciones','deliveryInstructions']].map(([label,key])=><div key={key}><dt>{label}</dt><dd>{String(operations[key]??'Sin completar')}{key==='deliveryCostGs'&&operations[key]!==undefined?' Gs.':''}</dd></div>)}</dl><a className="textlink" href={'emp001-config.html?tenant='+encodeURIComponent(tenantId)}>Editar retiro y entrega en la configuración actual →</a></Card><Card title="Documentos y respuestas" detail="Garantías, políticas y preguntas frecuentes aprobadas."><Pending/><div className="formgrid"><Field label="Garantías y políticas" placeholder="Condiciones autorizadas de garantía y devolución" multiline/><Field label="Preguntas frecuentes" placeholder="Preguntas habituales y sus respuestas" multiline/></div><button disabled className="secondary">Adjuntar documento</button></Card></>}
+ {tab==='sales'&&<><Card title="Más valor en cada conversación" detail="Recomendaciones útiles, sin forzar la venta."><label className="check"><input type="checkbox" defaultChecked/>Ofrecer una opción superior cuando aporte valor (upselling)</label><label className="check"><input type="checkbox" defaultChecked/>Sugerir productos complementarios (cross-selling)</label><Field label="Reglas para recomendar" placeholder="Ej. Sugerir una silla compatible al comprar un escritorio." multiline/></Card><Card title="Condiciones comerciales"><label className="check"><input type="checkbox"/>Permitir descuentos previamente autorizados</label><Field label="Límites y autorizaciones" placeholder="Quién autoriza y bajo qué condiciones" multiline/><div className="twocards"><div><strong>Cotizaciones</strong><p>Precio y disponibilidad confirmados antes de ofrecer.</p></div><div><strong>Pedidos</strong><p>Confirmación del cliente antes de registrar el pedido.</p></div></div><Field label="Condiciones de cierre y derivación" placeholder="Cuándo confirmar y cuándo pedir ayuda al responsable" multiline/><p className="safenote">Esta prueba utiliza pago simulado. No confirma cobros ni envía derivaciones reales.</p></Card></>}
+ {tab==='team'&&<><Card title="Las personas detrás de tu vendedor" detail="Definí quién ayuda cuando una conversación lo necesita."><Pending/>{[['Responsable principal','Pedidos y situaciones excepcionales'],['Tesorería','Verificación humana de pagos · deshabilitada en esta prueba'],['Logística','Retiro, envío y entrega'],['Responsable de catálogo','Fotografías, características y disponibilidad']].map(([role,detail])=><div className="teammember" key={role}><span className="personicon">{role[0]}</span><div className="memberfields"><strong>{role}</strong><p>{detail}</p><div className="formgrid"><Field label={'Nombre · '+role} placeholder="Nombre y apellido"/><Field label={'Contacto · '+role} placeholder="Contacto autorizado"/></div></div></div>)}</Card><Card title="Reglas de coordinación"><Field label="Cuándo escalar y qué compartir" placeholder="Ej. Pedir ayuda si falta información autorizada. Compartir solo los datos necesarios." multiline/></Card></>}
+ {tab==='connections'&&<><Card title="WhatsApp" detail="El canal de tu vendedor en esta primera versión."><div className="channel"><span className="channelicon">W</span><div><strong>WhatsApp Business</strong><p>El vendedor existente no se modifica desde esta vista.</p></div><span className="pill muted">Sin cambios</span></div><button disabled className="secondary">Administrar conexión</button><p className="caption">La conexión y el número se mostrarán cuando su lectura esté verificada.</p></Card><Card title="Instagram Direct" detail="El mismo vendedor, en un nuevo canal."><span className="pill muted">Próxima versión</span><p>Instagram Direct estará disponible después de completar WhatsApp V1.</p></Card></>}
+ <footer className="actions"><div><strong>Configuración en revisión</strong><small>Guardar, validar y publicar se habilitarán con persistencia y permisos verificados.</small></div><div className="actionbuttons"><button disabled className="secondary">Guardar borrador</button><button disabled className="secondary">Validar</button><button disabled className="primary">Publicar configuración</button></div></footer></div>
+ <aside className="simulator"><div className="simheader"><span className="avatar lime">IA</span><div><strong>Probá tu vendedor</strong><small>Simulador privado</small></div></div><p>Ensayá conversaciones antes de aplicar una configuración.</p><div className="chatpreview"><span className="chatlabel">EJEMPLO DE CONSULTA</span><div className="bubble">Busco un escritorio para trabajar desde casa.</div><div className="simempty"><span>✦</span><strong>Tu espacio de prueba</strong><p>La conversación con el motor real se conectará en el siguiente paso.</p></div></div><label className="field"><span>Mensaje de prueba</span><textarea disabled placeholder="Disponible al conectar el simulador" rows={2}/></label><button disabled className="primary full">Probar vendedor</button><p className="caption">Sin pedidos, cobros ni mensajes reales.</p></aside></div><footer className="pagefooter">HerreB Workforce · Configuración del vendedor <span>Vista previa privada</span></footer></main></div>
 }
