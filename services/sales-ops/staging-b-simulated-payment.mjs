@@ -25,7 +25,11 @@ export default {
       const data = await response.json();
       if (data.tenant_id !== TENANT) return json(data);
       // No bank data or treasury contact is exposed in the simulation profile.
-      return json({...data, operations:{paymentMode:'SIMULATED', paymentMethods:'PAGO SIMULADO / PRUEBA',
+      const configurable = Object.fromEntries(Object.entries(data.operations || {}).filter(([key,value]) =>
+        ['pickupLocation','pickupHours','deliveryCoverage','deliveryInstructions'].includes(key)
+          ? typeof value === 'string' && value.length <= 1000
+          : key === 'deliveryCostGs' && Number.isSafeInteger(value) && value >= 0));
+      return json({...data, operations:{...configurable,paymentMode:'SIMULATED', paymentMethods:'PAGO SIMULADO / PRUEBA',
         simulation:{tenantId:TENANT,customerId:CUSTOMER},internalEscalation:'disabled'}});
     }
     if (!enabled(env)) return json({ok:false,error:'SIMULATION_DISABLED'},404);

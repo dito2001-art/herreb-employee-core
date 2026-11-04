@@ -1,0 +1,9 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import sales from './staging-b-simulated-payment.mjs';import {fixture} from './simulated-payment.fixture.mjs';
+test('saved B operational settings survive authoritative simulation projection, Treasury and bank do not',async()=>{
+ const f=fixture();const operations={pickupLocation:'Retiro de prueba B',pickupHours:'Lunes de 10 a 12',deliveryCoverage:'Solo demo',deliveryCostGs:0,deliveryInstructions:'Prueba',bank:'forbidden',treasury:'forbidden',paymentMode:'REAL'};
+ const put=new Request(f.req('tenant-operations'),{method:'PUT',body:JSON.stringify({operations})});assert.equal((await sales.fetch(put,f.env)).status,200);
+ const b=await(await sales.fetch(f.req('tenant-operations'),f.env)).json();for(const k of ['pickupLocation','pickupHours','deliveryCoverage','deliveryCostGs','deliveryInstructions'])assert.equal(b.operations[k],operations[k]);assert.equal(b.operations.paymentMode,'SIMULATED');assert.equal(b.operations.bank,undefined);assert.equal(b.operations.treasury,undefined);
+ const a=await(await sales.fetch(f.req('tenant-operations',undefined,'tenant-a'),f.env)).json();assert.equal(a.operations.pickupLocation,undefined);assert.equal(a.operations.paymentMode,undefined);
+});
+test('projection rejects invalid operational values and foreign credential tenant',async()=>{const f=fixture();f.db.prepare('UPDATE tenant_operations SET operations_json=? WHERE tenant_id=?').run(JSON.stringify({pickupLocation:42,deliveryCostGs:-1,deliveryCoverage:'x'.repeat(1001)}),'herreb-client-b');const b=await(await sales.fetch(f.req('tenant-operations'),f.env)).json();assert.equal(b.operations.pickupLocation,undefined);assert.equal(b.operations.deliveryCostGs,undefined);assert.equal(b.operations.deliveryCoverage,undefined);assert.equal((await sales.fetch(f.req('tenant-operations',undefined,'tenant-a','local-b'),f.env)).status,404);});

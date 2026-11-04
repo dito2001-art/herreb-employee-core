@@ -1,0 +1,12 @@
+name: EMP001 B configuration readback
+on: [push, pull_request]
+jobs:
+  readback:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node --check services/sales-ops/staging-b-simulated-payment.mjs
+      - run: node --test services/sales-ops/configuration-readback.test.mjs
