@@ -20,4 +20,4 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: node scripts/build-emp001-preview.mjs
       - run: node scripts/test-emp001-preview.mjs
-      - run: npx --no-install tsc --noEmit --jsx react-jsx --target es2022 --module esnext --moduleResolution bundler --lib es2022,dom --skipLibCheck src/staging/emp001-config-preview.tsx src/emp001-configuration.tsx
+      - run: npx --no-install tsc --ignoreConfig --noEmit --jsx react-jsx --target es2022 --module esnext --moduleResolution bundler --lib es2022,dom --skipLibCheck src/staging/emp001-config-preview.tsx src/emp001-configuration.tsx
