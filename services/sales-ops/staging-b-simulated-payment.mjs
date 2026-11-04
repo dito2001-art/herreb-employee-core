@@ -11,7 +11,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     // Separate panel credential: only B configuration, never orders or payments.
-    const panelCredential = env.EMP001_CONFIG_B_TOKEN;
+    const panelCredential = typeof env.EMP001_CONFIG_B_TOKEN === 'string' ? env.EMP001_CONFIG_B_TOKEN.trim() : undefined;
     if (enabled(env) && url.pathname === '/api/v1/tenant-operations') console.info('EMP001_CONFIG_AUTH_CHECK', {
       credentialPresent: typeof panelCredential === 'string' && Boolean(panelCredential),
       credentialOuterWhitespace: typeof panelCredential === 'string' && panelCredential !== panelCredential.trim(),
