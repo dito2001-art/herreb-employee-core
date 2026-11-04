@@ -1,0 +1,13 @@
+{
+  "name": "herreb-emp001-sales-ops-stg-b",
+  "account_id": "3519d3ab1a5b1dc4e629e661df78c150",
+  "main": "staging-b-simulated-payment.mjs",
+  "compatibility_date": "2026-06-11",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [],
+  "triggers": {"crons": []},
+  "keep_vars": true,
+  "vars": {"DEPLOYMENT_ENV":"staging-b","SIMULATED_PAYMENT_ENABLED":"true"},
+  "d1_databases": [{"binding":"DB","database_name":"herreb-emp001-sales-ops-staging-b-db","database_id":"8530770d-bb37-486a-860b-3cda518c864e"}]
+}
