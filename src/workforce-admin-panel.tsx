@@ -1,3 +1,4 @@
+import { Emp001Configuration } from "./emp001-configuration";
 import { useEffect, useState } from "react";
 
 interface AdminIdentity { email: string; actorId: string; role: "owner" | "user" }
@@ -20,6 +21,7 @@ export function WorkforceAdminPanel() {
   const [error, setError] = useState<string>();
   const [query, setQuery] = useState("");
   const [expandedTenant, setExpandedTenant] = useState<string | null>(null);
+  const [configTenant, setConfigTenant] = useState<string | null>(null);
   const [savingTenant, setSavingTenant] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string>();
   const [identityFilter, setIdentityFilter] = useState<"all" | "owner" | "user">("all");
@@ -94,10 +96,15 @@ export function WorkforceAdminPanel() {
         <input className="block w-full mt-1 p-2 rounded-lg border bg-transparent" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tenant, email, actor or employee" />
       </label>
       <p className="text-xs opacity-70">Showing {filteredTenants.length} of {snapshot.totals.tenants} tenants · authenticated access</p>
+      {configTenant && <div className="rounded-xl border p-3 space-y-2" aria-label="EMP-001 configuration preview">
+        <button type="button" className="underline text-sm" onClick={() => setConfigTenant(null)}>Volver a empresas</button>
+        <Emp001Configuration tenantId={configTenant} />
+      </div>}
       <div className="space-y-3">
         {filteredTenants.map((tenant) => (
           <article key={tenant.tenantId} className="p-3 rounded-lg border">
             <div className="flex justify-between gap-3"><strong>{tenant.tenantId}</strong><span className="text-xs">{tenant.enabledEmployees.join(" · ")}</span></div>
+            {authorization && <button type="button" className="text-sm underline mt-2 mr-4" aria-expanded={configTenant === tenant.tenantId} onClick={() => setConfigTenant(configTenant === tenant.tenantId ? null : tenant.tenantId)}>Configurar vendedor (vista previa)</button>}
             <button type="button" className="text-sm underline mt-2" aria-expanded={expandedTenant === tenant.tenantId} onClick={() => setExpandedTenant(expandedTenant === tenant.tenantId ? null : tenant.tenantId)}>{expandedTenant === tenant.tenantId ? "Hide details" : "View details"}</button>
             {expandedTenant === tenant.tenantId && <div className="mt-2 space-y-1 text-xs">
               <p>Tenant ID: {tenant.tenantId}</p>
