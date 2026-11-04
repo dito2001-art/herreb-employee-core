@@ -20,6 +20,11 @@ function Item({ title, detail }: { title: string; detail: string }) {
 
 export function Emp001Configuration({ tenantId }: { tenantId: string }) {
   const [tab, setTab] = useState<Tab>("seller");
+  const [sellerName, setSellerName] = useState("");
+  const [tone, setTone] = useState("professional");
+  const [goal, setGoal] = useState("close");
+  const [upsell, setUpsell] = useState(true);
+  const [discounts, setDiscounts] = useState(false);
   const validTenant = /^[a-z0-9][a-z0-9-]{1,62}$/.test(tenantId);
   if (!validTenant) return <section role="alert">Identificador de empresa inválido.</section>;
 
@@ -28,7 +33,7 @@ export function Emp001Configuration({ tenantId }: { tenantId: string }) {
       <p className="text-xs uppercase tracking-widest opacity-60">HerreB Workforce</p>
       <h1 className="text-2xl font-semibold">Configurar vendedor IA</h1>
       <p className="text-sm opacity-70">Empresa: {tenantId}</p>
-      <p role="status" className="rounded-lg border p-3 text-sm">Vista preliminar. La configuración comercial todavía no está conectada al backend; no se pueden guardar ni activar cambios desde esta pantalla.</p>
+      <p role="status" className="rounded-lg border p-3 text-sm">Borrador local de interfaz: los cambios no se guardan en el servidor ni afectan al vendedor activo.</p>
     </header>
     <nav aria-label="Secciones de configuración" className="flex flex-wrap gap-2">
       {tabs.map(({ id, label }) => <button key={id} type="button" aria-current={tab === id ? "page" : undefined}
@@ -36,9 +41,9 @@ export function Emp001Configuration({ tenantId }: { tenantId: string }) {
     </nav>
     <div role="region" aria-label={tabs.find(x => x.id === tab)?.label} className="grid gap-3 md:grid-cols-2">
       {tab === "seller" && <>
-        <Item title="Identidad" detail="Nombre visible del vendedor y presentación a los clientes." />
-        <Item title="Personalidad" detail="Profesional y cercano, formal o amigable y directo." />
-        <Item title="Objetivo" detail="Cerrar ventas o generar oportunidades para el equipo." />
+        <label className="block text-sm space-y-1">Nombre del vendedor<input className="block w-full rounded-lg border p-2 bg-transparent" value={sellerName} maxLength={80} onChange={e => setSellerName(e.target.value)} placeholder="Ej. Sofía" /></label>
+        <label className="block text-sm space-y-1">Estilo de comunicación<select className="block w-full rounded-lg border p-2 bg-transparent" value={tone} onChange={e => setTone(e.target.value)}><option value="professional">Profesional y cercano</option><option value="formal">Formal</option><option value="friendly">Amigable y directo</option></select></label>
+        <label className="block text-sm space-y-1">Objetivo principal<select className="block w-full rounded-lg border p-2 bg-transparent" value={goal} onChange={e => setGoal(e.target.value)}><option value="close">Cerrar ventas</option><option value="leads">Generar oportunidades</option></select></label>
       </>}
       {tab === "knowledge" && <>
         <Item title="Catálogo" detail="SKU, descripción, fotos, medidas, materiales, precio y stock." />
@@ -47,7 +52,7 @@ export function Emp001Configuration({ tenantId }: { tenantId: string }) {
       </>}
       {tab === "sales" && <>
         <Item title="Reglas comerciales" detail="Precios, descuentos máximos y promociones autorizadas." />
-        <Item title="Venta adicional" detail="Cuándo recomendar productos complementarios." />
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={upsell} onChange={e => setUpsell(e.target.checked)} />Recomendar productos complementarios</label><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={discounts} onChange={e => setDiscounts(e.target.checked)} />Permitir descuentos autorizados (requiere reglas del servidor)</label>
         <Item title="Cierre" detail="Cotizar, crear pedido y solicitar confirmación humana cuando corresponda." />
       </>}
       {tab === "team" && <>
