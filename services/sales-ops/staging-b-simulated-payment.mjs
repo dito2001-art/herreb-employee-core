@@ -10,6 +10,25 @@ const json = (body, status = 200) => Response.json(body, {status, headers:{'cach
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    // Separate panel credential: only B configuration, never orders or payments.
+    const panelCredential = typeof env.EMP001_CONFIG_B_TOKEN === 'string' ? env.EMP001_CONFIG_B_TOKEN.trim() : undefined;
+    if (enabled(env) && url.pathname === '/api/v1/tenant-operations') console.info('EMP001_CONFIG_AUTH_CHECK', {
+      credentialPresent: typeof panelCredential === 'string' && Boolean(panelCredential),
+      credentialOuterWhitespace: typeof panelCredential === 'string' && panelCredential !== panelCredential.trim(),
+      exactMatch: Boolean(panelCredential) && request.headers.get('authorization') === `Bearer ${panelCredential}`,
+      trimmedMatch: typeof panelCredential === 'string' && Boolean(panelCredential.trim()) && request.headers.get('authorization') === `Bearer ${panelCredential.trim()}`
+    });
+    if (panelCredential && request.headers.get('authorization') === `Bearer ${panelCredential}`) {
+      if (!enabled(env) || request.headers.get('x-tenant-id') !== TENANT ||
+          url.pathname !== '/api/v1/tenant-operations' || !['GET','PUT'].includes(request.method))
+        return json({ok:false,error:'CONFIGURATION_CREDENTIAL_SCOPE_FORBIDDEN'},403);
+      // Request-local credential context: the panel must not depend on legacy
+      // seller tokens or duplicate entries in their credential registry.
+      env = {...env,
+        SALES_OPS_CREDENTIALS_JSON: JSON.stringify([{token:panelCredential,tenantId:TENANT}]),
+        EMP001_API_TOKEN: undefined, EMP001_API_TOKEN_TENANT_ID: undefined,
+        EMP001_B_API_TOKEN: undefined};
+    }
     const match = url.pathname.match(/^\/api\/v1\/orders\/([^/]+)\/simulated-payment$/);
     if (enabled(env) && request.method === 'POST' && /^\/api\/v1\/orders\/[^/]+\/state$/.test(url.pathname)) {
       const checkUrl=new URL(request.url); checkUrl.pathname=checkUrl.pathname.replace(/\/state$/,'');
@@ -25,7 +44,11 @@ export default {
       const data = await response.json();
       if (data.tenant_id !== TENANT) return json(data);
       // No bank data or treasury contact is exposed in the simulation profile.
-      return json({...data, operations:{paymentMode:'SIMULATED', paymentMethods:'PAGO SIMULADO / PRUEBA',
+      const configurable = Object.fromEntries(Object.entries(data.operations || {}).filter(([key,value]) =>
+        ['pickupLocation','pickupHours','deliveryCoverage','deliveryInstructions'].includes(key)
+          ? typeof value === 'string' && value.length <= 1000
+          : key === 'deliveryCostGs' && Number.isSafeInteger(value) && value >= 0));
+      return json({...data, operations:{...configurable,paymentMode:'SIMULATED', paymentMethods:'PAGO SIMULADO / PRUEBA',
         simulation:{tenantId:TENANT,customerId:CUSTOMER},internalEscalation:'disabled'}});
     }
     if (!enabled(env)) return json({ok:false,error:'SIMULATION_DISABLED'},404);
