@@ -10,6 +10,17 @@ const json = (body, status = 200) => Response.json(body, {status, headers:{'cach
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    // Separate panel credential: only B configuration, never orders or payments.
+    const panelCredential = env.EMP001_CONFIG_B_TOKEN;
+    if (panelCredential && request.headers.get('authorization') === `Bearer ${panelCredential}`) {
+      if (!enabled(env) || request.headers.get('x-tenant-id') !== TENANT ||
+          url.pathname !== '/api/v1/tenant-operations' || !['GET','PUT'].includes(request.method))
+        return json({ok:false,error:'CONFIGURATION_CREDENTIAL_SCOPE_FORBIDDEN'},403);
+      if (!env.EMP001_B_API_TOKEN) return json({ok:false,error:'CONFIGURATION_UPSTREAM_CREDENTIAL_MISSING'},503);
+      const headers = new Headers(request.headers);
+      headers.set('authorization', `Bearer ${env.EMP001_B_API_TOKEN}`);
+      request = new Request(request, {headers});
+    }
     const match = url.pathname.match(/^\/api\/v1\/orders\/([^/]+)\/simulated-payment$/);
     if (enabled(env) && request.method === 'POST' && /^\/api\/v1\/orders\/[^/]+\/state$/.test(url.pathname)) {
       const checkUrl=new URL(request.url); checkUrl.pathname=checkUrl.pathname.replace(/\/state$/,'');
