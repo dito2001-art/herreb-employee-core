@@ -16,10 +16,12 @@ export default {
       if (!enabled(env) || request.headers.get('x-tenant-id') !== TENANT ||
           url.pathname !== '/api/v1/tenant-operations' || !['GET','PUT'].includes(request.method))
         return json({ok:false,error:'CONFIGURATION_CREDENTIAL_SCOPE_FORBIDDEN'},403);
-      if (!env.EMP001_B_API_TOKEN) return json({ok:false,error:'CONFIGURATION_UPSTREAM_CREDENTIAL_MISSING'},503);
-      const headers = new Headers(request.headers);
-      headers.set('authorization', `Bearer ${env.EMP001_B_API_TOKEN}`);
-      request = new Request(request, {headers});
+      // Request-local credential context: the panel must not depend on legacy
+      // seller tokens or duplicate entries in their credential registry.
+      env = {...env,
+        SALES_OPS_CREDENTIALS_JSON: JSON.stringify([{token:panelCredential,tenantId:TENANT}]),
+        EMP001_API_TOKEN: undefined, EMP001_API_TOKEN_TENANT_ID: undefined,
+        EMP001_B_API_TOKEN: undefined};
     }
     const match = url.pathname.match(/^\/api\/v1\/orders\/([^/]+)\/simulated-payment$/);
     if (enabled(env) && request.method === 'POST' && /^\/api\/v1\/orders\/[^/]+\/state$/.test(url.pathname)) {
