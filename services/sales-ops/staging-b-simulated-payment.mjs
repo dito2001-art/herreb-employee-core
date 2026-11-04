@@ -12,6 +12,12 @@ export default {
     const url = new URL(request.url);
     // Separate panel credential: only B configuration, never orders or payments.
     const panelCredential = env.EMP001_CONFIG_B_TOKEN;
+    if (enabled(env) && url.pathname === '/api/v1/tenant-operations') console.info('EMP001_CONFIG_AUTH_CHECK', {
+      credentialPresent: typeof panelCredential === 'string' && Boolean(panelCredential),
+      credentialOuterWhitespace: typeof panelCredential === 'string' && panelCredential !== panelCredential.trim(),
+      exactMatch: Boolean(panelCredential) && request.headers.get('authorization') === `Bearer ${panelCredential}`,
+      trimmedMatch: typeof panelCredential === 'string' && Boolean(panelCredential.trim()) && request.headers.get('authorization') === `Bearer ${panelCredential.trim()}`
+    });
     if (panelCredential && request.headers.get('authorization') === `Bearer ${panelCredential}`) {
       if (!enabled(env) || request.headers.get('x-tenant-id') !== TENANT ||
           url.pathname !== '/api/v1/tenant-operations' || !['GET','PUT'].includes(request.method))
