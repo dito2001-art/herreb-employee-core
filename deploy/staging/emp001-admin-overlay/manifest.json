@@ -1,0 +1,18 @@
+{
+  "adminRepository": "dito2001-art/herreb-workforce-admin",
+  "adminBaseSHA": "514c4650c2395e848cbd922fa905d3581d738366",
+  "worker": "herreb-workforce-admin-stg-b",
+  "accountId": "3519d3ab1a5b1dc4e629e661df78c150",
+  "databaseBinding": "REGISTRY_DB",
+  "schemaMigrationRequired": false,
+  "activeSellerChanged": false,
+  "publicationEnabled": false,
+  "sha256": {
+    "src/emp001-profile.ts": "df552285652ae973ab54ac82f7ef3fc403f62706cabeda8874e06c338530a5bb",
+    "src/emp001-configuration.ts": "a5fb5e1cdd92dc15cb7068ee3423d9ccb765f9e0562cf57ddbe5d829f553cc26",
+    "src/staging-b-entry.ts": "4a3f00f5b1eb01bffc115d49ee8de8967b33b27c600f0b025146f203b611054c",
+    "src/worker.ts": "9a4cd6ac81004575ab3d45749dbae52339e2a708cc509f8e5b3d7476a42c2c57",
+    "tests/emp001-profile.test.mjs": "bf9fec2c831c6df1f5a638776642d548ff7771af0949c6e80fe602ab17173665",
+    "tests/emp001-configuration.spec.ts": "f8f2eb14fbd85d24227558e961896dcc807061489dedb64f561db07b01d9bf8b"
+  }
+}

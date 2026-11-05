@@ -1,0 +1,35 @@
+name: EMP001 isolated admin draft overlay
+on:
+  pull_request:
+    paths:
+      - 'deploy/staging/emp001-admin-overlay/**'
+      - 'src/emp001-configuration*'
+      - 'src/staging/emp001-config-preview.tsx'
+      - 'scripts/*emp001-preview.mjs'
+      - '.github/workflows/validate-emp001-admin-overlay.yml'
+permissions:
+  contents: read
+jobs:
+  isolated-drafts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts
+      - run: node scripts/build-emp001-preview.mjs
+      - uses: actions/checkout@v4
+        with:
+          repository: dito2001-art/herreb-workforce-admin
+          ref: 514c4650c2395e848cbd922fa905d3581d738366
+          path: admin-base
+      - run: cp -R deploy/staging/emp001-admin-overlay/src/. admin-base/src/ && cp -R deploy/staging/emp001-admin-overlay/tests/. admin-base/tests/ && cp dist/emp001-preview/emp001-v1.* admin-base/web/
+      - run: npm install --ignore-scripts
+        working-directory: admin-base
+      - run: npm run typecheck
+        working-directory: admin-base
+      - run: node --import tsx tests/emp001-configuration.spec.ts && node --import tsx tests/emp001-profile.test.mjs
+        working-directory: admin-base
+      - run: npm run build:staging-b && node --test tests/staging-b-package.test.mjs
+        working-directory: admin-base
