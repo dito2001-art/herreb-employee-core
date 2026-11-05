@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'src/emp001-configuration*'
+      - 'src/emp001-closing-settings.tsx'
+      - 'scripts/test-emp001-closing-preview.mjs'
       - 'src/emp001-ai-chat.tsx'
       - 'src/emp001-knowledge-library.tsx'
       - 'src/staging/emp001-document-parsers.js'
@@ -30,6 +32,7 @@ jobs:
       - run: npm ci --prefix tools/document-parsers --ignore-scripts
       - run: node scripts/build-emp001-preview.mjs
       - run: node scripts/test-emp001-preview.mjs
+      - run: node scripts/test-emp001-closing-preview.mjs
       - run: node scripts/test-emp001-documents.mjs
       - run: node scripts/test-emp001-ai-preview.mjs
       - run: node scripts/test-emp001-ai-keyboard-preview.mjs
