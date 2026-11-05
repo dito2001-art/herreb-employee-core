@@ -9,7 +9,7 @@ dom.window.crypto.randomUUID=()=> 'closing-save';dom.window.fetch=async(url,init
 dom.window.eval(readFileSync('dist/emp001-preview/emp001-v1.js','utf8'));const tick=()=>new Promise(r=>setTimeout(r,30));await tick();await tick();
 const doc=dom.window.document;[...doc.querySelectorAll('[role=tab]')].find(x=>x.textContent.includes('Ventas')).click();await tick();
 const select=async(label,value)=>{const input=[...doc.querySelectorAll('label')].find(x=>x.querySelector('span')?.textContent===label)?.querySelector('select');assert.ok(input,label);input.value=value;input.dispatchEvent(new dom.window.Event('change',{bubbles:true}));await tick();};
-await select('Qué ofrece tu empresa','SERVICES');await select('Objetivo de cierre','MEETING');assert.ok(doc.body.textContent.includes('Sin CRM, usá la agenda de Workforce'));
+await select('Qué ofrece tu empresa','SERVICES');await select('Objetivo de cierre','MEETING');assert.ok(doc.body.textContent.includes('Sin CRM, usá la agenda de Workforce'));assert.ok(!doc.body.textContent.includes('Esta prueba utiliza pago simulado'));
 await select('Dónde guardar las citas','WORKFORCE');await select('Duración','30');await select('Anticipación mínima','60');await select('Separación entre citas','15');await select('Zona horaria','America/Asuncion');
 const monday=[...doc.querySelectorAll('label.check')].find(x=>x.textContent==='Lunes');assert.ok(monday);monday.querySelector('input').click();await tick();
 assert.equal(doc.querySelector('input[type=time]').value,'09:00');
