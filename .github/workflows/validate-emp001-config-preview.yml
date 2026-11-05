@@ -5,7 +5,9 @@ on:
       - 'src/emp001-configuration*'
       - 'src/emp001-ai-chat.tsx'
       - 'scripts/test-emp001-ai-preview.mjs'
+      - 'scripts/test-emp001-ai-keyboard-preview.mjs'
       - 'src/staging/emp001-config-preview.tsx'
+      - 'src/staging/emp001-assistant*'
       - 'scripts/*emp001-preview.mjs'
       - '.github/workflows/validate-emp001-config-preview.yml'
 permissions:
@@ -23,4 +25,5 @@ jobs:
       - run: node scripts/build-emp001-preview.mjs
       - run: node scripts/test-emp001-preview.mjs
       - run: node scripts/test-emp001-ai-preview.mjs
+      - run: node scripts/test-emp001-ai-keyboard-preview.mjs
       - run: npx --no-install tsc --ignoreConfig --noEmit --jsx react-jsx --target es2022 --module esnext --moduleResolution bundler --lib es2022,dom --skipLibCheck src/staging/emp001-config-preview.tsx src/emp001-configuration.tsx

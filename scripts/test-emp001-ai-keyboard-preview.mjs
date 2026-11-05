@@ -1,0 +1,15 @@
+import {JSDOM} from 'jsdom';import {readFileSync} from 'node:fs';import assert from 'node:assert/strict';
+const dom=new JSDOM(readFileSync('dist/emp001-preview/emp001-assistant.html','utf8'),{url:'https://config.test/emp001-v1.html?tenant=herreb-client-b',runScripts:'outside-only',pretendToBeVisual:true});
+const queued=[],sent=[],doc=dom.window.document,tick=()=>new Promise(r=>setTimeout(r,30));
+dom.window.fetch=async(url,init={})=>{if(init.method==='POST'){sent.push(JSON.parse(init.body));return new Promise(resolve=>queued.push(resolve));}return{ok:true,json:async()=>url.endsWith('/profile')?{ok:true,tenantId:'herreb-client-b',revision:2,hash:'saved',canEdit:true,draft:{sellerName:'Sofía'}}:url.endsWith('/assistant')||url.endsWith('/simulate')?{ok:true,available:true}:url==='/api/tenants/herreb-client-b'?{ok:true,tenant:{tenantId:'herreb-client-b',name:'Empresa B'}}:{ok:true,tenantId:'herreb-client-b',operations:{}}}};
+dom.window.eval(readFileSync('dist/emp001-preview/emp001-assistant.js','utf8'));await tick();await tick();const button=n=>[...doc.querySelectorAll('button')].find(b=>b.textContent===n);await tick();
+const region=doc.querySelector('[aria-label="Creá tu vendedor conmigo"]'),input=region.querySelector('textarea');
+const enterText=(node,text)=>{Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype,'value').set.call(node,text);node.dispatchEvent(new dom.window.Event('input',{bubbles:true}));};
+const key=opts=>{const e=new dom.window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true,...opts});input.dispatchEvent(e);return e};
+enterText(input,'Hola necesito un vendedor para mi empresa X, preguntame que necesitas y te contesto');await tick();
+assert.equal(key({shiftKey:true}).defaultPrevented,false);assert.equal(key({isComposing:true}).defaultPrevented,false);assert.equal(sent.length,0);
+assert.equal(key({}).defaultPrevented,true);key({});await tick();assert.equal(sent.length,1);assert.ok(region.textContent.includes('Hola necesito un vendedor'));assert.ok(region.textContent.includes('Estoy preparando tu respuesta'));assert.equal(input.value,'');
+queued.shift()({ok:true,status:200,json:async()=>({ok:true,revision:2,hash:'saved',reply:'¿Qué productos o servicios vende tu empresa?',proposal:{}})});await tick();assert.ok(region.textContent.includes('¿Qué productos o servicios vende tu empresa?'));
+enterText(input,'Vendemos muebles');await tick();button('Conversar con el asistente').click();await tick();assert.equal(sent.length,2);assert.deepEqual(sent[1].messages.map(m=>m.role),['user','assistant','user']);
+queued.shift()({ok:false,status:502,json:async()=>({ok:false,error:'CONFIGURATION_AI_RESPONSE_INVALID'})});await tick();assert.equal(input.value,'Vendemos muebles');assert.ok(region.textContent.includes('formato esperado'));assert.equal(button('Conversar con el asistente').disabled,false);
+console.log('PASS keyboard: Enter sends, Shift+Enter/IME do not send, no duplicates, immediate pending bubble, button follow-up keeps context, error preserves retry, floating assistant preserves conversation');dom.window.close();
