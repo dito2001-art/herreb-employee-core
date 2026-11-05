@@ -1,11 +1,12 @@
 import {useEffect,useState,useRef} from 'react';
 type Draft=Record<string,string|boolean>;
+type AIResponse={ok?:boolean;available?:boolean;revision?:number;hash?:string|null;reply?:string;proposal?:Draft;sources?:{name:string}[];error?:string;upstreamStatus?:number};
 type Message={role:'user'|'assistant';content:string;sources?:string[]};
 export function Emp001AIChat({tenantId,mode,revision,hash,dirty,locked,onApply}:{tenantId:string;mode:'assistant'|'simulate';revision:number;hash:string|null;dirty:boolean;locked:boolean;onApply?:(proposal:Draft)=>void}){
  const epoch=useRef(0),inFlight=useRef(false),messageList=useRef<HTMLDivElement|null>(null);
  const [available,setAvailable]=useState(false),[connecting,setConnecting]=useState(true),[busy,setBusy]=useState(false),[input,setInput]=useState(''),[messages,setMessages]=useState<Message[]>([]),[proposal,setProposal]=useState<Draft|null>(null),[notice,setNotice]=useState('');
  const path=`/api/tenants/${encodeURIComponent(tenantId)}/emp001/configuration/${mode}`;
- useEffect(()=>{let live=true;setMessages([]);setProposal(null);setAvailable(false);setConnecting(true);fetch(path,{cache:'no-store'}).then(async r=>{const b=await r.json();if(live)setAvailable(r.ok&&b.ok&&b.available===true)}).catch(()=>{}).finally(()=>{if(live)setConnecting(false)});return()=>{live=false}},[path]);
+ useEffect(()=>{let live=true;setMessages([]);setProposal(null);setAvailable(false);setConnecting(true);fetch(path,{cache:'no-store'}).then(async r=>{const b=await r.json() as AIResponse;if(live)setAvailable(r.ok&&b.ok===true&&b.available===true)}).catch(()=>{}).finally(()=>{if(live)setConnecting(false)});return()=>{live=false}},[path]);
  useEffect(()=>{epoch.current++;setMessages([]);setProposal(null);setNotice('')},[revision,hash]);
  useEffect(()=>{const list=messageList.current;if(list)list.scrollTop=list.scrollHeight},[messages,busy]);
  const mustSave=mode==='simulate'&&dirty;
@@ -17,10 +18,10 @@ export function Emp001AIChat({tenantId,mode,revision,hash,dirty,locked,onApply}:
   const sentEpoch=epoch.current,controller=new AbortController(),timeout=setTimeout(()=>controller.abort(),45000);
   inFlight.current=true;setBusy(true);setMessages(next);setInput('');setProposal(null);setNotice('Mensaje enviado. El asistente está preparando la respuesta…');
   try{
-   const r=await fetch(path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({messages:next.map(({role,content})=>({role,content})),revision,hash}),signal:controller.signal});const b=await r.json();
+   const r=await fetch(path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({messages:next.map(({role,content})=>({role,content})),revision,hash}),signal:controller.signal});const b=await r.json() as AIResponse;
    if(sentEpoch!==epoch.current)return;
-   if(!r.ok||!b.ok||b.revision!==revision||b.hash!==hash){console.warn('EMP001_AI_REQUEST_FAILED',{status:r.status,error:b.error,upstreamStatus:b.upstreamStatus});throw Error(r.status===409?'El borrador cambió. Recargá antes de continuar.':b.upstreamStatus===401?'La credencial de conexión de IA fue rechazada. El administrador debe revisar su configuración.':b.error==='CONFIGURATION_AI_RESPONSE_INVALID'?'La respuesta no llegó en el formato esperado. Tu mensaje sigue listo para reintentar.':'No se pudo obtener una respuesta. Tu mensaje sigue listo para reintentar.');}
-   setMessages([...next,{role:'assistant',content:b.reply,sources:Array.isArray(b.sources)?b.sources.map((s:{name:string})=>s.name):[]}]);setNotice('');if(mode==='assistant'&&Object.keys(b.proposal??{}).length)setProposal(b.proposal);
+   if(!r.ok||!b.ok||b.revision!==revision||b.hash!==hash||typeof b.reply!=='string'){console.warn('EMP001_AI_REQUEST_FAILED',{status:r.status,error:b.error,upstreamStatus:b.upstreamStatus});throw Error(r.status===409?'El borrador cambió. Recargá antes de continuar.':b.upstreamStatus===401?'La credencial de conexión de IA fue rechazada. El administrador debe revisar su configuración.':b.error==='CONFIGURATION_AI_RESPONSE_INVALID'?'La respuesta no llegó en el formato esperado. Tu mensaje sigue listo para reintentar.':'No se pudo obtener una respuesta. Tu mensaje sigue listo para reintentar.');}
+   setMessages([...next,{role:'assistant',content:b.reply,sources:Array.isArray(b.sources)?b.sources.map((s:{name:string})=>s.name):[]}]);setNotice('');if(mode==='assistant'&&Object.keys(b.proposal??{}).length)setProposal(b.proposal??{});
   }catch(e){if(sentEpoch===epoch.current){setMessages(prior);setInput(text);setNotice(e instanceof Error&&e.name==='AbortError'?'La respuesta tardó demasiado. Tu mensaje sigue listo para reintentar.':e instanceof Error?e.message:'No se pudo completar la consulta.');}}
   finally{clearTimeout(timeout);inFlight.current=false;setBusy(false)}
  }
