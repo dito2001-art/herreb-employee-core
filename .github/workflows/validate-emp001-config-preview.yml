@@ -4,6 +4,11 @@ on:
     paths:
       - 'src/emp001-configuration*'
       - 'src/emp001-ai-chat.tsx'
+      - 'src/emp001-knowledge-library.tsx'
+      - 'src/staging/emp001-document-parsers.js'
+      - 'tools/document-parsers/package*.json'
+      - 'examples/emp001-ejemplo.csv'
+      - 'scripts/test-emp001-documents.mjs'
       - 'scripts/test-emp001-ai-preview.mjs'
       - 'scripts/test-emp001-ai-keyboard-preview.mjs'
       - 'src/staging/emp001-config-preview.tsx'
@@ -22,8 +27,10 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci --ignore-scripts
+      - run: npm ci --prefix tools/document-parsers --ignore-scripts
       - run: node scripts/build-emp001-preview.mjs
       - run: node scripts/test-emp001-preview.mjs
+      - run: node scripts/test-emp001-documents.mjs
       - run: node scripts/test-emp001-ai-preview.mjs
       - run: node scripts/test-emp001-ai-keyboard-preview.mjs
       - run: npx --no-install tsc --ignoreConfig --noEmit --jsx react-jsx --target es2022 --module esnext --moduleResolution bundler --lib es2022,dom --skipLibCheck src/staging/emp001-config-preview.tsx src/emp001-configuration.tsx
