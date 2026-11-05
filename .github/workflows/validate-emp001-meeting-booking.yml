@@ -1,0 +1,22 @@
+name: EMP001 native meeting booking
+on:
+  pull_request:
+    paths:
+      - 'src/runtime/emp001-meeting-booking*'
+      - 'src/runtime/workforce-calendar-store.ts'
+      - '.github/workflows/validate-emp001-meeting-booking.yml'
+permissions:
+  contents: read
+jobs:
+  booking:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: node --import tsx --test src/runtime/emp001-meeting-booking.test.ts
+      - run: npx --no-install tsc --ignoreConfig --noEmit --strict --types node --moduleResolution bundler --module esnext --target es2022 --skipLibCheck src/runtime/emp001-meeting-booking.ts src/runtime/emp001-meeting-booking.test.ts
+      - run: npx --no-install oxlint src/runtime/emp001-meeting-booking.ts src/runtime/emp001-meeting-booking.test.ts
